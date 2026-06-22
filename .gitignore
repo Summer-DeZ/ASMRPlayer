@@ -30,8 +30,8 @@ keystore.properties
 
 # Design/reference materials and internal docs (not needed to build the app,
 # kept local so design + refactor plans are not pushed to GitHub by accident)
+DOCS/
 docs/
-ICON/
 
 # OS, logs, and temporary files
 .DS_Store

@@ -1,25 +1,27 @@
 package io.github.summerdez.asmrplayer.di
 
-import io.github.summerdez.asmrplayer.R
-import io.github.summerdez.asmrplayer.data.*
-import io.github.summerdez.asmrplayer.data.remote.*
-import io.github.summerdez.asmrplayer.data.download.*
-import io.github.summerdez.asmrplayer.data.files.*
-import io.github.summerdez.asmrplayer.domain.*
-import io.github.summerdez.asmrplayer.domain.model.*
-import io.github.summerdez.asmrplayer.playback.*
-import io.github.summerdez.asmrplayer.presentation.*
-import io.github.summerdez.asmrplayer.ui.*
-import io.github.summerdez.asmrplayer.ui.activity.*
-import io.github.summerdez.asmrplayer.ui.components.*
-import io.github.summerdez.asmrplayer.ui.screens.*
-import io.github.summerdez.asmrplayer.ui.theme.*
-import io.github.summerdez.asmrplayer.ui.util.*
-import io.github.summerdez.asmrplayer.di.*
 import android.app.Application
 import android.content.Context
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.ViewModelProvider
+import io.github.summerdez.asmrplayer.data.AppSettingsRepository
+import io.github.summerdez.asmrplayer.data.AsrmDatabase
+import io.github.summerdez.asmrplayer.data.DlsiteApi
+import io.github.summerdez.asmrplayer.data.DlsiteRepository
+import io.github.summerdez.asmrplayer.data.LibraryRepository
+import io.github.summerdez.asmrplayer.data.RoomDlsiteRepository
+import io.github.summerdez.asmrplayer.data.RoomLibraryRepository
+import io.github.summerdez.asmrplayer.data.SettingsRepository
+import io.github.summerdez.asmrplayer.data.createDlsiteApi
+import io.github.summerdez.asmrplayer.data.update.AppUpdateRepository
+import io.github.summerdez.asmrplayer.data.update.GitHubAppUpdateRepository
+import io.github.summerdez.asmrplayer.playback.PlaybackCommandClient
+import io.github.summerdez.asmrplayer.presentation.DlsiteViewModel
+import io.github.summerdez.asmrplayer.presentation.LibraryViewModel
+import io.github.summerdez.asmrplayer.presentation.MainViewModel
+import io.github.summerdez.asmrplayer.presentation.PlaybackViewModel
+import io.github.summerdez.asmrplayer.presentation.SettingsViewModel
+import io.github.summerdez.asmrplayer.presentation.SleepTimerViewModel
 
 class AppContainer(private val application: Application) {
     val database: AsrmDatabase by lazy {
@@ -40,6 +42,10 @@ class AppContainer(private val application: Application) {
 
     val settingsRepository: SettingsRepository by lazy {
         AppSettingsRepository(application)
+    }
+
+    val updateRepository: AppUpdateRepository by lazy {
+        GitHubAppUpdateRepository(application.cacheDir)
     }
 
     val playbackCommands: PlaybackCommandClient by lazy {
@@ -71,7 +77,12 @@ private class ASMRViewModelFactory(
             modelClass.isAssignableFrom(PlaybackViewModel::class.java) ->
                 PlaybackViewModel(application, container.libraryRepository, container.playbackCommands) as T
             modelClass.isAssignableFrom(SettingsViewModel::class.java) ->
-                SettingsViewModel(application, container.settingsRepository, container.playbackCommands) as T
+                SettingsViewModel(
+                    application,
+                    container.settingsRepository,
+                    container.playbackCommands,
+                    container.updateRepository,
+                ) as T
             modelClass.isAssignableFrom(SleepTimerViewModel::class.java) ->
                 SleepTimerViewModel(container.playbackCommands) as T
             modelClass.isAssignableFrom(DlsiteViewModel::class.java) ->

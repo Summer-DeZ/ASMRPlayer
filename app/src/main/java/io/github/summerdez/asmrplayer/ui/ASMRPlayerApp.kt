@@ -27,11 +27,32 @@ import androidx.compose.ui.platform.LocalContext
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import io.github.summerdez.asmrplayer.data.files.DocumentFiles
 import io.github.summerdez.asmrplayer.domain.PlaylistQueries
-import io.github.summerdez.asmrplayer.domain.model.*
-import io.github.summerdez.asmrplayer.presentation.*
+import io.github.summerdez.asmrplayer.domain.model.Playlist
+import io.github.summerdez.asmrplayer.domain.model.TrackItem
+import io.github.summerdez.asmrplayer.presentation.DlsiteEvent
+import io.github.summerdez.asmrplayer.presentation.DlsiteViewModel
+import io.github.summerdez.asmrplayer.presentation.LibraryViewModel
+import io.github.summerdez.asmrplayer.presentation.MainTab
+import io.github.summerdez.asmrplayer.presentation.MainViewModel
+import io.github.summerdez.asmrplayer.presentation.PlaybackViewModel
+import io.github.summerdez.asmrplayer.presentation.SettingsEvent
+import io.github.summerdez.asmrplayer.presentation.SettingsViewModel
+import io.github.summerdez.asmrplayer.presentation.SleepTimerViewModel
 import io.github.summerdez.asmrplayer.ui.activity.DlsiteLoginActivity
-import io.github.summerdez.asmrplayer.ui.components.*
-import io.github.summerdez.asmrplayer.ui.screens.*
+import io.github.summerdez.asmrplayer.ui.components.BottomPlaybackArea
+import io.github.summerdez.asmrplayer.ui.components.ConfirmDialog
+import io.github.summerdez.asmrplayer.ui.components.DownloadOptionsDialog
+import io.github.summerdez.asmrplayer.ui.components.InstallUpdateDialog
+import io.github.summerdez.asmrplayer.ui.components.MoveTrackDialog
+import io.github.summerdez.asmrplayer.ui.components.PageHeader
+import io.github.summerdez.asmrplayer.ui.components.TextInputDialog
+import io.github.summerdez.asmrplayer.ui.components.UpdateDetailsDialog
+import io.github.summerdez.asmrplayer.ui.screens.DlsiteTab
+import io.github.summerdez.asmrplayer.ui.screens.LibraryTab
+import io.github.summerdez.asmrplayer.ui.screens.QueueContent
+import io.github.summerdez.asmrplayer.ui.screens.SettingsTab
+import io.github.summerdez.asmrplayer.ui.screens.SleepTab
+import io.github.summerdez.asmrplayer.ui.screens.SubtitlePlayerScreen
 import io.github.summerdez.asmrplayer.ui.theme.ASMRPlayerTheme
 import io.github.summerdez.asmrplayer.ui.theme.LocalAmberTokens
 
@@ -49,6 +70,7 @@ fun ASMRPlayerApp(
     onToggleOverlay: () -> Unit,
     onUnlockOverlay: () -> Unit,
     onRequestNotificationPermission: () -> Unit,
+    onInstallUpdate: (String) -> Unit,
     onApplySystemBars: () -> Unit,
 ) {
     val context = LocalContext.current
@@ -68,6 +90,14 @@ fun ASMRPlayerApp(
         dlsiteViewModel.events.collect { event ->
             when (event) {
                 is DlsiteEvent.Message -> toast(event.text)
+            }
+        }
+    }
+    LaunchedEffect(settingsViewModel) {
+        settingsViewModel.events.collect { event ->
+            when (event) {
+                is SettingsEvent.Message -> toast(event.text)
+                is SettingsEvent.InstallUpdate -> onInstallUpdate(event.apkPath)
             }
         }
     }
@@ -214,6 +244,10 @@ fun ASMRPlayerApp(
                                     settingsViewModel.setThemeMode(mode)
                                     onApplySystemBars()
                                 },
+                                onCheckForUpdates = settingsViewModel::checkForUpdates,
+                                onShowUpdateDetails = settingsViewModel::showUpdateDetails,
+                                onCancelUpdateDownload = settingsViewModel::cancelUpdateDownload,
+                                onRetryUpdateDownload = settingsViewModel::retryUpdateDownload,
                             )
                             MainTab.SLEEP -> SleepTab(
                                 state = sleepState,
@@ -296,6 +330,21 @@ fun ASMRPlayerApp(
                     options = dlsiteState.downloadOptions,
                     onDismiss = dlsiteViewModel::dismissDownloadOptions,
                     onChoose = { option -> dlsiteViewModel.startDownload(optionWork, option) },
+                )
+            }
+            settingsState.updateDialogRelease?.let { release ->
+                UpdateDetailsDialog(
+                    release = release,
+                    currentVersionName = settingsState.currentVersionName,
+                    onDismiss = settingsViewModel::dismissUpdateDetails,
+                    onDownload = settingsViewModel::downloadAvailableUpdate,
+                )
+            }
+            settingsState.installPromptRelease?.let { release ->
+                InstallUpdateDialog(
+                    release = release,
+                    onDismiss = settingsViewModel::dismissInstallPrompt,
+                    onInstall = settingsViewModel::installDownloadedUpdate,
                 )
             }
 

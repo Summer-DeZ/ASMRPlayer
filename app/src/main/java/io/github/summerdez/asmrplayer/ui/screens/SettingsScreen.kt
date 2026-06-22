@@ -1,153 +1,49 @@
 package io.github.summerdez.asmrplayer.ui.screens
 
-import io.github.summerdez.asmrplayer.R
-import io.github.summerdez.asmrplayer.data.*
-import io.github.summerdez.asmrplayer.data.remote.*
-import io.github.summerdez.asmrplayer.data.download.*
-import io.github.summerdez.asmrplayer.data.files.*
-import io.github.summerdez.asmrplayer.domain.*
-import io.github.summerdez.asmrplayer.domain.model.*
-import io.github.summerdez.asmrplayer.playback.*
-import io.github.summerdez.asmrplayer.presentation.*
-import io.github.summerdez.asmrplayer.ui.*
-import io.github.summerdez.asmrplayer.ui.activity.*
-import io.github.summerdez.asmrplayer.ui.components.*
-import io.github.summerdez.asmrplayer.ui.screens.*
-import io.github.summerdez.asmrplayer.ui.theme.*
-import io.github.summerdez.asmrplayer.ui.util.*
-import io.github.summerdez.asmrplayer.di.*
-import android.app.Activity
-import android.content.Intent
-import android.net.Uri
-import android.widget.ImageView
-import android.widget.Toast
-import androidx.activity.compose.BackHandler
-import androidx.activity.compose.rememberLauncherForActivityResult
-import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.BorderStroke
-import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
-import androidx.compose.foundation.gestures.detectDragGestures
-import androidx.compose.foundation.gestures.detectTapGestures
-import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
-import androidx.compose.foundation.layout.BoxWithConstraints
 import androidx.compose.foundation.layout.Column
-import androidx.compose.foundation.layout.ColumnScope
-import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
-import androidx.compose.foundation.layout.WindowInsets
-import androidx.compose.foundation.layout.aspectRatio
 import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
-import androidx.compose.foundation.layout.navigationBarsPadding
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
-import androidx.compose.foundation.layout.statusBarsPadding
 import androidx.compose.foundation.layout.width
-import androidx.compose.foundation.lazy.LazyColumn
-import androidx.compose.foundation.lazy.items
-import androidx.compose.foundation.lazy.itemsIndexed
-import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.automirrored.filled.Login
-import androidx.compose.material.icons.automirrored.filled.Logout
-import androidx.compose.material.icons.automirrored.filled.OpenInNew
-import androidx.compose.material.icons.automirrored.filled.QueueMusic
-import androidx.compose.material.icons.filled.Add
-import androidx.compose.material.icons.filled.Bedtime
-import androidx.compose.material.icons.filled.Close
-import androidx.compose.material.icons.filled.Delete
-import androidx.compose.material.icons.filled.Download
-import androidx.compose.material.icons.filled.Edit
-import androidx.compose.material.icons.filled.FolderOpen
-import androidx.compose.material.icons.filled.LibraryMusic
-import androidx.compose.material.icons.filled.LockOpen
-import androidx.compose.material.icons.filled.MoreVert
-import androidx.compose.material.icons.filled.MusicNote
-import androidx.compose.material.icons.filled.Notifications
-import androidx.compose.material.icons.filled.Pause
-import androidx.compose.material.icons.filled.PlayArrow
-import androidx.compose.material.icons.filled.Settings
-import androidx.compose.material.icons.filled.SkipNext
-import androidx.compose.material.icons.filled.SkipPrevious
-import androidx.compose.material.icons.filled.Subtitles
-import androidx.compose.material.icons.filled.Timer
-import androidx.compose.material.icons.filled.UploadFile
-import androidx.compose.material3.Button
-import androidx.compose.material3.DropdownMenu
-import androidx.compose.material3.DropdownMenuItem
-import androidx.compose.material3.ExperimentalMaterial3Api
+import androidx.compose.material.icons.automirrored.filled.KeyboardArrowRight
+import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
-import androidx.compose.material3.IconButton
-import androidx.compose.material3.MaterialTheme
-import androidx.compose.material3.ModalBottomSheet
-import androidx.compose.material3.OutlinedTextField
-import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Surface
-import androidx.compose.material3.Switch
-import androidx.compose.material3.SwitchDefaults
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
-import androidx.compose.material3.darkColorScheme
-import androidx.compose.material3.lightColorScheme
-import androidx.compose.material3.rememberModalBottomSheetState
 import androidx.compose.runtime.Composable
-import androidx.compose.runtime.LaunchedEffect
-import androidx.compose.runtime.getValue
-import androidx.compose.runtime.mutableIntStateOf
-import androidx.compose.runtime.mutableStateOf
-import androidx.compose.runtime.remember
-import androidx.compose.runtime.setValue
-import androidx.compose.runtime.staticCompositionLocalOf
-import androidx.compose.ui.geometry.Offset
-import androidx.compose.ui.geometry.Size
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.draw.clip
-import androidx.compose.ui.draw.clipToBounds
-import androidx.compose.ui.graphics.TransformOrigin
-import androidx.compose.ui.graphics.graphicsLayer
-import androidx.compose.ui.graphics.Brush
-import androidx.compose.ui.graphics.Color
-import androidx.compose.ui.graphics.StrokeCap
-import androidx.compose.ui.graphics.drawscope.Stroke
-import androidx.compose.ui.graphics.vector.ImageVector
-import androidx.compose.ui.input.pointer.pointerInput
-import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
-import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
-import androidx.compose.ui.viewinterop.AndroidView
-import androidx.compose.animation.AnimatedContent
-import androidx.compose.animation.AnimatedVisibility
-import androidx.compose.animation.animateColorAsState
-import androidx.compose.animation.core.animateFloatAsState
-import androidx.compose.animation.core.tween
-import androidx.compose.animation.expandVertically
-import androidx.compose.animation.fadeIn
-import androidx.compose.animation.fadeOut
-import androidx.compose.animation.shrinkVertically
-import androidx.compose.animation.slideInVertically
-import androidx.compose.animation.slideOutVertically
-import androidx.compose.animation.togetherWith
-import androidx.compose.ui.window.Dialog
-import androidx.lifecycle.compose.collectAsStateWithLifecycle
-import java.text.DateFormat
-import java.util.Date
-import kotlin.math.max
+import io.github.summerdez.asmrplayer.presentation.AppUpdateDownloadStatus
+import io.github.summerdez.asmrplayer.presentation.AppUpdateStatus
+import io.github.summerdez.asmrplayer.presentation.SettingsUiState
+import io.github.summerdez.asmrplayer.ui.components.GroupFooter
+import io.github.summerdez.asmrplayer.ui.components.GroupedCard
+import io.github.summerdez.asmrplayer.ui.components.SettingsPermissionRow
+import io.github.summerdez.asmrplayer.ui.components.SettingsSwitchRow
+import io.github.summerdez.asmrplayer.ui.components.ThemeChip
+import io.github.summerdez.asmrplayer.ui.theme.AppThemeMode
+import io.github.summerdez.asmrplayer.ui.theme.LocalAmberTokens
 
 @Composable
 fun SettingsTab(
@@ -157,6 +53,10 @@ fun SettingsTab(
     onOpenOverlaySettings: () -> Unit,
     onRequestNotificationPermission: () -> Unit,
     onThemeSelected: (AppThemeMode) -> Unit,
+    onCheckForUpdates: () -> Unit,
+    onShowUpdateDetails: () -> Unit,
+    onCancelUpdateDownload: () -> Unit,
+    onRetryUpdateDownload: () -> Unit,
 ) {
     val tokens = LocalAmberTokens.current
     Column(
@@ -201,6 +101,229 @@ fun SettingsTab(
                 }
             }
         }
+        Spacer(Modifier.height(18.dp))
+        SectionLabel("关于")
+        GroupedCard {
+            SettingsValueRow("版本", state.currentVersionName)
+            HorizontalDivider(color = tokens.separator, modifier = Modifier.padding(start = 16.dp))
+            UpdateCheckRow(
+                status = state.updateStatus,
+                onClick = {
+                    when (state.updateStatus) {
+                        is AppUpdateStatus.Available -> onShowUpdateDetails()
+                        AppUpdateStatus.Checking -> Unit
+                        else -> onCheckForUpdates()
+                    }
+                },
+            )
+        }
+        GroupFooter(updateFooterText(state.updateStatus))
+        UpdateDownloadCard(
+            status = state.updateDownloadStatus,
+            onCancel = onCancelUpdateDownload,
+            onRetry = onRetryUpdateDownload,
+        )
     }
 }
 
+@Composable
+private fun SectionLabel(text: String) {
+    Text(
+        text = text,
+        color = LocalAmberTokens.current.label2,
+        fontSize = 13.sp,
+        fontWeight = FontWeight.SemiBold,
+        modifier = Modifier.padding(start = 16.dp, bottom = 7.dp),
+    )
+}
+
+@Composable
+private fun SettingsValueRow(title: String, value: String) {
+    val tokens = LocalAmberTokens.current
+    Row(
+        modifier = Modifier
+            .fillMaxWidth()
+            .height(52.dp)
+            .padding(start = 16.dp, end = 14.dp),
+        verticalAlignment = Alignment.CenterVertically,
+    ) {
+        Text(title, fontSize = 17.sp, color = tokens.label, modifier = Modifier.weight(1f))
+        Text(value, fontSize = 17.sp, color = tokens.label2, maxLines = 1, overflow = TextOverflow.Ellipsis)
+    }
+}
+
+@Composable
+private fun UpdateCheckRow(status: AppUpdateStatus, onClick: () -> Unit) {
+    val tokens = LocalAmberTokens.current
+    val enabled = status !is AppUpdateStatus.Checking
+    Row(
+        modifier = Modifier
+            .fillMaxWidth()
+            .height(52.dp)
+            .clickable(enabled = enabled, onClick = onClick)
+            .padding(start = 16.dp, end = 14.dp),
+        verticalAlignment = Alignment.CenterVertically,
+    ) {
+        Text("检查更新", fontSize = 17.sp, color = tokens.label, modifier = Modifier.weight(1f))
+        when (status) {
+            AppUpdateStatus.Checking -> {
+                CircularProgressIndicator(
+                    modifier = Modifier.size(18.dp),
+                    color = tokens.accent,
+                    trackColor = tokens.label3,
+                    strokeWidth = 2.dp,
+                )
+                Spacer(Modifier.width(8.dp))
+                Text("正在检查…", fontSize = 17.sp, color = tokens.label2)
+            }
+            is AppUpdateStatus.Available -> {
+                Box(
+                    Modifier
+                        .size(9.dp)
+                        .background(tokens.accent2, CircleShape),
+                )
+                Spacer(Modifier.width(8.dp))
+                Text(
+                    text = "有新版本 ${status.release.versionName}",
+                    fontSize = 17.sp,
+                    color = tokens.accent,
+                    maxLines = 1,
+                    overflow = TextOverflow.Ellipsis,
+                )
+                Spacer(Modifier.width(8.dp))
+                Icon(Icons.AutoMirrored.Filled.KeyboardArrowRight, contentDescription = null, tint = tokens.label3, modifier = Modifier.size(18.dp))
+            }
+            AppUpdateStatus.UpToDate -> Text("已是最新", fontSize = 17.sp, color = tokens.label2)
+            is AppUpdateStatus.Failed -> {
+                Text("检查失败", fontSize = 17.sp, color = tokens.accent2)
+                Spacer(Modifier.width(8.dp))
+                Icon(Icons.AutoMirrored.Filled.KeyboardArrowRight, contentDescription = null, tint = tokens.label3, modifier = Modifier.size(18.dp))
+            }
+            AppUpdateStatus.Idle -> {
+                Text("点击检查", fontSize = 17.sp, color = tokens.label2)
+                Spacer(Modifier.width(8.dp))
+                Icon(Icons.AutoMirrored.Filled.KeyboardArrowRight, contentDescription = null, tint = tokens.label3, modifier = Modifier.size(18.dp))
+            }
+        }
+    }
+}
+
+@Composable
+private fun UpdateDownloadCard(
+    status: AppUpdateDownloadStatus,
+    onCancel: () -> Unit,
+    onRetry: () -> Unit,
+) {
+    val visible = status is AppUpdateDownloadStatus.Downloading || status is AppUpdateDownloadStatus.Failed
+    if (!visible) {
+        return
+    }
+    val tokens = LocalAmberTokens.current
+    val release = when (status) {
+        is AppUpdateDownloadStatus.Downloading -> status.release
+        is AppUpdateDownloadStatus.Failed -> status.release
+        AppUpdateDownloadStatus.Idle, is AppUpdateDownloadStatus.Downloaded -> return
+    }
+    val bytesDownloaded = when (status) {
+        is AppUpdateDownloadStatus.Downloading -> status.bytesDownloaded
+        is AppUpdateDownloadStatus.Failed -> status.bytesDownloaded
+        AppUpdateDownloadStatus.Idle, is AppUpdateDownloadStatus.Downloaded -> 0L
+    }
+    val totalBytes = when (status) {
+        is AppUpdateDownloadStatus.Downloading -> status.totalBytes
+        is AppUpdateDownloadStatus.Failed -> status.totalBytes
+        AppUpdateDownloadStatus.Idle, is AppUpdateDownloadStatus.Downloaded -> 0L
+    }
+    val progress = if (totalBytes > 0L) {
+        (bytesDownloaded.toFloat() / totalBytes.toFloat()).coerceIn(0f, 1f)
+    } else {
+        0f
+    }
+    val failureMessage = (status as? AppUpdateDownloadStatus.Failed)?.message
+    val failed = failureMessage != null
+    Spacer(Modifier.height(14.dp))
+    Surface(
+        color = tokens.card,
+        shape = RoundedCornerShape(16.dp),
+        modifier = Modifier.fillMaxWidth(),
+    ) {
+        Column(Modifier.padding(16.dp)) {
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                Text(
+                    text = if (failed) "更新下载失败" else "正在下载更新 ${release.versionName}",
+                    color = tokens.label,
+                    fontSize = 17.sp,
+                    fontWeight = FontWeight.Medium,
+                    modifier = Modifier.weight(1f),
+                    maxLines = 1,
+                    overflow = TextOverflow.Ellipsis,
+                )
+                Text(
+                    text = if (totalBytes > 0L) "${(progress * 100).toInt()}%" else "--",
+                    color = if (failed) tokens.accent2 else tokens.accent,
+                    fontSize = 15.sp,
+                    fontWeight = FontWeight.SemiBold,
+                )
+            }
+            Box(
+                modifier = Modifier
+                    .padding(top = 12.dp)
+                    .fillMaxWidth()
+                    .height(4.dp)
+                    .background(tokens.label3.copy(alpha = 0.28f), RoundedCornerShape(3.dp)),
+            ) {
+                Box(
+                    modifier = Modifier
+                        .fillMaxHeight()
+                        .fillMaxWidth(progress)
+                        .background(if (failed) tokens.accent2 else tokens.accent, RoundedCornerShape(3.dp)),
+                )
+            }
+            Row(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(top = 10.dp),
+                verticalAlignment = Alignment.CenterVertically,
+            ) {
+                Text(
+                    text = failureMessage ?: run {
+                        "${formatUpdateBytes(bytesDownloaded)} / ${formatUpdateBytes(totalBytes)}"
+                    },
+                    color = tokens.label2,
+                    fontSize = 13.sp,
+                    modifier = Modifier.weight(1f),
+                    maxLines = 1,
+                    overflow = TextOverflow.Ellipsis,
+                )
+                TextButton(onClick = if (failed) onRetry else onCancel) {
+                    Text(if (failed) "重试" else "取消", color = tokens.accent2, fontSize = 13.sp, fontWeight = FontWeight.Medium)
+                }
+            }
+        }
+    }
+}
+
+private fun updateFooterText(status: AppUpdateStatus): String {
+    return when (status) {
+        is AppUpdateStatus.Failed -> status.message
+        else -> "点击「检查更新」获取最新版本；发现新版本时显示更新点与版本号。"
+    }
+}
+
+private fun formatUpdateBytes(bytes: Long): String {
+    if (bytes <= 0L) {
+        return "--"
+    }
+    val units = listOf("B", "KB", "MB", "GB")
+    var value = bytes.toDouble()
+    var unitIndex = 0
+    while (value >= 1024.0 && unitIndex < units.lastIndex) {
+        value /= 1024.0
+        unitIndex += 1
+    }
+    return if (unitIndex == 0) {
+        "${value.toLong()} ${units[unitIndex]}"
+    } else {
+        "%.1f %s".format(value, units[unitIndex])
+    }
+}
