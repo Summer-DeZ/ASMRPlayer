@@ -6,6 +6,8 @@ import io.github.summerdez.asmrplayer.data.ai.AiSubtitleTaskStateBus
 import io.github.summerdez.asmrplayer.data.ai.AiSubtitleTranslationCache
 import io.github.summerdez.asmrplayer.data.ai.OpenAiCompatibleTranslator
 import io.github.summerdez.asmrplayer.data.ai.StreamingLinearResampler
+import io.github.summerdez.asmrplayer.data.ai.WhisperRecognitionConcurrency
+import io.github.summerdez.asmrplayer.data.ai.planWhisperRecognitionConcurrency
 import io.github.summerdez.asmrplayer.domain.model.AiSubtitleSettings
 import io.github.summerdez.asmrplayer.domain.model.AiSubtitleStage
 import io.github.summerdez.asmrplayer.domain.model.AiTranslationEngine
@@ -249,6 +251,95 @@ class AiSubtitlePipelineTest {
         assertTrue(second.isNotEmpty())
     }
 
+    @Test
+    fun whisperConcurrencyLetsBaseUseMoreWorkersOnLargeDevices() {
+        val plan = planWhisperRecognitionConcurrency(
+            modelSpec = WhisperModelSpec.BASE,
+            availMemBytes = 3L * GIB,
+            cores = 8,
+            segmentCount = 12,
+        )
+
+        assertEquals(WhisperRecognitionConcurrency(workerCount = 4, threadsPerWorker = 2), plan)
+    }
+
+    @Test
+    fun whisperConcurrencyKeepsSmallToTwoWorkersWithEnoughMemory() {
+        val plan = planWhisperRecognitionConcurrency(
+            modelSpec = WhisperModelSpec.SMALL,
+            availMemBytes = 3L * GIB,
+            cores = 8,
+            segmentCount = 12,
+        )
+
+        assertEquals(WhisperRecognitionConcurrency(workerCount = 2, threadsPerWorker = 4), plan)
+    }
+
+    @Test
+    fun whisperConcurrencyFallsBackToOneWorkerOnLowMemory() {
+        val basePlan = planWhisperRecognitionConcurrency(
+            modelSpec = WhisperModelSpec.BASE,
+            availMemBytes = 256L * MIB,
+            cores = 8,
+            segmentCount = 8,
+        )
+        val smallPlan = planWhisperRecognitionConcurrency(
+            modelSpec = WhisperModelSpec.SMALL,
+            availMemBytes = 256L * MIB,
+            cores = 8,
+            segmentCount = 8,
+        )
+
+        assertEquals(WhisperRecognitionConcurrency(workerCount = 1, threadsPerWorker = 4), basePlan)
+        assertEquals(WhisperRecognitionConcurrency(workerCount = 1, threadsPerWorker = 4), smallPlan)
+    }
+
+    @Test
+    fun whisperConcurrencyRespectsCoreAndSegmentLimits() {
+        val noSegments = planWhisperRecognitionConcurrency(
+            modelSpec = WhisperModelSpec.BASE,
+            availMemBytes = 3L * GIB,
+            cores = 8,
+            segmentCount = 0,
+        )
+        val oneSegment = planWhisperRecognitionConcurrency(
+            modelSpec = WhisperModelSpec.SMALL,
+            availMemBytes = 3L * GIB,
+            cores = 8,
+            segmentCount = 1,
+        )
+        val sixCoreBase = planWhisperRecognitionConcurrency(
+            modelSpec = WhisperModelSpec.BASE,
+            availMemBytes = 3L * GIB,
+            cores = 6,
+            segmentCount = 12,
+        )
+
+        assertEquals(WhisperRecognitionConcurrency(workerCount = 1, threadsPerWorker = 4), noSegments)
+        assertEquals(WhisperRecognitionConcurrency(workerCount = 1, threadsPerWorker = 4), oneSegment)
+        assertEquals(WhisperRecognitionConcurrency(workerCount = 3, threadsPerWorker = 2), sixCoreBase)
+        assertTrue(sixCoreBase.workerCount * sixCoreBase.threadsPerWorker <= 6)
+    }
+
+    @Test
+    fun whisperConcurrencyUsesMeasuredMemoryBudgetForPlgClassDevice() {
+        val basePlan = planWhisperRecognitionConcurrency(
+            modelSpec = WhisperModelSpec.BASE,
+            availMemBytes = 1_920L * MIB,
+            cores = 8,
+            segmentCount = 12,
+        )
+        val smallPlan = planWhisperRecognitionConcurrency(
+            modelSpec = WhisperModelSpec.SMALL,
+            availMemBytes = 1_920L * MIB,
+            cores = 8,
+            segmentCount = 12,
+        )
+
+        assertEquals(WhisperRecognitionConcurrency(workerCount = 3, threadsPerWorker = 2), basePlan)
+        assertEquals(WhisperRecognitionConcurrency(workerCount = 2, threadsPerWorker = 4), smallPlan)
+    }
+
     private fun aiSettings(): AiSubtitleSettings {
         return AiSubtitleSettings(
             translationEngine = AiTranslationEngine.OLLAMA,
@@ -257,4 +348,8 @@ class AiSubtitlePipelineTest {
         )
     }
 
+    private companion object {
+        const val MIB = 1024L * 1024L
+        const val GIB = 1024L * MIB
+    }
 }

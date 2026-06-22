@@ -1,5 +1,6 @@
 package io.github.summerdez.asmrplayer.data.ai
 
+import android.app.ActivityManager
 import android.content.Context
 import android.media.AudioFormat
 import android.media.MediaCodec
@@ -20,7 +21,6 @@ import io.github.summerdez.asmrplayer.domain.model.WhisperModelSpec
 import java.io.IOException
 import java.nio.ByteBuffer
 import java.nio.ByteOrder
-import java.util.concurrent.atomic.AtomicLong
 import kotlin.math.floor
 import kotlin.math.max
 import kotlinx.coroutines.channels.Channel
@@ -49,6 +49,75 @@ internal data class VadSpeechSegment(
     val startMs: Long,
     val samples: FloatArray,
 )
+
+internal data class WhisperRecognitionConcurrency(
+    val workerCount: Int,
+    val threadsPerWorker: Int,
+)
+
+private data class IndexedVadSpeechSegment(
+    val index: Int,
+    val segment: VadSpeechSegment,
+)
+
+private const val COMPACT_MODEL_FILE_THRESHOLD_BYTES = 220L * 1024L * 1024L
+private const val COMPACT_MODEL_MEMORY_MULTIPLIER = 3L
+private const val LARGE_MODEL_MEMORY_MULTIPLIER = 2L
+private const val COMPACT_MODEL_COPY_MEMORY_OVERHEAD_BYTES = 96L * 1024L * 1024L
+private const val LARGE_MODEL_COPY_MEMORY_OVERHEAD_BYTES = 192L * 1024L * 1024L
+private const val STREAMING_SEGMENT_COUNT_HINT = Int.MAX_VALUE
+private const val MAX_RECOGNIZER_THREADS_PER_WORKER = 4
+private const val VAD_PROGRESS_WEIGHT = 0.2f
+private const val RECOGNITION_PROGRESS_WEIGHT = 0.8f
+
+internal fun planWhisperRecognitionConcurrency(
+    modelSpec: WhisperModelSpec,
+    availMemBytes: Long,
+    cores: Int,
+    segmentCount: Int,
+): WhisperRecognitionConcurrency {
+    val safeCores = cores.coerceAtLeast(1)
+    val safeSegmentCount = segmentCount.coerceAtLeast(0)
+    val modelMaxWorkers = when (modelSpec.id) {
+        WhisperModelSpec.SMALL.id -> 2
+        else -> 4
+    }
+    val coreMaxWorkers = when {
+        safeCores >= 8 -> 4
+        safeCores >= 6 -> 3
+        safeCores >= 2 -> 2
+        else -> 1
+    }
+    val segmentMaxWorkers = safeSegmentCount.takeIf { it > 0 } ?: 1
+    val memoryMaxWorkers = if (availMemBytes <= 0L) {
+        1
+    } else {
+        (availMemBytes / modelCopyBudgetBytes(modelSpec))
+            .toInt()
+            .coerceAtLeast(1)
+    }
+    val workerCount = minOf(modelMaxWorkers, coreMaxWorkers, memoryMaxWorkers, segmentMaxWorkers)
+        .coerceAtLeast(1)
+    return WhisperRecognitionConcurrency(
+        workerCount = workerCount,
+        threadsPerWorker = (safeCores / workerCount)
+            .coerceAtLeast(1)
+            .coerceAtMost(MAX_RECOGNIZER_THREADS_PER_WORKER),
+    )
+}
+
+private fun modelCopyBudgetBytes(modelSpec: WhisperModelSpec): Long {
+    val modelBytes = modelSpec.files
+        .filter { it.fileName == modelSpec.encoderFileName || it.fileName == modelSpec.decoderFileName }
+        .sumOf { it.sizeBytes }
+        .takeIf { it > 0L }
+        ?: modelSpec.sizeBytes
+    return if (modelBytes <= COMPACT_MODEL_FILE_THRESHOLD_BYTES) {
+        modelBytes * COMPACT_MODEL_MEMORY_MULTIPLIER + COMPACT_MODEL_COPY_MEMORY_OVERHEAD_BYTES
+    } else {
+        modelBytes * LARGE_MODEL_MEMORY_MULTIPLIER + LARGE_MODEL_COPY_MEMORY_OVERHEAD_BYTES
+    }
+}
 
 internal fun buildSileroVad(paths: WhisperModelPaths): Vad {
     return Vad(
@@ -106,36 +175,18 @@ class WhisperRuntimeTranscriber : OnDeviceTranscriber {
             // Report URI permission or file errors before runtime/model initialization.
         } ?: throw IOException("无法读取音频文件")
 
-        val speechSegments = mutableListOf<VadSpeechSegment>()
-        var lastDecodeProgress = 0f
-        val vad = buildSileroVad(paths)
-        try {
-            AndroidAudioPcmDecoder.decodeToMono16k(
-                context = context,
-                audioUri = audioUri,
-                onDecodeProgress = { progress ->
-                    lastDecodeProgress = progress.coerceIn(0f, 1f)
-                    onProgress(lastDecodeProgress * VAD_PROGRESS_WEIGHT, emptyList())
-                },
-                onSamples = { samples ->
-                    currentCoroutineContext().ensureActive()
-                    vad.acceptWaveform(samples)
-                    collectVadSegments(vad, speechSegments)
-                    onProgress(lastDecodeProgress * VAD_PROGRESS_WEIGHT, emptyList())
-                },
-            )
-            vad.flush()
-            collectVadSegments(vad, speechSegments)
-        } finally {
-            vad.release()
-        }
-        if (speechSegments.isEmpty()) {
-            throw IOException("未识别到可用语音片段")
-        }
-        val lines = recognizeSegmentsInParallel(
+        val concurrency = planWhisperRecognitionConcurrency(
+            modelSpec = modelState.spec,
+            availMemBytes = recognitionMemoryBudgetBytes(context),
+            cores = Runtime.getRuntime().availableProcessors(),
+            segmentCount = STREAMING_SEGMENT_COUNT_HINT,
+        )
+        val lines = transcribeSegmentsWithPipeline(
+            context = context,
+            audioUri = audioUri,
             spec = modelState.spec,
             paths = paths,
-            segments = speechSegments,
+            concurrency = concurrency,
             onProgress = onProgress,
         )
         if (lines.isEmpty()) {
@@ -148,7 +199,7 @@ class WhisperRuntimeTranscriber : OnDeviceTranscriber {
     private fun buildRecognizer(
         spec: WhisperModelSpec,
         paths: WhisperModelPaths,
-        numThreads: Int = Runtime.getRuntime().availableProcessors().coerceIn(1, 4),
+        numThreads: Int,
     ): OfflineRecognizer {
         return OfflineRecognizer(
             config = OfflineRecognizerConfig(
@@ -170,67 +221,124 @@ class WhisperRuntimeTranscriber : OnDeviceTranscriber {
         )
     }
 
-    private suspend fun collectVadSegments(
-        vad: Vad,
-        segments: MutableList<VadSpeechSegment>,
-    ) {
-        drainVadSpeechSegments(vad) { segment ->
-            segments += segment
-        }
-    }
-
-    private suspend fun recognizeSegmentsInParallel(
+    private suspend fun transcribeSegmentsWithPipeline(
+        context: Context,
+        audioUri: Uri,
         spec: WhisperModelSpec,
         paths: WhisperModelPaths,
-        segments: List<VadSpeechSegment>,
+        concurrency: WhisperRecognitionConcurrency,
         onProgress: (progress: Float, preview: List<SubtitleLine>) -> Unit,
-    ): List<SubtitleLine> {
-        val results = arrayOfNulls<SubtitleLine>(segments.size)
-        val completedSamples = AtomicLong(0L)
-        val totalSamples = segments.sumOf { it.samples.size.toLong() }.coerceAtLeast(1L)
+    ): List<SubtitleLine> = coroutineScope {
+        val taskChannel = Channel<IndexedVadSpeechSegment>((concurrency.workerCount * 2).coerceAtLeast(1))
+        val results = mutableMapOf<Int, SubtitleLine>()
+        val progressTracker = StreamingTranscriptionProgress()
         val resultMutex = Mutex()
-        val workerCount = cpuWorkerCount(segments.size)
-        val recognizerThreads = if (workerCount > 1) 1 else Runtime.getRuntime().availableProcessors().coerceIn(1, 4)
-        coroutineScope {
-            val taskChannel = Channel<IndexedValue<VadSpeechSegment>>(Channel.UNLIMITED)
-            repeat(workerCount) {
-                launch {
-                    val recognizer = buildRecognizer(spec, paths, recognizerThreads)
-                    try {
-                        for (task in taskChannel) {
-                            currentCoroutineContext().ensureActive()
-                            val segment = task.value
-                            val text = recognizeSegment(recognizer, segment.samples)
-                            val endMs = segment.startMs + whisperSampleCountToMs(segment.samples.size)
-                            val line = if (text.isBlank()) {
-                                null
-                            } else {
-                                SubtitleLine(
-                                    id = (task.index + 1).toString(),
-                                    startMs = segment.startMs,
-                                    endMs = endMs.coerceAtLeast(segment.startMs + 250L),
-                                    sourceText = text,
-                                )
-                            }
-                            val doneSamples = completedSamples.addAndGet(segment.samples.size.toLong())
-                            resultMutex.withLock {
-                                results[task.index] = line
-                                val progress = VAD_PROGRESS_WEIGHT +
-                                    (doneSamples.toFloat() / totalSamples.toFloat()) * RECOGNITION_PROGRESS_WEIGHT
-                                onProgress(progress.coerceIn(VAD_PROGRESS_WEIGHT, 1f), previewLines(results))
-                            }
+
+        val producer = launch {
+            val vad = buildSileroVad(paths)
+            var nextSegmentIndex = 0
+            var closeCause: Throwable? = null
+            try {
+                AndroidAudioPcmDecoder.decodeToMono16k(
+                    context = context,
+                    audioUri = audioUri,
+                    onDecodeProgress = { progress ->
+                        updateTranscriptionProgress(resultMutex, progressTracker, results, onProgress) {
+                            recordDecodeProgress(progress)
                         }
-                    } finally {
-                        recognizer.release()
+                    },
+                    onSamples = { samples ->
+                        currentCoroutineContext().ensureActive()
+                        vad.acceptWaveform(samples)
+                        drainVadSpeechSegments(vad) { segment ->
+                            updateTranscriptionProgress(resultMutex, progressTracker, results, onProgress) {
+                                recordSegmentProduced(segment.samples.size)
+                            }
+                            taskChannel.send(
+                                IndexedVadSpeechSegment(
+                                    index = nextSegmentIndex,
+                                    segment = segment,
+                                ),
+                            )
+                            nextSegmentIndex += 1
+                        }
+                    },
+                )
+                vad.flush()
+                drainVadSpeechSegments(vad) { segment ->
+                    updateTranscriptionProgress(resultMutex, progressTracker, results, onProgress) {
+                        recordSegmentProduced(segment.samples.size)
                     }
+                    taskChannel.send(
+                        IndexedVadSpeechSegment(
+                            index = nextSegmentIndex,
+                            segment = segment,
+                        ),
+                    )
+                    nextSegmentIndex += 1
+                }
+            } catch (error: Throwable) {
+                closeCause = error
+                throw error
+            } finally {
+                vad.release()
+                taskChannel.close(closeCause)
+            }
+        }
+
+        val workers = List(concurrency.workerCount) {
+            launch {
+                var recognizer: OfflineRecognizer? = null
+                try {
+                    for (task in taskChannel) {
+                        currentCoroutineContext().ensureActive()
+                        val activeRecognizer = recognizer ?: buildRecognizer(
+                            spec = spec,
+                            paths = paths,
+                            numThreads = concurrency.threadsPerWorker,
+                        ).also { recognizer = it }
+                        val segment = task.segment
+                        val text = recognizeSegment(activeRecognizer, segment.samples)
+                        val endMs = segment.startMs + whisperSampleCountToMs(segment.samples.size)
+                        val line = if (text.isBlank()) {
+                            null
+                        } else {
+                            SubtitleLine(
+                                id = (task.index + 1).toString(),
+                                startMs = segment.startMs,
+                                endMs = endMs.coerceAtLeast(segment.startMs + 250L),
+                                sourceText = text,
+                            )
+                        }
+                        updateTranscriptionProgress(resultMutex, progressTracker, results, onProgress) {
+                            if (line != null) {
+                                results[task.index] = line
+                            }
+                            recordSegmentRecognized(segment.samples.size)
+                        }
+                    }
+                } finally {
+                    recognizer?.release()
                 }
             }
-            segments.forEachIndexed { index, segment ->
-                taskChannel.send(IndexedValue(index, segment))
-            }
-            taskChannel.close()
         }
-        return orderedLines(results)
+
+        producer.join()
+        workers.forEach { it.join() }
+        orderedLines(results.values)
+    }
+
+    private suspend fun updateTranscriptionProgress(
+        resultMutex: Mutex,
+        progressTracker: StreamingTranscriptionProgress,
+        results: Map<Int, SubtitleLine>,
+        onProgress: (progress: Float, preview: List<SubtitleLine>) -> Unit,
+        update: StreamingTranscriptionProgress.() -> Unit,
+    ) {
+        resultMutex.withLock {
+            progressTracker.update()
+            onProgress(progressTracker.progress(), previewLines(results.values))
+        }
     }
 
     private fun recognizeSegment(recognizer: OfflineRecognizer, samples: FloatArray): String {
@@ -244,29 +352,65 @@ class WhisperRuntimeTranscriber : OnDeviceTranscriber {
         }
     }
 
-    companion object {
-        private const val VAD_PROGRESS_WEIGHT = 0.2f
-        private const val RECOGNITION_PROGRESS_WEIGHT = 0.8f
+    private fun recognitionMemoryBudgetBytes(context: Context): Long {
+        val activityManager = context.getSystemService(Context.ACTIVITY_SERVICE) as? ActivityManager
+            ?: return 0L
+        val memoryInfo = ActivityManager.MemoryInfo()
+        activityManager.getMemoryInfo(memoryInfo)
+        if (memoryInfo.lowMemory) {
+            return 0L
+        }
+        val systemReserve = if (memoryInfo.totalMem > 0L) {
+            memoryInfo.totalMem / 8L
+        } else {
+            0L
+        }
+        return (memoryInfo.availMem - systemReserve).coerceAtLeast(0L)
+    }
 
+    companion object {
         fun runtimeName(spec: WhisperModelSpec): String = "Whisper ${spec.id}"
 
-        private fun cpuWorkerCount(segmentCount: Int): Int {
-            if (segmentCount <= 1) {
-                return 1
-            }
-            return minOf(2, Runtime.getRuntime().availableProcessors().coerceAtLeast(1), segmentCount)
-        }
-
-        private fun orderedLines(results: Array<SubtitleLine?>): List<SubtitleLine> {
+        private fun orderedLines(results: Iterable<SubtitleLine>): List<SubtitleLine> {
             return results
-                .filterNotNull()
                 .sortedBy { it.startMs }
                 .mapIndexed { index, line -> line.copy(id = (index + 1).toString()) }
         }
 
-        private fun previewLines(results: Array<SubtitleLine?>): List<SubtitleLine> {
+        private fun previewLines(results: Iterable<SubtitleLine>): List<SubtitleLine> {
             return orderedLines(results).takeLast(WHISPER_PREVIEW_LINE_COUNT)
         }
+    }
+}
+
+private class StreamingTranscriptionProgress {
+    private var decodeProgress: Float = 0f
+    private var producedSamples: Long = 0L
+    private var recognizedSamples: Long = 0L
+    private var lastProgress: Float = 0f
+
+    fun recordDecodeProgress(progress: Float) {
+        decodeProgress = max(decodeProgress, progress.coerceIn(0f, 1f))
+    }
+
+    fun recordSegmentProduced(sampleCount: Int) {
+        producedSamples += sampleCount.coerceAtLeast(0).toLong()
+    }
+
+    fun recordSegmentRecognized(sampleCount: Int) {
+        recognizedSamples += sampleCount.coerceAtLeast(0).toLong()
+    }
+
+    fun progress(): Float {
+        val vadProgress = decodeProgress * VAD_PROGRESS_WEIGHT
+        val recognitionRatio = if (producedSamples > 0L) {
+            recognizedSamples.toFloat() / producedSamples.toFloat()
+        } else {
+            0f
+        }
+        val recognitionProgress = minOf(recognitionRatio, decodeProgress) * RECOGNITION_PROGRESS_WEIGHT
+        lastProgress = max(lastProgress, (vadProgress + recognitionProgress).coerceIn(0f, 1f))
+        return lastProgress
     }
 }
 
@@ -276,7 +420,7 @@ internal object AndroidAudioPcmDecoder {
     suspend fun decodeToMono16k(
         context: Context,
         audioUri: Uri,
-        onDecodeProgress: (progress: Float) -> Unit,
+        onDecodeProgress: suspend (progress: Float) -> Unit,
         onSamples: suspend (samples: FloatArray) -> Unit,
     ) {
         val extractor = MediaExtractor()
