@@ -115,6 +115,7 @@ public final class DlsiteDownloadTask {
                 }
             }
             ImportResult importResult = importPlaylist(context, libraryRepository, importWork, audioFiles, coverFileForImport(dlsiteApi, importWork, workDir));
+            importWork = importWork.asDownloaded(importResult.playlistId, workDir.getAbsolutePath(), importResult.totalTrackCount);
             importedAudioFiles.addAll(audioFiles);
             ContentResult contentResult = new ContentResult(
                     option.id,
