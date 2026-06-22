@@ -206,16 +206,44 @@ class AiSubtitlePipelineTest {
     }
 
     @Test
-    fun orderedTranslationContentAllowsJapaneseTextAsTranslationForOnomatopoeia() {
+    fun orderedTranslationContentAcceptsChineseOnomatopoeia() {
         val source = listOf(SubtitleLine("1", 0L, 1_000L, "ん…"))
 
         val parsed = OpenAiCompatibleTranslator.parseCompleteTranslationContent(
-            content = """{"lines":[{"id":"1","zh":"ん…"}]}""",
+            content = """{"lines":[{"id":"1","zh":"嗯…"}]}""",
             finishReason = "stop",
             sourceLines = source,
         )
 
-        assertEquals("ん…", parsed.single().translatedText)
+        assertEquals("嗯…", parsed.single().translatedText)
+    }
+
+    @Test
+    fun orderedTranslationContentAcceptsChineseAsmrSoundLabel() {
+        val source = listOf(SubtitleLine("1", 0L, 1_000L, "れろ…"))
+
+        val parsed = OpenAiCompatibleTranslator.parseCompleteTranslationContent(
+            content = """{"lines":[{"id":"1","zh":"（舔舐声）"}]}""",
+            finishReason = "stop",
+            sourceLines = source,
+        )
+
+        assertEquals("（舔舐声）", parsed.single().translatedText)
+    }
+
+    @Test
+    fun orderedTranslationContentRejectsJapaneseKanaInTranslation() {
+        val source = listOf(SubtitleLine("1", 0L, 1_000L, "ん…"))
+
+        val error = assertThrows(IllegalArgumentException::class.java) {
+            OpenAiCompatibleTranslator.parseCompleteTranslationContent(
+                content = """{"lines":[{"id":"1","zh":"ん…"}]}""",
+                finishReason = "stop",
+                sourceLines = source,
+            )
+        }
+
+        assertTrue(error.message.orEmpty().contains("日文假名"))
     }
 
     @Test
@@ -278,7 +306,7 @@ class AiSubtitlePipelineTest {
                     request: TranslationRequest,
                 ): TranslationResponse {
                     userPrompt = request.messages.joinToString("\n") { it.content }
-                    return TranslationResponse("""{"lines":[{"id":"1","zh":"かせちゃ"}]}""", "stop")
+                    return TranslationResponse("""{"lines":[{"id":"1","zh":"（听不清）"}]}""", "stop")
                 }
             },
         )
@@ -290,7 +318,62 @@ class AiSubtitlePipelineTest {
         assertTrue(userPrompt.contains("逐行保守翻译"))
         assertTrue(userPrompt.contains("当前日文没有对应词"))
         assertTrue(userPrompt.contains("短碎片"))
-        assertTrue(userPrompt.contains("宁可保留日文"))
+        assertTrue(userPrompt.contains("不要保留日文"))
+        assertTrue(userPrompt.contains("（听不清）"))
+    }
+
+    @Test
+    fun translationPromptRequiresAsmrSoundEffectLabels() {
+        val source = listOf(SubtitleLine("1", 0L, 1_000L, "れろれろ"))
+        var userPrompt = ""
+        val translator = OpenAiCompatibleTranslator(
+            requestExecutor = object : TranslationRequestExecutor {
+                override suspend fun execute(
+                    settings: AiSubtitleSettings,
+                    request: TranslationRequest,
+                ): TranslationResponse {
+                    userPrompt = request.messages.joinToString("\n") { it.content }
+                    return TranslationResponse("""{"lines":[{"id":"1","zh":"（舔舐声）"}]}""", "stop")
+                }
+            },
+        )
+
+        runBlocking {
+            translator.translate(aiSettings(), TranslationBatch(lines = source, contextTitle = "playlist"))
+        }
+
+        assertTrue(userPrompt.contains("ASMR 音效翻译"))
+        assertTrue(userPrompt.contains("不要硬译拟声词字面"))
+        assertTrue(userPrompt.contains("（舔舐声）"))
+        assertTrue(userPrompt.contains("（摩擦声）"))
+    }
+
+    @Test
+    fun translationPromptCanEnableAdultContentLiteralTranslation() {
+        val source = listOf(SubtitleLine("1", 0L, 1_000L, "耳元で言うね"))
+        var userPrompt = ""
+        val translator = OpenAiCompatibleTranslator(
+            requestExecutor = object : TranslationRequestExecutor {
+                override suspend fun execute(
+                    settings: AiSubtitleSettings,
+                    request: TranslationRequest,
+                ): TranslationResponse {
+                    userPrompt = request.messages.joinToString("\n") { it.content }
+                    return TranslationResponse("""{"lines":[{"id":"1","zh":"在耳边说哦"}]}""", "stop")
+                }
+            },
+        )
+
+        runBlocking {
+            translator.translate(
+                aiSettings().copy(allowAdultContentTranslation = true),
+                TranslationBatch(lines = source, contextTitle = "playlist"),
+            )
+        }
+
+        assertTrue(userPrompt.contains("成人内容直译已开启"))
+        assertTrue(userPrompt.contains("按原文直译"))
+        assertTrue(userPrompt.contains("不得添加当前 ja 没有的成人内容"))
     }
 
     @Test
@@ -386,6 +469,7 @@ class AiSubtitlePipelineTest {
         )
         assertNull(cache.load(target, "base", settings, source.map { it.copy(sourceText = "${it.sourceText}!") }, sceneContext))
         assertNull(cache.load(target, "base", settings, source, sceneContext.copy(tone = "冷淡")))
+        assertNull(cache.load(target, "base", settings.copy(allowAdultContentTranslation = true), source, sceneContext))
     }
 
     @Test

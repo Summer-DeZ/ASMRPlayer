@@ -23,7 +23,7 @@ import org.json.JSONObject
 internal const val TRANSLATION_PROTOCOL_VERSION = "ordered-lines-v1"
 internal const val SCENE_CONTEXT_VERSION = "scene-context-v2"
 internal const val BATCH_STRATEGY_VERSION = "batch-60-window-4-v1"
-internal const val TRANSLATION_PROMPT_VERSION = "asr-ja-zh-ordered-v3"
+internal const val TRANSLATION_PROMPT_VERSION = "asr-ja-zh-ordered-v5"
 
 data class TranslationContextLine(
     val id: String,
@@ -268,10 +268,13 @@ class OpenAiCompatibleTranslator(
             你是 ASMR 日译中字幕翻译器。你只能翻译文本，绝不能输出、推测或改写任何时间轴。
             必须输出合法 json object，顶层只有 lines 数组。第 i 个返回项的 id 必须等于第 i 个输入项的 id。
             每个 id 必须恰好一条 zh；叹息、喘息、拟声、符号、无实义短句也必须保留或给出自然中文拟声，不得省略、合并、拆分、解释或输出 Markdown。
+            zh 必须输出简体中文、中文拟声或中文保守占位；不要把日文假名、片假名或整段日文原样放进 zh。
+            ASMR 音效翻译：舔舐、吸吮、摩擦、衣料摩擦、耳边摩擦、呼吸、喘息、湿润口腔音等非台词声音，不要硬译拟声词字面；优先输出「（舔舐声）」「（摩擦声）」「（耳边摩擦声）」「（呼吸声）」这类简短中文声音描述。
             前文窗口和后文窗口只供理解语气和称呼，不要输出窗口里的 id。
             逐行保守翻译：不得把情景卡、标题、术语表或后文里出现但当前日文没有对应词的内容塞进当前 zh。
-            如果一行像 ASR 误识别、短碎片、半个词或无法确定含义，优先输出原日文或保守片段，不要硬猜成完整中文句子。
+            如果一行像 ASR 误识别、短碎片、半个词或无法确定含义，输出「（听不清）」或「（含混）」这类中文保守占位，不要保留日文，也不要硬猜成完整中文句子。
             例如当前行不含「女の子/女子/少女/女」等对应词时，不得译出「女孩子」；当前行不含「寒い/冷たい/冷える」等对应词时，不得译出「很冷」。
+            ${adultContentRule(settings)}
         """.trimIndent()
         val user = buildString {
             appendLine("作品标题：${batch.contextTitle.ifBlank { "ASMR 音声" }}")
@@ -284,7 +287,12 @@ class OpenAiCompatibleTranslator(
             appendLine(sourceLinesJsonString(batch.lines))
             appendLine("只读后文窗口 json（不要输出这些 id）：")
             appendLine(contextLinesJsonString(batch.nextContext, includeZh = false))
-            appendLine("质量规则：每个 zh 必须主要来自同一 id 的 ja；上下文只能消歧，不能替代当前行。短碎片或疑似识别错误时，宁可保留日文，不要凭空补人物、感受或动作。")
+            appendLine("质量规则：每个 zh 必须主要来自同一 id 的 ja；上下文只能消歧，不能替代当前行。短碎片或疑似识别错误时，输出中文保守占位，不要保留日文，不要凭空补人物、感受或动作。舔舐、摩擦、呼吸等 ASMR 非台词声音优先输出「（舔舐声）」「（摩擦声）」等中文声音描述。")
+            if (settings.allowAdultContentTranslation) {
+                appendLine("成人内容直译已开启：原文如果包含成人向或敏感词，请按原意翻成直接、自然的中文，不要用省略号、含糊词或同义规避；但仍不得添加当前 ja 没有的成人内容。")
+            } else {
+                appendLine("成人内容直译未开启：保持普通字幕翻译风格，不额外强化成人向表达。")
+            }
             appendLine("返回格式必须是：{\"lines\":[{\"id\":\"输入 id\",\"zh\":\"中文译文\"}]}")
             if (!lastFailure.isNullOrBlank()) {
                 appendLine("上次失败原因：$lastFailure。请严格修正 JSON 结构、id 顺序和每行 zh。")
@@ -343,6 +351,14 @@ class OpenAiCompatibleTranslator(
         return (sourceChars * 4 + contextChars * 2 + 2_048).coerceIn(4_096, 12_000)
     }
 
+    private fun adultContentRule(settings: AiSubtitleSettings): String {
+        return if (settings.allowAdultContentTranslation) {
+            "成人内容直译：当前 ja 若明确包含成人向或敏感表达，应按原文直译成中文敏感词，不要因为敏感而弱化、消音、跳过或改写；但不能新增原文没有的成人内容。"
+        } else {
+            "成人内容：按普通字幕标准翻译，不要因情景卡自行添加成人向内容。"
+        }
+    }
+
     private fun sourceLinesJsonString(lines: List<SubtitleLine>): String {
         return lines.joinToString(prefix = "[", postfix = "]") { line ->
             """{"id":${jsonStringLiteral(line.id)},"ja":${jsonStringLiteral(line.sourceText)}}"""
@@ -395,6 +411,9 @@ class OpenAiCompatibleTranslator(
                 val translatedText = item.zh.trim()
                 if (translatedText.isBlank()) {
                     throw IllegalArgumentException("翻译响应第 ${source.id} 句为空")
+                }
+                if (containsJapaneseKana(translatedText)) {
+                    throw IllegalArgumentException("翻译响应第 ${source.id} 句仍含日文假名")
                 }
                 source.copy(translatedText = translatedText)
             }
@@ -577,6 +596,12 @@ class OpenAiCompatibleTranslator(
                 withoutOpening.removeSuffix("```").trim()
             } else {
                 withoutOpening
+            }
+        }
+
+        private fun containsJapaneseKana(value: String): Boolean {
+            return value.any { char ->
+                char in '\u3040'..'\u309f' || char in '\u30a0'..'\u30ff'
             }
         }
 

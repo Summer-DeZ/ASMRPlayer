@@ -28,6 +28,7 @@ data class AiSubtitleSettings(
     val deepSeekModel: String = AiTranslationEngine.DEEPSEEK.defaultModel,
     val deepSeekApiKey: String = "",
     val whisperModelId: String = WhisperModelSpec.DEFAULT_ID,
+    val allowAdultContentTranslation: Boolean = false,
 ) {
     val activeBaseUrl: String
         get() = when (translationEngine) {

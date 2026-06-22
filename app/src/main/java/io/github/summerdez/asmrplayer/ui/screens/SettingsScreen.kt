@@ -65,6 +65,7 @@ fun SettingsTab(
     onEditAiDeepSeekBaseUrl: () -> Unit,
     onEditAiDeepSeekModel: () -> Unit,
     onEditAiDeepSeekApiKey: () -> Unit,
+    onAiAdultContentTranslationAllowedChange: (Boolean) -> Unit,
     onAiWhisperModelSelected: (String) -> Unit,
     onDownloadWhisperModel: () -> Unit,
     onCancelWhisperModelDownload: () -> Unit,
@@ -149,8 +150,15 @@ fun SettingsTab(
                     )
                 }
             }
+            HorizontalDivider(color = tokens.separator, modifier = Modifier.padding(start = 16.dp))
+            SettingsSwitchRow(
+                "成人内容直译",
+                state.aiSubtitleSettings.allowAdultContentTranslation,
+            ) {
+                onAiAdultContentTranslationAllowedChange(!state.aiSubtitleSettings.allowAdultContentTranslation)
+            }
         }
-        GroupFooter("音频只在本机转写；翻译阶段只发送文本。DeepSeek 需自填 API Key，应用不内置。")
+        GroupFooter("音频只在本机转写；翻译阶段只发送文本。开启成人内容直译后，AI 会按原文翻译成人向敏感词，不再用模糊说法规避。")
         Spacer(Modifier.height(14.dp))
         SectionLabel("转写模型")
         GroupedCard {

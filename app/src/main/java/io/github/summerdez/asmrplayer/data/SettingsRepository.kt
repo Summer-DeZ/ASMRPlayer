@@ -36,6 +36,7 @@ interface SettingsRepository {
     fun setAiDeepSeekModel(value: String)
     fun setAiDeepSeekApiKey(value: String)
     fun setAiWhisperModelId(value: String)
+    fun setAiAdultContentTranslationAllowed(value: Boolean)
 }
 
 class AppSettingsRepository(
@@ -52,6 +53,7 @@ class AppSettingsRepository(
             settingsDao.valueFlow(KEY_AI_DEEPSEEK_MODEL),
             settingsDao.valueFlow(KEY_AI_DEEPSEEK_API_KEY),
             settingsDao.valueFlow(KEY_AI_WHISPER_MODEL_ID),
+            settingsDao.valueFlow(KEY_AI_ADULT_CONTENT_TRANSLATION),
         ),
     ) { values ->
         aiSettingsFromValues(values)
@@ -76,6 +78,7 @@ class AppSettingsRepository(
                     settingsDao.value(KEY_AI_DEEPSEEK_MODEL),
                     settingsDao.value(KEY_AI_DEEPSEEK_API_KEY),
                     settingsDao.value(KEY_AI_WHISPER_MODEL_ID),
+                    settingsDao.value(KEY_AI_ADULT_CONTENT_TRANSLATION),
                 ),
             )
         }
@@ -109,6 +112,10 @@ class AppSettingsRepository(
         put(KEY_AI_WHISPER_MODEL_ID, WhisperModelSpec.byId(value).id)
     }
 
+    override fun setAiAdultContentTranslationAllowed(value: Boolean) {
+        put(KEY_AI_ADULT_CONTENT_TRANSLATION, value.toString())
+    }
+
     private fun put(key: String, value: String) {
         DbIo.run {
             settingsDao.put(AppSettingEntity(key, value))
@@ -127,6 +134,7 @@ class AppSettingsRepository(
             deepSeekModel = normalizeDeepSeekModel(values.getOrNull(4)),
             deepSeekApiKey = values.getOrNull(5).orEmpty(),
             whisperModelId = WhisperModelSpec.byId(values.getOrNull(6)).id,
+            allowAdultContentTranslation = values.getOrNull(7)?.toBooleanStrictOrNull() ?: false,
         )
     }
 
@@ -147,6 +155,7 @@ class AppSettingsRepository(
         const val KEY_AI_DEEPSEEK_MODEL = "ai_deepseek_model"
         const val KEY_AI_DEEPSEEK_API_KEY = "ai_deepseek_api_key"
         const val KEY_AI_WHISPER_MODEL_ID = "ai_whisper_model_id"
+        const val KEY_AI_ADULT_CONTENT_TRANSLATION = "ai_adult_content_translation"
         val LEGACY_DEEPSEEK_DEFAULT_MODELS = setOf("deepseek-v4-pro")
     }
 }

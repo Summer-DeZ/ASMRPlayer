@@ -330,6 +330,10 @@ class SettingsViewModel(
         settingsRepository.setAiWhisperModelId(value)
     }
 
+    fun setAiAdultContentTranslationAllowed(value: Boolean) {
+        settingsRepository.setAiAdultContentTranslationAllowed(value)
+    }
+
     fun downloadWhisperModel() {
         val spec = WhisperModelSpec.byId(_state.value.aiSubtitleSettings.whisperModelId)
         if (_state.value.whisperModelState.downloading || _state.value.whisperModelState.downloaded) {

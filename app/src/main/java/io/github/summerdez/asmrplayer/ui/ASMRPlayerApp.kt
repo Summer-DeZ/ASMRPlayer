@@ -289,6 +289,7 @@ fun ASMRPlayerApp(
                                 onEditAiDeepSeekBaseUrl = { aiSettingField = AiSettingField.DEEPSEEK_BASE_URL },
                                 onEditAiDeepSeekModel = { aiSettingField = AiSettingField.DEEPSEEK_MODEL },
                                 onEditAiDeepSeekApiKey = { aiSettingField = AiSettingField.DEEPSEEK_API_KEY },
+                                onAiAdultContentTranslationAllowedChange = settingsViewModel::setAiAdultContentTranslationAllowed,
                                 onAiWhisperModelSelected = settingsViewModel::setAiWhisperModelId,
                                 onDownloadWhisperModel = settingsViewModel::downloadWhisperModel,
                                 onCancelWhisperModelDownload = settingsViewModel::cancelWhisperModelDownload,

@@ -51,6 +51,7 @@ internal class AiSubtitleTranslationCache(
                 metadata[KEY_TRANSLATION_ENGINE] != settings.translationEngine.name ||
                 metadata[KEY_BASE_URL] != settings.activeBaseUrl.trim().trimEnd('/') ||
                 metadata[KEY_MODEL] != settings.activeModel ||
+                metadata[KEY_ADULT_CONTENT_TRANSLATION] != settings.allowAdultContentTranslation.toString() ||
                 metadata[KEY_CONTEXT_TITLE] != target.contextTitle ||
                 metadata[KEY_PROMPT_VERSION] != PROMPT_VERSION ||
                 metadata[KEY_TRANSLATION_PROTOCOL_VERSION] != TRANSLATION_PROTOCOL_VERSION ||
@@ -93,6 +94,7 @@ internal class AiSubtitleTranslationCache(
             appendLine("$KEY_TRANSLATION_ENGINE=${encode(settings.translationEngine.name)}")
             appendLine("$KEY_BASE_URL=${encode(settings.activeBaseUrl.trim().trimEnd('/'))}")
             appendLine("$KEY_MODEL=${encode(settings.activeModel)}")
+            appendLine("$KEY_ADULT_CONTENT_TRANSLATION=${encode(settings.allowAdultContentTranslation.toString())}")
             appendLine("$KEY_CONTEXT_TITLE=${encode(target.contextTitle)}")
             appendLine("$KEY_PROMPT_VERSION=${encode(PROMPT_VERSION)}")
             appendLine("$KEY_TRANSLATION_PROTOCOL_VERSION=${encode(TRANSLATION_PROTOCOL_VERSION)}")
@@ -176,6 +178,7 @@ internal class AiSubtitleTranslationCache(
         const val KEY_TRANSLATION_ENGINE = "translationEngine"
         const val KEY_BASE_URL = "baseUrl"
         const val KEY_MODEL = "model"
+        const val KEY_ADULT_CONTENT_TRANSLATION = "adultContentTranslation"
         const val KEY_CONTEXT_TITLE = "contextTitle"
         const val KEY_PROMPT_VERSION = "promptVersion"
         const val KEY_TRANSLATION_PROTOCOL_VERSION = "translationProtocolVersion"
