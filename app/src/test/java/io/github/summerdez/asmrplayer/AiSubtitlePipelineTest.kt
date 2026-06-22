@@ -2,15 +2,13 @@ package io.github.summerdez.asmrplayer
 
 import io.github.summerdez.asmrplayer.data.ai.AiSubtitleVtt
 import io.github.summerdez.asmrplayer.data.ai.AiSubtitleSegmentCache
+import io.github.summerdez.asmrplayer.data.ai.AiSubtitleTaskStateBus
 import io.github.summerdez.asmrplayer.data.ai.AiSubtitleTranslationCache
-import io.github.summerdez.asmrplayer.data.ai.AsrBackendPlanner
-import io.github.summerdez.asmrplayer.data.ai.AsrRuntimeBackend
 import io.github.summerdez.asmrplayer.data.ai.OpenAiCompatibleTranslator
 import io.github.summerdez.asmrplayer.data.ai.StreamingLinearResampler
-import io.github.summerdez.asmrplayer.domain.model.AiAsrBackendPreference
 import io.github.summerdez.asmrplayer.domain.model.AiSubtitleSettings
+import io.github.summerdez.asmrplayer.domain.model.AiSubtitleStage
 import io.github.summerdez.asmrplayer.domain.model.AiTranslationEngine
-import io.github.summerdez.asmrplayer.domain.model.GpuWhisperModelSpec
 import io.github.summerdez.asmrplayer.domain.model.SubtitleGenerationTarget
 import io.github.summerdez.asmrplayer.domain.model.SubtitleLine
 import io.github.summerdez.asmrplayer.domain.model.WhisperModelSpec
@@ -209,43 +207,35 @@ class AiSubtitlePipelineTest {
     }
 
     @Test
-    fun gpuWhisperModelSpecsStaySeparateFromCpuOnnxModels() {
-        assertEquals("base-q5_1", GpuWhisperModelSpec.DEFAULT_ID)
-        assertEquals(GpuWhisperModelSpec.BASE, GpuWhisperModelSpec.byId(null))
-        assertEquals(listOf("base-q5_1", "small-q5_1"), GpuWhisperModelSpec.ALL.map { it.id })
-        assertEquals("ggml-base-q5_1.bin", GpuWhisperModelSpec.BASE.fileName)
-        assertEquals("ggml-small-q5_1.bin", GpuWhisperModelSpec.SMALL.fileName)
-        assertTrue(GpuWhisperModelSpec.SMALL.experimental)
-        assertTrue(GpuWhisperModelSpec.SMALL.sizeBytes > GpuWhisperModelSpec.BASE.sizeBytes)
-        assertTrue(GpuWhisperModelSpec.BASE.directoryName.startsWith("whisper-cpp"))
-    }
-
-    @Test
     fun deepSeekDefaultModelUsesFlash() {
         assertEquals("deepseek-v4-flash", AiTranslationEngine.DEEPSEEK.defaultModel)
     }
 
     @Test
-    fun asrBackendPlannerKeepsCpuFallbackWhenGpuBackendIsMissing() {
-        val decision = AsrBackendPlanner.choose(
-            preference = AiAsrBackendPreference.AUTO,
-            gpuAvailable = true,
-            gpuBackendRegistered = false,
+    fun aiSubtitleTaskProgressDoesNotRegressWhenPreviewArrives() {
+        val target = SubtitleGenerationTarget(
+            playlistId = "playlist-progress",
+            trackId = "track-progress",
+            trackTitle = "track",
+            audioUri = "content://audio/progress",
         )
 
-        assertEquals(AsrRuntimeBackend.SHERPA_ONNX_CPU, decision.backend)
-        assertTrue(decision.fallbackReason.contains("CPU"))
-    }
-
-    @Test
-    fun asrBackendPlannerSelectsGpuOnlyWhenAvailableAndRegistered() {
-        val decision = AsrBackendPlanner.choose(
-            preference = AiAsrBackendPreference.GPU_EXPERIMENTAL,
-            gpuAvailable = true,
-            gpuBackendRegistered = true,
+        AiSubtitleTaskStateBus.publish(target, AiSubtitleStage.TRANSCRIBING)
+        AiSubtitleTaskStateBus.publishTranscribing(
+            target = target,
+            progress = 0.42f,
+            preview = listOf(SubtitleLine("1", 0L, 1_000L, "進んだ")),
+        )
+        AiSubtitleTaskStateBus.publishTranscribing(
+            target = target,
+            progress = 0.02f,
+            preview = listOf(SubtitleLine("2", 1_000L, 2_000L, "プレビュー")),
         )
 
-        assertEquals(AsrRuntimeBackend.WHISPER_CPP_VULKAN, decision.backend)
+        val task = AiSubtitleTaskStateBus.taskFor(target.trackId)
+        assertEquals(0.42f, task?.transcribeProgress ?: 0f, 0.0001f)
+        assertEquals("プレビュー", task?.previewLines?.last()?.sourceText)
+        AiSubtitleTaskStateBus.remove(target.trackId)
     }
 
     @Test

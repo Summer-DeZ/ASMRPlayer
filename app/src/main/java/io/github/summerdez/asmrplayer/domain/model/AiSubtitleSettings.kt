@@ -20,14 +20,6 @@ enum class AiTranslationEngine(
     ),
 }
 
-enum class AiAsrBackendPreference(
-    val label: String,
-) {
-    AUTO("自动"),
-    CPU("CPU"),
-    GPU_EXPERIMENTAL("GPU（实验）"),
-}
-
 data class AiSubtitleSettings(
     val translationEngine: AiTranslationEngine = AiTranslationEngine.OLLAMA,
     val ollamaBaseUrl: String = AiTranslationEngine.OLLAMA.defaultBaseUrl,
@@ -36,8 +28,6 @@ data class AiSubtitleSettings(
     val deepSeekModel: String = AiTranslationEngine.DEEPSEEK.defaultModel,
     val deepSeekApiKey: String = "",
     val whisperModelId: String = WhisperModelSpec.DEFAULT_ID,
-    val asrBackendPreference: AiAsrBackendPreference = AiAsrBackendPreference.AUTO,
-    val gpuWhisperModelId: String = GpuWhisperModelSpec.DEFAULT_ID,
 ) {
     val activeBaseUrl: String
         get() = when (translationEngine) {
@@ -152,44 +142,3 @@ data class WhisperModelFileSpec(
     val downloadUrl: String,
     val sizeBytes: Long,
 )
-
-data class GpuWhisperModelSpec(
-    val id: String,
-    val label: String,
-    val directoryName: String,
-    val fileName: String,
-    val downloadUrl: String,
-    val sizeBytes: Long,
-    val experimental: Boolean = false,
-) {
-    companion object {
-        const val DEFAULT_ID = "base-q5_1"
-        private const val WHISPER_CPP_MODELS =
-            "https://huggingface.co/ggerganov/whisper.cpp/resolve/main"
-
-        val BASE = GpuWhisperModelSpec(
-            id = DEFAULT_ID,
-            label = "Whisper base Q5_1（GPU）",
-            directoryName = "whisper-cpp-base-q5_1",
-            fileName = "ggml-base-q5_1.bin",
-            downloadUrl = "$WHISPER_CPP_MODELS/ggml-base-q5_1.bin",
-            sizeBytes = 59_700_000L,
-        )
-
-        val SMALL = GpuWhisperModelSpec(
-            id = "small-q5_1",
-            label = "Whisper small Q5_1（GPU 实验）",
-            directoryName = "whisper-cpp-small-q5_1",
-            fileName = "ggml-small-q5_1.bin",
-            downloadUrl = "$WHISPER_CPP_MODELS/ggml-small-q5_1.bin",
-            sizeBytes = 163_000_000L,
-            experimental = true,
-        )
-
-        val ALL: List<GpuWhisperModelSpec> = listOf(BASE, SMALL)
-
-        fun byId(id: String?): GpuWhisperModelSpec {
-            return ALL.firstOrNull { it.id == id } ?: BASE
-        }
-    }
-}

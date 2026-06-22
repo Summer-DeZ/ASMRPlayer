@@ -34,7 +34,6 @@ data class AiSubtitleTaskState(
     val previewLines: List<SubtitleLine> = emptyList(),
     val subtitlePath: String = "",
     val error: String = "",
-    val backendNotice: String = "",
 ) {
     val overallProgress: Float
         get() = when (stage) {

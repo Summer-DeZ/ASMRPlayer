@@ -17,10 +17,8 @@ import io.github.summerdez.asmrplayer.ui.theme.*
 import io.github.summerdez.asmrplayer.ui.util.*
 import io.github.summerdez.asmrplayer.di.*
 import android.content.Context
-import io.github.summerdez.asmrplayer.domain.model.AiAsrBackendPreference
 import io.github.summerdez.asmrplayer.domain.model.AiSubtitleSettings
 import io.github.summerdez.asmrplayer.domain.model.AiTranslationEngine
-import io.github.summerdez.asmrplayer.domain.model.GpuWhisperModelSpec
 import io.github.summerdez.asmrplayer.domain.model.WhisperModelSpec
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.combine
@@ -38,8 +36,6 @@ interface SettingsRepository {
     fun setAiDeepSeekModel(value: String)
     fun setAiDeepSeekApiKey(value: String)
     fun setAiWhisperModelId(value: String)
-    fun setAiAsrBackendPreference(value: AiAsrBackendPreference)
-    fun setAiGpuWhisperModelId(value: String)
 }
 
 class AppSettingsRepository(
@@ -56,8 +52,6 @@ class AppSettingsRepository(
             settingsDao.valueFlow(KEY_AI_DEEPSEEK_MODEL),
             settingsDao.valueFlow(KEY_AI_DEEPSEEK_API_KEY),
             settingsDao.valueFlow(KEY_AI_WHISPER_MODEL_ID),
-            settingsDao.valueFlow(KEY_AI_ASR_BACKEND_PREFERENCE),
-            settingsDao.valueFlow(KEY_AI_GPU_WHISPER_MODEL_ID),
         ),
     ) { values ->
         aiSettingsFromValues(values)
@@ -82,8 +76,6 @@ class AppSettingsRepository(
                     settingsDao.value(KEY_AI_DEEPSEEK_MODEL),
                     settingsDao.value(KEY_AI_DEEPSEEK_API_KEY),
                     settingsDao.value(KEY_AI_WHISPER_MODEL_ID),
-                    settingsDao.value(KEY_AI_ASR_BACKEND_PREFERENCE),
-                    settingsDao.value(KEY_AI_GPU_WHISPER_MODEL_ID),
                 ),
             )
         }
@@ -117,14 +109,6 @@ class AppSettingsRepository(
         put(KEY_AI_WHISPER_MODEL_ID, WhisperModelSpec.byId(value).id)
     }
 
-    override fun setAiAsrBackendPreference(value: AiAsrBackendPreference) {
-        put(KEY_AI_ASR_BACKEND_PREFERENCE, value.name)
-    }
-
-    override fun setAiGpuWhisperModelId(value: String) {
-        put(KEY_AI_GPU_WHISPER_MODEL_ID, GpuWhisperModelSpec.byId(value).id)
-    }
-
     private fun put(key: String, value: String) {
         DbIo.run {
             settingsDao.put(AppSettingEntity(key, value))
@@ -143,10 +127,6 @@ class AppSettingsRepository(
             deepSeekModel = normalizeDeepSeekModel(values.getOrNull(4)),
             deepSeekApiKey = values.getOrNull(5).orEmpty(),
             whisperModelId = WhisperModelSpec.byId(values.getOrNull(6)).id,
-            asrBackendPreference = values.getOrNull(7).orEmpty()
-                .let { raw -> AiAsrBackendPreference.entries.firstOrNull { it.name == raw } }
-                ?: AiAsrBackendPreference.AUTO,
-            gpuWhisperModelId = GpuWhisperModelSpec.byId(values.getOrNull(8)).id,
         )
     }
 
@@ -167,8 +147,6 @@ class AppSettingsRepository(
         const val KEY_AI_DEEPSEEK_MODEL = "ai_deepseek_model"
         const val KEY_AI_DEEPSEEK_API_KEY = "ai_deepseek_api_key"
         const val KEY_AI_WHISPER_MODEL_ID = "ai_whisper_model_id"
-        const val KEY_AI_ASR_BACKEND_PREFERENCE = "ai_asr_backend_preference"
-        const val KEY_AI_GPU_WHISPER_MODEL_ID = "ai_gpu_whisper_model_id"
         val LEGACY_DEEPSEEK_DEFAULT_MODELS = setOf("deepseek-v4-pro")
     }
 }

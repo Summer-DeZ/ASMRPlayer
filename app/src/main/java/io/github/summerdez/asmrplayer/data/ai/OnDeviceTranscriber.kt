@@ -20,11 +20,17 @@ import io.github.summerdez.asmrplayer.domain.model.WhisperModelSpec
 import java.io.IOException
 import java.nio.ByteBuffer
 import java.nio.ByteOrder
+import java.util.concurrent.atomic.AtomicLong
 import kotlin.math.floor
 import kotlin.math.max
+import kotlinx.coroutines.channels.Channel
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.coroutineScope
 import kotlinx.coroutines.currentCoroutineContext
 import kotlinx.coroutines.ensureActive
+import kotlinx.coroutines.launch
+import kotlinx.coroutines.sync.Mutex
+import kotlinx.coroutines.sync.withLock
 import kotlinx.coroutines.withContext
 
 interface OnDeviceTranscriber {
@@ -34,6 +40,54 @@ interface OnDeviceTranscriber {
         modelState: WhisperModelState,
         onProgress: (progress: Float, preview: List<SubtitleLine>) -> Unit,
     ): List<SubtitleLine>
+}
+
+internal const val WHISPER_SAMPLE_RATE = 16_000
+internal const val WHISPER_PREVIEW_LINE_COUNT = 8
+
+internal data class VadSpeechSegment(
+    val startMs: Long,
+    val samples: FloatArray,
+)
+
+internal fun buildSileroVad(paths: WhisperModelPaths): Vad {
+    return Vad(
+        config = VadModelConfig(
+            sileroVadModelConfig = SileroVadModelConfig(
+                model = paths.vad.absolutePath,
+                threshold = 0.5f,
+                minSilenceDuration = 0.45f,
+                minSpeechDuration = 0.25f,
+                windowSize = 512,
+                maxSpeechDuration = 30.0f,
+            ),
+            sampleRate = WHISPER_SAMPLE_RATE,
+            numThreads = 1,
+            provider = "cpu",
+        ),
+    )
+}
+
+internal suspend fun drainVadSpeechSegments(
+    vad: Vad,
+    onSegment: suspend (VadSpeechSegment) -> Unit,
+) {
+    while (!vad.empty()) {
+        val segment = vad.front()
+        if (segment.samples.isNotEmpty()) {
+            onSegment(
+                VadSpeechSegment(
+                    startMs = segment.start * 1000L / WHISPER_SAMPLE_RATE,
+                    samples = segment.samples,
+                ),
+            )
+        }
+        vad.pop()
+    }
+}
+
+internal fun whisperSampleCountToMs(sampleCount: Int): Long {
+    return sampleCount * 1000L / WHISPER_SAMPLE_RATE
 }
 
 class WhisperRuntimeTranscriber : OnDeviceTranscriber {
@@ -52,57 +106,53 @@ class WhisperRuntimeTranscriber : OnDeviceTranscriber {
             // Report URI permission or file errors before runtime/model initialization.
         } ?: throw IOException("无法读取音频文件")
 
-        val lines = mutableListOf<SubtitleLine>()
-        val vad = buildVad(paths)
-        val recognizer = buildRecognizer(modelState.spec, paths)
+        val speechSegments = mutableListOf<VadSpeechSegment>()
+        var lastDecodeProgress = 0f
+        val vad = buildSileroVad(paths)
         try {
             AndroidAudioPcmDecoder.decodeToMono16k(
                 context = context,
                 audioUri = audioUri,
                 onDecodeProgress = { progress ->
-                    onProgress(progress, lines.takeLast(PREVIEW_LINE_COUNT))
+                    lastDecodeProgress = progress.coerceIn(0f, 1f)
+                    onProgress(lastDecodeProgress * VAD_PROGRESS_WEIGHT, emptyList())
                 },
                 onSamples = { samples ->
                     currentCoroutineContext().ensureActive()
                     vad.acceptWaveform(samples)
-                    drainVadSegments(vad, recognizer, lines, onProgress)
+                    collectVadSegments(vad, speechSegments)
+                    onProgress(lastDecodeProgress * VAD_PROGRESS_WEIGHT, emptyList())
                 },
             )
             vad.flush()
-            drainVadSegments(vad, recognizer, lines, onProgress)
+            collectVadSegments(vad, speechSegments)
         } finally {
-            recognizer.release()
             vad.release()
         }
+        if (speechSegments.isEmpty()) {
+            throw IOException("未识别到可用语音片段")
+        }
+        val lines = recognizeSegmentsInParallel(
+            spec = modelState.spec,
+            paths = paths,
+            segments = speechSegments,
+            onProgress = onProgress,
+        )
         if (lines.isEmpty()) {
             throw IOException("未识别到可用语音片段")
         }
-        onProgress(1f, lines.takeLast(PREVIEW_LINE_COUNT))
+        onProgress(1f, lines.takeLast(WHISPER_PREVIEW_LINE_COUNT))
         lines
     }
 
-    private fun buildVad(paths: WhisperModelPaths): Vad {
-        return Vad(
-            config = VadModelConfig(
-                sileroVadModelConfig = SileroVadModelConfig(
-                    model = paths.vad.absolutePath,
-                    threshold = 0.5f,
-                    minSilenceDuration = 0.45f,
-                    minSpeechDuration = 0.25f,
-                    windowSize = 512,
-                    maxSpeechDuration = 30.0f,
-                ),
-                sampleRate = SAMPLE_RATE,
-                numThreads = 1,
-                provider = "cpu",
-            ),
-        )
-    }
-
-    private fun buildRecognizer(spec: WhisperModelSpec, paths: WhisperModelPaths): OfflineRecognizer {
+    private fun buildRecognizer(
+        spec: WhisperModelSpec,
+        paths: WhisperModelPaths,
+        numThreads: Int = Runtime.getRuntime().availableProcessors().coerceIn(1, 4),
+    ): OfflineRecognizer {
         return OfflineRecognizer(
             config = OfflineRecognizerConfig(
-                featConfig = FeatureConfig(sampleRate = SAMPLE_RATE, featureDim = 80, dither = 0.0f),
+                featConfig = FeatureConfig(sampleRate = WHISPER_SAMPLE_RATE, featureDim = 80, dither = 0.0f),
                 modelConfig = OfflineModelConfig(
                     whisper = OfflineWhisperModelConfig(
                         encoder = paths.encoder.absolutePath,
@@ -113,41 +163,80 @@ class WhisperRuntimeTranscriber : OnDeviceTranscriber {
                     ),
                     tokens = paths.tokens.absolutePath,
                     modelType = "whisper",
-                    numThreads = Runtime.getRuntime().availableProcessors().coerceIn(1, 4),
+                    numThreads = numThreads,
                     provider = "cpu",
                 ),
             ),
         )
     }
 
-    private fun drainVadSegments(
+    private suspend fun collectVadSegments(
         vad: Vad,
-        recognizer: OfflineRecognizer,
-        lines: MutableList<SubtitleLine>,
-        onProgress: (progress: Float, preview: List<SubtitleLine>) -> Unit,
+        segments: MutableList<VadSpeechSegment>,
     ) {
-        while (!vad.empty()) {
-            val segment = vad.front()
-            val text = recognizeSegment(recognizer, segment.samples)
-            if (text.isNotBlank()) {
-                val startMs = segment.start * 1000L / SAMPLE_RATE
-                val endMs = startMs + segment.samples.size * 1000L / SAMPLE_RATE
-                lines += SubtitleLine(
-                    id = (lines.size + 1).toString(),
-                    startMs = startMs,
-                    endMs = endMs.coerceAtLeast(startMs + 250L),
-                    sourceText = text,
-                )
-                onProgress(0f, lines.takeLast(PREVIEW_LINE_COUNT))
-            }
-            vad.pop()
+        drainVadSpeechSegments(vad) { segment ->
+            segments += segment
         }
+    }
+
+    private suspend fun recognizeSegmentsInParallel(
+        spec: WhisperModelSpec,
+        paths: WhisperModelPaths,
+        segments: List<VadSpeechSegment>,
+        onProgress: (progress: Float, preview: List<SubtitleLine>) -> Unit,
+    ): List<SubtitleLine> {
+        val results = arrayOfNulls<SubtitleLine>(segments.size)
+        val completedSamples = AtomicLong(0L)
+        val totalSamples = segments.sumOf { it.samples.size.toLong() }.coerceAtLeast(1L)
+        val resultMutex = Mutex()
+        val workerCount = cpuWorkerCount(segments.size)
+        val recognizerThreads = if (workerCount > 1) 1 else Runtime.getRuntime().availableProcessors().coerceIn(1, 4)
+        coroutineScope {
+            val taskChannel = Channel<IndexedValue<VadSpeechSegment>>(Channel.UNLIMITED)
+            repeat(workerCount) {
+                launch {
+                    val recognizer = buildRecognizer(spec, paths, recognizerThreads)
+                    try {
+                        for (task in taskChannel) {
+                            currentCoroutineContext().ensureActive()
+                            val segment = task.value
+                            val text = recognizeSegment(recognizer, segment.samples)
+                            val endMs = segment.startMs + whisperSampleCountToMs(segment.samples.size)
+                            val line = if (text.isBlank()) {
+                                null
+                            } else {
+                                SubtitleLine(
+                                    id = (task.index + 1).toString(),
+                                    startMs = segment.startMs,
+                                    endMs = endMs.coerceAtLeast(segment.startMs + 250L),
+                                    sourceText = text,
+                                )
+                            }
+                            val doneSamples = completedSamples.addAndGet(segment.samples.size.toLong())
+                            resultMutex.withLock {
+                                results[task.index] = line
+                                val progress = VAD_PROGRESS_WEIGHT +
+                                    (doneSamples.toFloat() / totalSamples.toFloat()) * RECOGNITION_PROGRESS_WEIGHT
+                                onProgress(progress.coerceIn(VAD_PROGRESS_WEIGHT, 1f), previewLines(results))
+                            }
+                        }
+                    } finally {
+                        recognizer.release()
+                    }
+                }
+            }
+            segments.forEachIndexed { index, segment ->
+                taskChannel.send(IndexedValue(index, segment))
+            }
+            taskChannel.close()
+        }
+        return orderedLines(results)
     }
 
     private fun recognizeSegment(recognizer: OfflineRecognizer, samples: FloatArray): String {
         val stream = recognizer.createStream()
         return try {
-            stream.acceptWaveform(samples, SAMPLE_RATE)
+            stream.acceptWaveform(samples, WHISPER_SAMPLE_RATE)
             recognizer.decode(stream)
             recognizer.getResult(stream).text.trim()
         } finally {
@@ -156,10 +245,28 @@ class WhisperRuntimeTranscriber : OnDeviceTranscriber {
     }
 
     companion object {
-        private const val SAMPLE_RATE = 16_000
-        private const val PREVIEW_LINE_COUNT = 8
+        private const val VAD_PROGRESS_WEIGHT = 0.2f
+        private const val RECOGNITION_PROGRESS_WEIGHT = 0.8f
 
         fun runtimeName(spec: WhisperModelSpec): String = "Whisper ${spec.id}"
+
+        private fun cpuWorkerCount(segmentCount: Int): Int {
+            if (segmentCount <= 1) {
+                return 1
+            }
+            return minOf(2, Runtime.getRuntime().availableProcessors().coerceAtLeast(1), segmentCount)
+        }
+
+        private fun orderedLines(results: Array<SubtitleLine?>): List<SubtitleLine> {
+            return results
+                .filterNotNull()
+                .sortedBy { it.startMs }
+                .mapIndexed { index, line -> line.copy(id = (index + 1).toString()) }
+        }
+
+        private fun previewLines(results: Array<SubtitleLine?>): List<SubtitleLine> {
+            return orderedLines(results).takeLast(WHISPER_PREVIEW_LINE_COUNT)
+        }
     }
 }
 

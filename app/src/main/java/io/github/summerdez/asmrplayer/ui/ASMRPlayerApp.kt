@@ -284,7 +284,6 @@ fun ASMRPlayerApp(
                                 onCancelUpdateDownload = settingsViewModel::cancelUpdateDownload,
                                 onRetryUpdateDownload = settingsViewModel::retryUpdateDownload,
                                 onAiEngineSelected = settingsViewModel::setAiTranslationEngine,
-                                onAiAsrBackendSelected = settingsViewModel::setAiAsrBackendPreference,
                                 onEditAiOllamaBaseUrl = { aiSettingField = AiSettingField.OLLAMA_BASE_URL },
                                 onEditAiOllamaModel = { aiSettingField = AiSettingField.OLLAMA_MODEL },
                                 onEditAiDeepSeekBaseUrl = { aiSettingField = AiSettingField.DEEPSEEK_BASE_URL },
@@ -294,10 +293,6 @@ fun ASMRPlayerApp(
                                 onDownloadWhisperModel = settingsViewModel::downloadWhisperModel,
                                 onCancelWhisperModelDownload = settingsViewModel::cancelWhisperModelDownload,
                                 onDeleteWhisperModel = settingsViewModel::deleteWhisperModel,
-                                onAiGpuWhisperModelSelected = settingsViewModel::setAiGpuWhisperModelId,
-                                onDownloadGpuWhisperModel = settingsViewModel::downloadGpuWhisperModel,
-                                onCancelGpuWhisperModelDownload = settingsViewModel::cancelGpuWhisperModelDownload,
-                                onDeleteGpuWhisperModel = settingsViewModel::deleteGpuWhisperModel,
                             )
                             MainTab.SLEEP -> SleepTab(
                                 state = sleepState,

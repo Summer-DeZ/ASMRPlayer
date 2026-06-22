@@ -9,7 +9,6 @@ import android.os.SystemClock
 import io.github.summerdez.asmrplayer.di.AppGraph
 import io.github.summerdez.asmrplayer.domain.model.AiSubtitleSettings
 import io.github.summerdez.asmrplayer.domain.model.AiSubtitleStage
-import io.github.summerdez.asmrplayer.domain.model.GpuWhisperModelSpec
 import io.github.summerdez.asmrplayer.domain.model.SubtitleGenerationTarget
 import io.github.summerdez.asmrplayer.domain.model.SubtitleLine
 import io.github.summerdez.asmrplayer.domain.model.WhisperModelSpec
@@ -90,7 +89,7 @@ class AiSubtitleGenerationService : Service() {
                     )
                     updateNotification(target, force = true)
                 }
-                ?: transcribeAndCache(target, settings, modelSpec, segmentCache)
+                ?: transcribeAndCache(target, modelSpec, segmentCache)
             val monoFile = writeSubtitleFile(target, suffix = "ja", body = AiSubtitleVtt.mono(sourceLines))
             withContext(Dispatchers.Main) {
                 container.libraryRepository.setTrackSubtitle(
@@ -142,25 +141,11 @@ class AiSubtitleGenerationService : Service() {
 
     private suspend fun transcribeAndCache(
         target: SubtitleGenerationTarget,
-        settings: AiSubtitleSettings,
         modelSpec: WhisperModelSpec,
         segmentCache: AiSubtitleSegmentCache,
     ): List<SubtitleLine> {
         val modelState = WhisperModelRepository(this).state(modelSpec)
-        val gpuModelState = GpuWhisperModelRepository(this).state(
-            GpuWhisperModelSpec.byId(settings.gpuWhisperModelId),
-        )
-        val transcriber = BackendSelectingTranscriber(
-            preferenceProvider = { settings.asrBackendPreference },
-            gpuCapabilityDetector = { context ->
-                gpuModelState.downloaded && NativeWhisperRuntime.isVulkanCapable(context)
-            },
-            gpuTranscriber = WhisperCppVulkanTranscriber(gpuModelState),
-            onBackendNotice = { message ->
-                AiSubtitleTaskStateBus.publishBackendNotice(target, message)
-                updateNotification(target, force = true)
-            },
-        )
+        val transcriber = WhisperRuntimeTranscriber()
         val sourceLines = transcriber.transcribeJapanese(
             context = this,
             target = target,

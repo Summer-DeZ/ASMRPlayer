@@ -470,10 +470,6 @@ fun AiSubtitleGenerationSheet(
             progress = task.transcribeProgress,
             meta = "音频不上传",
         )
-        if (task.backendNotice.isNotBlank()) {
-            Spacer(Modifier.height(8.dp))
-            Text(task.backendNotice, color = tokens.label2, fontSize = 13.sp)
-        }
         Spacer(Modifier.height(12.dp))
         AiSubtitleStageCard(
             index = 2,

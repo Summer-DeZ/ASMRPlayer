@@ -16,16 +16,23 @@ object AiSubtitleTaskStateBus {
     fun publish(target: SubtitleGenerationTarget, stage: AiSubtitleStage) {
         publish(
             taskFor(target.trackId) ?: AiSubtitleTaskState(target = target),
-        ) { it.copy(stage = stage, error = "") }
+        ) {
+            if (stage == AiSubtitleStage.TRANSCRIBING) {
+                AiSubtitleTaskState(target = target, stage = stage)
+            } else {
+                it.copy(stage = stage, error = "")
+            }
+        }
     }
 
     fun publishTranscribing(target: SubtitleGenerationTarget, progress: Float, preview: List<SubtitleLine>) {
         publish(
             taskFor(target.trackId) ?: AiSubtitleTaskState(target = target),
         ) {
+            val nextProgress = progress.coerceIn(0f, 1f)
             it.copy(
                 stage = AiSubtitleStage.TRANSCRIBING,
-                transcribeProgress = progress.coerceIn(0f, 1f),
+                transcribeProgress = maxOf(it.transcribeProgress, nextProgress),
                 previewLines = preview.takeLast(PREVIEW_LIMIT),
                 error = "",
             )
@@ -36,9 +43,10 @@ object AiSubtitleTaskStateBus {
         publish(
             taskFor(target.trackId) ?: AiSubtitleTaskState(target = target),
         ) {
+            val nextProgress = progress.coerceIn(0f, 1f)
             it.copy(
                 stage = AiSubtitleStage.TRANSLATING,
-                translateProgress = progress.coerceIn(0f, 1f),
+                translateProgress = maxOf(it.translateProgress, nextProgress),
                 previewLines = preview.takeLast(PREVIEW_LIMIT),
                 error = "",
             )
@@ -65,17 +73,6 @@ object AiSubtitleTaskStateBus {
             taskFor(target.trackId) ?: AiSubtitleTaskState(target = target),
         ) {
             it.copy(stage = AiSubtitleStage.FAILED, error = message)
-        }
-    }
-
-    fun publishBackendNotice(target: SubtitleGenerationTarget, message: String) {
-        if (message.isBlank()) {
-            return
-        }
-        publish(
-            taskFor(target.trackId) ?: AiSubtitleTaskState(target = target),
-        ) {
-            it.copy(backendNotice = message)
         }
     }
 
