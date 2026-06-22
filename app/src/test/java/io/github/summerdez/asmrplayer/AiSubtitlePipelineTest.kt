@@ -9,6 +9,7 @@ import io.github.summerdez.asmrplayer.data.ai.SceneContext
 import io.github.summerdez.asmrplayer.data.ai.SceneContextBuilder
 import io.github.summerdez.asmrplayer.data.ai.StreamingLinearResampler
 import io.github.summerdez.asmrplayer.data.ai.TranslationBatch
+import io.github.summerdez.asmrplayer.data.ai.TranslationContextLine
 import io.github.summerdez.asmrplayer.data.ai.TranslationRequestExecutor
 import io.github.summerdez.asmrplayer.data.ai.TranslationRequest
 import io.github.summerdez.asmrplayer.data.ai.TranslationResponse
@@ -349,6 +350,96 @@ class AiSubtitlePipelineTest {
     }
 
     @Test
+    fun deepSeekTranslationPromptIncludesFullSourceContextAsReadOnlyPrefix() {
+        val source = (1..4).map { index ->
+            SubtitleLine(index.toString(), index * 1_000L, index * 1_000L + 500L, "全局原文$index")
+        }
+        var userPrompt = ""
+        var capturedRequest: TranslationRequest? = null
+        val translator = OpenAiCompatibleTranslator(
+            requestExecutor = object : TranslationRequestExecutor {
+                override suspend fun execute(
+                    settings: AiSubtitleSettings,
+                    request: TranslationRequest,
+                ): TranslationResponse {
+                    capturedRequest = request
+                    userPrompt = request.messages.single { it.role == "user" }.content
+                    return TranslationResponse("""{"lines":[{"id":"3","zh":"第三句"}]}""", "stop")
+                }
+            },
+        )
+
+        runBlocking {
+            translator.translate(
+                aiSettings().copy(
+                    translationEngine = AiTranslationEngine.DEEPSEEK,
+                    deepSeekApiKey = "token",
+                ),
+                TranslationBatch(
+                    lines = listOf(source[2]),
+                    contextTitle = "playlist",
+                    sceneContext = SceneContext(scene = "耳边低语"),
+                    globalSourceContext = source.map { line ->
+                        TranslationContextLine(id = line.id, ja = line.sourceText)
+                    },
+                    batchIndex = 1,
+                    totalBatches = 4,
+                ),
+            )
+        }
+
+        val fullContextIndex = userPrompt.indexOf("完整日文字幕全文 json")
+        val batchIndex = userPrompt.indexOf("批次：2/4")
+        val currentLinesIndex = userPrompt.indexOf("待翻译 lines json")
+
+        assertTrue(fullContextIndex >= 0)
+        assertTrue(fullContextIndex < batchIndex)
+        assertTrue(fullContextIndex < currentLinesIndex)
+        assertTrue(userPrompt.contains("全局原文1"))
+        assertTrue(userPrompt.contains("全局原文4"))
+        assertTrue(userPrompt.contains("不得翻译全文"))
+        assertTrue(userPrompt.contains("不得输出待翻译 lines 之外的 id"))
+        assertTrue(capturedRequest?.responseFormatJsonObject == true)
+        assertTrue(capturedRequest?.disableThinking == true)
+    }
+
+    @Test
+    fun ollamaTranslationPromptOmitsFullSourceContext() {
+        val source = listOf(
+            SubtitleLine("1", 0L, 1_000L, "全局背景一"),
+            SubtitleLine("2", 1_000L, 2_000L, "現在の行"),
+        )
+        var userPrompt = ""
+        val translator = OpenAiCompatibleTranslator(
+            requestExecutor = object : TranslationRequestExecutor {
+                override suspend fun execute(
+                    settings: AiSubtitleSettings,
+                    request: TranslationRequest,
+                ): TranslationResponse {
+                    userPrompt = request.messages.single { it.role == "user" }.content
+                    return TranslationResponse("""{"lines":[{"id":"2","zh":"当前行"}]}""", "stop")
+                }
+            },
+        )
+
+        runBlocking {
+            translator.translate(
+                aiSettings(),
+                TranslationBatch(
+                    lines = listOf(source[1]),
+                    contextTitle = "playlist",
+                    globalSourceContext = source.map { line ->
+                        TranslationContextLine(id = line.id, ja = line.sourceText)
+                    },
+                ),
+            )
+        }
+
+        assertTrue(!userPrompt.contains("完整日文字幕全文 json"))
+        assertTrue(!userPrompt.contains("全局背景一"))
+    }
+
+    @Test
     fun translationPromptCanEnableAdultContentLiteralTranslation() {
         val source = listOf(SubtitleLine("1", 0L, 1_000L, "耳元で言うね"))
         var userPrompt = ""
@@ -562,6 +653,9 @@ class AiSubtitlePipelineTest {
         )
 
         assertEquals(listOf("4", "5"), batch.lines.map { it.id })
+        assertEquals(source.map { it.id }, batch.globalSourceContext.map { it.id })
+        assertEquals(source.map { it.sourceText }, batch.globalSourceContext.map { it.ja })
+        assertTrue(batch.globalSourceContext.all { it.zh.isBlank() })
         assertEquals(listOf("2", "3"), batch.previousContext.map { it.id })
         assertEquals(listOf("译文2", "译文3"), batch.previousContext.map { it.zh })
         assertEquals(listOf("6", "7"), batch.nextContext.map { it.id })

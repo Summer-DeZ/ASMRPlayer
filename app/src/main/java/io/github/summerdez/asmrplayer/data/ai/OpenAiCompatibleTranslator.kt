@@ -22,8 +22,8 @@ import org.json.JSONObject
 
 internal const val TRANSLATION_PROTOCOL_VERSION = "ordered-lines-v1"
 internal const val SCENE_CONTEXT_VERSION = "scene-context-v2"
-internal const val BATCH_STRATEGY_VERSION = "batch-60-window-4-v1"
-internal const val TRANSLATION_PROMPT_VERSION = "asr-ja-zh-ordered-v5"
+internal const val BATCH_STRATEGY_VERSION = "batch-80-window-4-deepseek-full-context-v1"
+internal const val TRANSLATION_PROMPT_VERSION = "asr-ja-zh-ordered-v6"
 
 data class TranslationContextLine(
     val id: String,
@@ -54,6 +54,7 @@ data class TranslationBatch(
     val lines: List<SubtitleLine>,
     val contextTitle: String,
     val sceneContext: SceneContext = SceneContext(),
+    val globalSourceContext: List<TranslationContextLine> = emptyList(),
     val previousContext: List<TranslationContextLine> = emptyList(),
     val nextContext: List<TranslationContextLine> = emptyList(),
     val batchIndex: Int = 0,
@@ -270,6 +271,7 @@ class OpenAiCompatibleTranslator(
             每个 id 必须恰好一条 zh；叹息、喘息、拟声、符号、无实义短句也必须保留或给出自然中文拟声，不得省略、合并、拆分、解释或输出 Markdown。
             zh 必须输出简体中文、中文拟声或中文保守占位；不要把日文假名、片假名或整段日文原样放进 zh。
             ASMR 音效翻译：舔舐、吸吮、摩擦、衣料摩擦、耳边摩擦、呼吸、喘息、湿润口腔音等非台词声音，不要硬译拟声词字面；优先输出「（舔舐声）」「（摩擦声）」「（耳边摩擦声）」「（呼吸声）」这类简短中文声音描述。
+            如果用户消息包含完整日文字幕全文，只能把它当作全局只读背景；输出范围仍然只由「待翻译 lines json」决定。
             前文窗口和后文窗口只供理解语气和称呼，不要输出窗口里的 id。
             逐行保守翻译：不得把情景卡、标题、术语表或后文里出现但当前日文没有对应词的内容塞进当前 zh。
             如果一行像 ASR 误识别、短碎片、半个词或无法确定含义，输出「（听不清）」或「（含混）」这类中文保守占位，不要保留日文，也不要硬猜成完整中文句子。
@@ -278,9 +280,14 @@ class OpenAiCompatibleTranslator(
         """.trimIndent()
         val user = buildString {
             appendLine("作品标题：${batch.contextTitle.ifBlank { "ASMR 音声" }}")
-            appendLine("批次：${batch.batchIndex + 1}/${batch.totalBatches}")
             appendLine("全局情景卡 json：")
             appendLine(sceneContextToJsonString(batch.sceneContext))
+            if (shouldIncludeGlobalSourceContext(settings, batch)) {
+                appendLine("完整日文字幕全文 json（DeepSeek 1M 上下文只读背景；真正需要输出的 id 只看后面的待翻译 lines）：")
+                appendLine(contextLinesJsonString(batch.globalSourceContext, includeZh = false))
+                appendLine("全文背景规则：完整字幕只用于理解作品整体、称呼、语气、术语和音效；不得翻译全文，不得输出待翻译 lines 之外的 id，不得把远处剧情塞进当前句。")
+            }
+            appendLine("批次：${batch.batchIndex + 1}/${batch.totalBatches}")
             appendLine("只读前文窗口 json（不要输出这些 id）：")
             appendLine(contextLinesJsonString(batch.previousContext, includeZh = true))
             appendLine("待翻译 lines json（只翻译这些 id，保留同顺序）：")
@@ -349,6 +356,14 @@ class OpenAiCompatibleTranslator(
             batch.nextContext.sumOf { it.id.length + it.ja.length } +
             batch.sceneContext.signatureMaterial.length
         return (sourceChars * 4 + contextChars * 2 + 2_048).coerceIn(4_096, 12_000)
+    }
+
+    private fun shouldIncludeGlobalSourceContext(
+        settings: AiSubtitleSettings,
+        batch: TranslationBatch,
+    ): Boolean {
+        return settings.translationEngine == AiTranslationEngine.DEEPSEEK &&
+            batch.globalSourceContext.isNotEmpty()
     }
 
     private fun adultContentRule(settings: AiSubtitleSettings): String {

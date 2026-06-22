@@ -366,7 +366,7 @@ class AiSubtitleGenerationService : Service() {
         private const val EXTRA_AUDIO_URI = "audioUri"
         private const val EXTRA_CONTEXT_TITLE = "contextTitle"
         private const val EXTRA_FORCE_REGENERATE = "forceRegenerate"
-        private const val TRANSLATION_BATCH_SIZE = 60
+        private const val TRANSLATION_BATCH_SIZE = 80
         private const val TRANSLATION_CONTEXT_WINDOW_SIZE = 4
         private const val TRANSLATION_PREVIEW_SIZE = 4
         private const val NOTIFICATION_MIN_INTERVAL_MS = 1_000L
@@ -429,10 +429,13 @@ internal fun buildTranslationBatch(
     val nextContext = sourceLines
         .subList(batchEndExclusive, nextEnd)
         .map { line -> TranslationContextLine(id = line.id, ja = line.sourceText) }
+    val globalSourceContext = sourceLines
+        .map { line -> TranslationContextLine(id = line.id, ja = line.sourceText) }
     return TranslationBatch(
         lines = batchLines,
         contextTitle = contextTitle,
         sceneContext = sceneContext,
+        globalSourceContext = globalSourceContext,
         previousContext = previousContext,
         nextContext = nextContext,
         batchIndex = batchIndex,

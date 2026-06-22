@@ -26,8 +26,8 @@ android {
         applicationId = "io.github.summerdez.asmrplayer"
         minSdk = 26
         targetSdk = 36
-        versionCode = 13
-        versionName = "1.2.4"
+        versionCode = 14
+        versionName = "1.2.5"
 
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
     }
