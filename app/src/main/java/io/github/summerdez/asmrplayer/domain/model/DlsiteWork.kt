@@ -40,6 +40,8 @@ data class DlsiteWork @JvmOverloads constructor(
 
     fun isDownloading(): Boolean = status == STATUS_DOWNLOADING
 
+    fun isQueued(): Boolean = status == STATUS_QUEUED
+
     fun isPaused(): Boolean = status == STATUS_PAUSED
 
     fun isFailed(): Boolean = status == STATUS_FAILED
@@ -48,6 +50,7 @@ data class DlsiteWork @JvmOverloads constructor(
 
     fun statusLabel(): String {
         return when (status) {
+            STATUS_QUEUED -> "排队中"
             STATUS_DOWNLOADING -> "下载中"
             STATUS_PAUSED -> "已暂停"
             STATUS_DOWNLOADED -> if (trackCount > 0) "已导入 $trackCount 首" else "已导入"
@@ -90,6 +93,10 @@ data class DlsiteWork @JvmOverloads constructor(
 
     fun asDownloading(): DlsiteWork {
         return copy(status = STATUS_DOWNLOADING, error = "", updatedAt = System.currentTimeMillis())
+    }
+
+    fun asQueued(): DlsiteWork {
+        return copy(status = STATUS_QUEUED, error = "", updatedAt = System.currentTimeMillis())
     }
 
     fun asPaused(): DlsiteWork {
@@ -149,6 +156,7 @@ data class DlsiteWork @JvmOverloads constructor(
 
     companion object {
         const val STATUS_FOUND = "found"
+        const val STATUS_QUEUED = "queued"
         const val STATUS_DOWNLOADING = "downloading"
         const val STATUS_PAUSED = "paused"
         const val STATUS_DOWNLOADED = "downloaded"

@@ -74,3 +74,31 @@ internal fun DlsiteWork.toEntity(): DlsiteWorkEntity {
         trackCount = trackCount,
     )
 }
+
+internal fun DlsiteContentEntity.toContent(): DlsiteContent {
+    return DlsiteContent(
+        workId = workId,
+        optionId = optionId,
+        title = title,
+        status = status,
+        localPath = localPath,
+        trackIds = trackIds,
+        trackCount = trackCount,
+        error = error,
+        updatedAt = updatedAt,
+    )
+}
+
+internal fun DlsiteContent.toEntity(): DlsiteContentEntity {
+    return DlsiteContentEntity(
+        workId = workId,
+        optionId = optionId,
+        title = title,
+        status = status,
+        localPath = localPath,
+        trackIds = trackIds,
+        trackCount = trackCount,
+        error = error,
+        updatedAt = updatedAt,
+    )
+}

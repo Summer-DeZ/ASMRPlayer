@@ -41,12 +41,13 @@ import io.github.summerdez.asmrplayer.presentation.SleepTimerViewModel
 import io.github.summerdez.asmrplayer.ui.activity.DlsiteLoginActivity
 import io.github.summerdez.asmrplayer.ui.components.BottomPlaybackArea
 import io.github.summerdez.asmrplayer.ui.components.ConfirmDialog
-import io.github.summerdez.asmrplayer.ui.components.DownloadOptionsDialog
 import io.github.summerdez.asmrplayer.ui.components.InstallUpdateDialog
 import io.github.summerdez.asmrplayer.ui.components.MoveTrackDialog
 import io.github.summerdez.asmrplayer.ui.components.PageHeader
 import io.github.summerdez.asmrplayer.ui.components.TextInputDialog
 import io.github.summerdez.asmrplayer.ui.components.UpdateDetailsDialog
+import io.github.summerdez.asmrplayer.ui.screens.DownloadContentsSheet
+import io.github.summerdez.asmrplayer.ui.screens.DownloadManagerSheet
 import io.github.summerdez.asmrplayer.ui.screens.DlsiteTab
 import io.github.summerdez.asmrplayer.ui.screens.LibraryTab
 import io.github.summerdez.asmrplayer.ui.screens.QueueContent
@@ -166,6 +167,7 @@ fun ASMRPlayerApp(
         var deleteTrack by remember { mutableStateOf<Triple<Playlist, TrackItem, Int>?>(null) }
         var moveTrack by remember { mutableStateOf<Pair<Playlist, TrackItem>?>(null) }
         var customSleepDialog by remember { mutableStateOf(false) }
+        var downloadManagerOpen by remember { mutableStateOf(false) }
 
         BackHandler(enabled = playerOpen || queueOpen) {
             if (queueOpen) {
@@ -284,6 +286,9 @@ fun ASMRPlayerApp(
                                         },
                                     )
                                 },
+                                onPauseAll = dlsiteViewModel::pauseAllDownloads,
+                                onResumeAll = dlsiteViewModel::resumeAllDownloads,
+                                onOpenDownloadManager = { downloadManagerOpen = true },
                             )
                         }
                     }
@@ -325,12 +330,44 @@ fun ASMRPlayerApp(
             }
 
             dlsiteState.optionWork?.let { optionWork ->
-                DownloadOptionsDialog(
-                    work = optionWork,
-                    options = dlsiteState.downloadOptions,
-                    onDismiss = dlsiteViewModel::dismissDownloadOptions,
-                    onChoose = { option -> dlsiteViewModel.startDownload(optionWork, option) },
-                )
+                val sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true)
+                ModalBottomSheet(
+                    onDismissRequest = dlsiteViewModel::dismissDownloadOptions,
+                    sheetState = sheetState,
+                    containerColor = tokens.sheet,
+                    dragHandle = null,
+                ) {
+                    DownloadContentsSheet(
+                        work = optionWork,
+                        options = dlsiteState.downloadOptions,
+                        contents = dlsiteState.contentsByWork[optionWork.workId].orEmpty(),
+                        onDismiss = dlsiteViewModel::dismissDownloadOptions,
+                        onStart = { options -> dlsiteViewModel.startDownload(optionWork, options) },
+                        onDeleteContent = { content ->
+                            dlsiteViewModel.deleteContent(optionWork, content) {}
+                        },
+                    )
+                }
+            }
+
+            if (downloadManagerOpen) {
+                val sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true)
+                ModalBottomSheet(
+                    onDismissRequest = { downloadManagerOpen = false },
+                    sheetState = sheetState,
+                    containerColor = tokens.sheet,
+                    dragHandle = null,
+                ) {
+                    DownloadManagerSheet(
+                        state = dlsiteState,
+                        onPauseAll = dlsiteViewModel::pauseAllDownloads,
+                        onResumeAll = dlsiteViewModel::resumeAllDownloads,
+                        onClearCompleted = dlsiteViewModel::clearCompletedDownloadTasks,
+                        onPause = dlsiteViewModel::pauseDownload,
+                        onResume = dlsiteViewModel::resumeDownload,
+                        onCancel = dlsiteViewModel::cancelDownload,
+                    )
+                }
             }
             settingsState.updateDialogRelease?.let { release ->
                 UpdateDetailsDialog(

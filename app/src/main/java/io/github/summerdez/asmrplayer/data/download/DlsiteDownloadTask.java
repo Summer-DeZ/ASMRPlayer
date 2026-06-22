@@ -26,15 +26,18 @@ import java.io.File;
 import java.io.FileInputStream;
 import java.io.FileOutputStream;
 import java.io.IOException;
+import java.io.InterruptedIOException;
 import java.nio.charset.Charset;
 import java.nio.charset.StandardCharsets;
 import java.util.ArrayList;
 import java.util.Collections;
 import java.util.Comparator;
 import java.util.HashMap;
+import java.util.HashSet;
 import java.util.List;
 import java.util.Locale;
 import java.util.Map;
+import java.util.Set;
 import java.util.UUID;
 import java.util.zip.ZipEntry;
 import java.util.zip.ZipInputStream;
@@ -59,25 +62,70 @@ public final class DlsiteDownloadTask {
             LibraryRepository libraryRepository,
             DlsiteWork work,
             String downloadOptionId) throws IOException {
+        List<String> optionIds = new ArrayList<>();
+        if (!TextUtils.isEmpty(downloadOptionId)) {
+            optionIds.add(downloadOptionId);
+        }
+        return downloadAndImport(context, dlsiteApi, libraryRepository, work, optionIds, null);
+    }
+
+    static Result downloadAndImport(
+            Context context,
+            DlsiteApi dlsiteApi,
+            LibraryRepository libraryRepository,
+            DlsiteWork work,
+            List<String> downloadOptionIds,
+            ContentListener listener) throws IOException {
         DlsiteWork importWork = work.withEnsuredCoverUrl();
         File workDir = new File(context.getFilesDir(), "dlsite/works/" + importWork.workId);
 
-        if (importWork.isDownloaded() && workDir.isDirectory()) {
-            return new Result(
-                    importWork.playlistId,
-                    workDir.getAbsolutePath(),
-                    importWork.trackCount,
-                    importWork.coverUri);
-        }
-
-        deleteRecursively(workDir);
         if (!workDir.mkdirs() && !workDir.isDirectory()) {
             throw new IOException("无法创建作品目录");
         }
 
-        List<File> audioFiles = dlsiteApi.downloadWorkFiles(importWork, workDir, downloadOptionId);
-        if (audioFiles.isEmpty()) {
-            throw new IOException("没有找到可导入的音频");
+        List<DlsiteDownloadOption> options = dlsiteApi.fetchDownloadOptions(importWork);
+        List<DlsiteDownloadOption> selectedOptions = selectedOptions(options, downloadOptionIds);
+        if (selectedOptions.isEmpty()) {
+            throw new IOException("没有找到可下载的内容");
+        }
+
+        List<File> importedAudioFiles = new ArrayList<>();
+        List<ContentResult> contentResults = new ArrayList<>();
+        for (DlsiteDownloadOption option : selectedOptions) {
+            throwIfInterrupted();
+            File contentDir = contentDir(workDir, option);
+            File marker = new File(contentDir, ".downloaded");
+            List<File> audioFiles;
+            if (marker.isFile()) {
+                audioFiles = audioFilesIn(contentDir);
+            } else {
+                deleteRecursively(contentDir);
+                if (!contentDir.mkdirs() && !contentDir.isDirectory()) {
+                    throw new IOException("无法创建内容目录");
+                }
+                if (listener != null) {
+                    listener.onContentStarted(option, contentDir);
+                }
+                audioFiles = dlsiteApi.downloadWorkFiles(importWork, contentDir, option.id);
+                if (audioFiles.isEmpty()) {
+                    throw new IOException("没有找到可导入的音频");
+                }
+                if (!marker.createNewFile() && !marker.isFile()) {
+                    throw new IOException("无法写入内容下载标记");
+                }
+            }
+            ImportResult importResult = importPlaylist(context, libraryRepository, importWork, audioFiles, coverFileForImport(dlsiteApi, importWork, workDir));
+            importedAudioFiles.addAll(audioFiles);
+            ContentResult contentResult = new ContentResult(
+                    option.id,
+                    option.title,
+                    contentDir.getAbsolutePath(),
+                    importResult.addedTrackIds,
+                    audioFiles.size());
+            contentResults.add(contentResult);
+            if (listener != null) {
+                listener.onContentFinished(option, contentResult);
+            }
         }
 
         File coverFile = existingCoverFile(importWork);
@@ -88,8 +136,13 @@ public final class DlsiteDownloadTask {
         if (coverFile != null && coverFile.isFile()) {
             coverUri = Uri.fromFile(coverFile).toString();
         }
-        String playlistId = importPlaylist(context, libraryRepository, importWork, audioFiles, coverFile);
-        return new Result(playlistId, workDir.getAbsolutePath(), audioFiles.size(), coverUri);
+        ImportResult importResult = importPlaylist(context, libraryRepository, importWork, importedAudioFiles, coverFile);
+        return new Result(
+                importResult.playlistId,
+                workDir.getAbsolutePath(),
+                importResult.totalTrackCount,
+                coverUri,
+                contentResults);
     }
 
     public static void deleteCache(Context context, DlsiteWork work) throws IOException {
@@ -100,30 +153,96 @@ public final class DlsiteDownloadTask {
         deleteRecursively(workDir);
     }
 
-    private static String importPlaylist(
+    public static void deleteContentCache(Context context, DlsiteWork work, String optionId) throws IOException {
+        if (work == null || TextUtils.isEmpty(work.workId)) {
+            return;
+        }
+        File workDir = new File(context.getFilesDir(), "dlsite/works/" + work.workId);
+        deleteRecursively(new File(new File(workDir, "contents"), safeContentId(optionId)));
+    }
+
+    private static ImportResult importPlaylist(
             Context context,
             LibraryRepository libraryRepository,
             DlsiteWork work,
             List<File> audioFiles,
             File coverFile) {
-        Playlist playlist = libraryRepository.createPlaylist(work.displayTitle());
+        Playlist playlist = libraryRepository.getPlaylist(work.playlistId);
+        if (playlist == null) {
+            playlist = libraryRepository.createPlaylist(work.displayTitle());
+        }
         if (coverFile != null && coverFile.isFile()) {
             libraryRepository.setPlaylistCover(playlist.id, Uri.fromFile(coverFile).toString());
         }
+        Set<String> existingUris = new HashSet<>();
+        for (TrackItem track : playlist.tracks) {
+            existingUris.add(track.uri);
+        }
         Map<String, File> subtitles = subtitleFilesByName(audioFiles);
+        List<String> addedTrackIds = new ArrayList<>();
         for (File audioFile : audioFiles) {
+            String audioUri = Uri.fromFile(audioFile).toString();
+            if (existingUris.contains(audioUri)) {
+                continue;
+            }
             File subtitleFile = subtitles.get(normalizedName(audioFile.getName() + ".vtt"));
+            String trackId = UUID.randomUUID().toString();
             libraryRepository.addTrack(
                     playlist.id,
                     new TrackItem(
-                            UUID.randomUUID().toString(),
+                            trackId,
                             audioFile.getName(),
-                            Uri.fromFile(audioFile).toString(),
+                            audioUri,
                             subtitleFile == null ? "" : Uri.fromFile(subtitleFile).toString(),
                             subtitleFile == null ? "" : subtitleFile.getName(),
                             DocumentFiles.audioDurationMs(context, Uri.fromFile(audioFile))));
+            addedTrackIds.add(trackId);
+            existingUris.add(audioUri);
         }
-        return playlist.id;
+        Playlist updated = libraryRepository.getPlaylist(playlist.id);
+        return new ImportResult(
+                playlist.id,
+                addedTrackIds,
+                updated == null ? playlist.tracks.size() + addedTrackIds.size() : updated.tracks.size());
+    }
+
+    private static File coverFileForImport(DlsiteApi dlsiteApi, DlsiteWork work, File workDir) {
+        File coverFile = existingCoverFile(work);
+        if (coverFile == null) {
+            coverFile = downloadCover(dlsiteApi, work, workDir);
+        }
+        return coverFile;
+    }
+
+    private static List<DlsiteDownloadOption> selectedOptions(
+            List<DlsiteDownloadOption> options,
+            List<String> downloadOptionIds) throws IOException {
+        if (options == null || options.isEmpty()) {
+            return Collections.emptyList();
+        }
+        if (downloadOptionIds == null || downloadOptionIds.isEmpty()) {
+            return options;
+        }
+        Set<String> ids = new HashSet<>(downloadOptionIds);
+        List<DlsiteDownloadOption> selected = new ArrayList<>();
+        for (DlsiteDownloadOption option : options) {
+            if (ids.contains(option.id)) {
+                selected.add(option);
+            }
+        }
+        if (selected.isEmpty()) {
+            throw new IOException("没有找到所选下载内容");
+        }
+        return selected;
+    }
+
+    private static File contentDir(File workDir, DlsiteDownloadOption option) {
+        return new File(new File(workDir, "contents"), safeContentId(option.id));
+    }
+
+    private static String safeContentId(String optionId) {
+        String id = TextUtils.isEmpty(optionId) ? "default" : optionId;
+        return safeFileName(id);
     }
 
     private static File downloadCover(DlsiteApi dlsiteApi, DlsiteWork work, File workDir) {
@@ -307,17 +426,63 @@ public final class DlsiteDownloadTask {
         return (value == null ? "" : value.trim()).toLowerCase(Locale.ROOT);
     }
 
+    private static void throwIfInterrupted() throws InterruptedIOException {
+        if (Thread.currentThread().isInterrupted()) {
+            throw new InterruptedIOException("下载已中断");
+        }
+    }
+
     static final class Result {
         final String playlistId;
         final String localPath;
         final int trackCount;
         final String coverUri;
+        final List<ContentResult> contentResults;
 
         Result(String playlistId, String localPath, int trackCount, String coverUri) {
+            this(playlistId, localPath, trackCount, coverUri, Collections.emptyList());
+        }
+
+        Result(String playlistId, String localPath, int trackCount, String coverUri, List<ContentResult> contentResults) {
             this.playlistId = playlistId == null ? "" : playlistId;
             this.localPath = localPath == null ? "" : localPath;
             this.trackCount = trackCount;
             this.coverUri = coverUri == null ? "" : coverUri;
+            this.contentResults = contentResults == null ? Collections.emptyList() : new ArrayList<>(contentResults);
+        }
+    }
+
+    interface ContentListener {
+        void onContentStarted(DlsiteDownloadOption option, File contentDir);
+
+        void onContentFinished(DlsiteDownloadOption option, ContentResult result);
+    }
+
+    static final class ContentResult {
+        final String optionId;
+        final String title;
+        final String localPath;
+        final List<String> trackIds;
+        final int trackCount;
+
+        ContentResult(String optionId, String title, String localPath, List<String> trackIds, int trackCount) {
+            this.optionId = optionId == null ? "" : optionId;
+            this.title = title == null ? "" : title;
+            this.localPath = localPath == null ? "" : localPath;
+            this.trackIds = trackIds == null ? Collections.emptyList() : new ArrayList<>(trackIds);
+            this.trackCount = trackCount;
+        }
+    }
+
+    private static final class ImportResult {
+        final String playlistId;
+        final List<String> addedTrackIds;
+        final int totalTrackCount;
+
+        ImportResult(String playlistId, List<String> addedTrackIds, int totalTrackCount) {
+            this.playlistId = playlistId == null ? "" : playlistId;
+            this.addedTrackIds = addedTrackIds == null ? Collections.emptyList() : new ArrayList<>(addedTrackIds);
+            this.totalTrackCount = totalTrackCount;
         }
     }
 }

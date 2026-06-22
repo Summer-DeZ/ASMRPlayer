@@ -37,6 +37,7 @@ interface DlsiteApi {
 
 interface DlsiteRepository {
     val worksFlow: Flow<List<DlsiteWork>>
+    val contentsFlow: Flow<List<DlsiteContent>>
     val lastSyncMsFlow: Flow<Long>
     val downloadStateFlow: StateFlow<DlsiteDownloadState>
 
@@ -46,16 +47,26 @@ interface DlsiteRepository {
     fun downloadCover(work: DlsiteWork, outputDir: File): File
     fun getWorks(): List<DlsiteWork>
     fun getWork(workId: String?): DlsiteWork?
+    fun getContents(workId: String?): List<DlsiteContent>
     fun getLastSyncMs(): Long
     fun mergeDiscoveredWorks(discoveredWorks: List<DlsiteWork>): List<DlsiteWork>
     fun saveWork(updatedWork: DlsiteWork?)
+    fun saveDownloadOptions(work: DlsiteWork, options: List<DlsiteDownloadOption>): List<DlsiteContent>
     fun markDownloading(work: DlsiteWork)
     fun markDownloading(work: DlsiteWork, optionId: String?, optionTitle: String?)
+    fun markQueued(work: DlsiteWork, optionIds: List<String>, optionTitle: String?)
     fun markPaused(work: DlsiteWork)
     fun markDownloaded(work: DlsiteWork, playlistId: String?, localPath: String?, trackCount: Int)
     fun markFailed(work: DlsiteWork, error: String?)
     fun markInterruptedDownloads(error: String?): Int
     fun markCacheDeleted(work: DlsiteWork)
+    fun markContentQueued(workId: String?, optionIds: List<String>)
+    fun markContentDownloading(workId: String?, optionId: String?)
+    fun markContentDownloaded(workId: String?, optionId: String?, localPath: String?, trackIds: List<String>, trackCount: Int)
+    fun markContentFailed(workId: String?, optionId: String?, error: String?)
+    fun markContentPaused(workId: String?, optionIds: List<String>)
+    fun markContentCacheDeleted(workId: String?, optionId: String?)
+    fun markAllQueuedDownloadsPaused()
 }
 
 class RoomDlsiteRepository(
@@ -67,6 +78,9 @@ class RoomDlsiteRepository(
 
     override val worksFlow: Flow<List<DlsiteWork>> =
         dlsiteDao.workFlow().map { works -> works.map { it.toWork() } }
+
+    override val contentsFlow: Flow<List<DlsiteContent>> =
+        dlsiteDao.contentFlow().map { contents -> contents.map { it.toContent() } }
 
     override val lastSyncMsFlow: Flow<Long> =
         settingsDao.valueFlow(KEY_LAST_SYNC_MS).map { it?.toLongOrNull() ?: 0L }
@@ -102,6 +116,15 @@ class RoomDlsiteRepository(
         }
         return DbIo.run {
             dlsiteDao.workById(workId)?.toWork()
+        }
+    }
+
+    override fun getContents(workId: String?): List<DlsiteContent> {
+        if (workId.isNullOrEmpty()) {
+            return emptyList()
+        }
+        return DbIo.run {
+            dlsiteDao.contentsForWork(workId).map { it.toContent() }
         }
     }
 
@@ -142,12 +165,44 @@ class RoomDlsiteRepository(
         }
     }
 
+    override fun saveDownloadOptions(work: DlsiteWork, options: List<DlsiteDownloadOption>): List<DlsiteContent> {
+        if (work.workId.isEmpty()) {
+            return emptyList()
+        }
+        return DbIo.run {
+            val existing = dlsiteDao.contentsForWork(work.workId)
+                .map { it.toContent() }
+                .associateBy { it.optionId }
+            val contents = options.map { option ->
+                val existingContent = existing[option.id]
+                DlsiteContent(
+                    workId = work.workId,
+                    optionId = option.id,
+                    title = option.title.ifEmpty { "默认版本" },
+                    status = existingContent?.status ?: DlsiteContent.STATUS_FOUND,
+                    localPath = existingContent?.localPath.orEmpty(),
+                    trackIds = existingContent?.trackIds.orEmpty(),
+                    trackCount = existingContent?.trackCount ?: option.audioFiles.size,
+                    error = existingContent?.error.orEmpty(),
+                    updatedAt = existingContent?.updatedAt ?: System.currentTimeMillis(),
+                )
+            }
+            dlsiteDao.upsertContents(contents.map { it.toEntity() })
+            contents
+        }
+    }
+
     override fun markDownloading(work: DlsiteWork) {
         saveWork(work.asDownloading())
     }
 
     override fun markDownloading(work: DlsiteWork, optionId: String?, optionTitle: String?) {
         markDownloading(work.withDownloadOption(optionId, optionTitle))
+    }
+
+    override fun markQueued(work: DlsiteWork, optionIds: List<String>, optionTitle: String?) {
+        saveWork(work.withDownloadOption(optionIds.joinToString(OPTION_ID_SEPARATOR), optionTitle).asQueued())
+        markContentQueued(work.workId, optionIds)
     }
 
     override fun markPaused(work: DlsiteWork) {
@@ -178,10 +233,113 @@ class RoomDlsiteRepository(
 
     override fun markCacheDeleted(work: DlsiteWork) {
         saveWork(work.asCacheDeleted())
+        DbIo.run {
+            dlsiteDao.contentsForWork(work.workId).forEach { content ->
+                dlsiteDao.upsertContent(content.toContent().asCacheDeleted().toEntity())
+            }
+        }
+    }
+
+    override fun markContentQueued(workId: String?, optionIds: List<String>) {
+        updateContents(workId, optionIds) { it.asQueued() }
+    }
+
+    override fun markContentDownloading(workId: String?, optionId: String?) {
+        updateContents(workId, listOf(optionId.orEmpty())) { it.asDownloading() }
+        updateWorkFromContents(workId)
+    }
+
+    override fun markContentDownloaded(
+        workId: String?,
+        optionId: String?,
+        localPath: String?,
+        trackIds: List<String>,
+        trackCount: Int,
+    ) {
+        updateContents(workId, listOf(optionId.orEmpty())) {
+            it.asDownloaded(localPath, trackIds, trackCount)
+        }
+        updateWorkFromContents(workId)
+    }
+
+    override fun markContentFailed(workId: String?, optionId: String?, error: String?) {
+        updateContents(workId, listOf(optionId.orEmpty())) { it.asFailed(error) }
+        updateWorkFromContents(workId)
+    }
+
+    override fun markContentPaused(workId: String?, optionIds: List<String>) {
+        updateContents(workId, optionIds) { it.asPaused() }
+        updateWorkFromContents(workId)
+    }
+
+    override fun markContentCacheDeleted(workId: String?, optionId: String?) {
+        updateContents(workId, listOf(optionId.orEmpty())) { it.asCacheDeleted() }
+        updateWorkFromContents(workId)
+    }
+
+    override fun markAllQueuedDownloadsPaused() {
+        DbIo.run {
+            dlsiteDao.works().map { it.toWork() }.forEach { work ->
+                if (work.isQueued() || work.isDownloading()) {
+                    dlsiteDao.upsert(work.asPaused().toEntity())
+                }
+            }
+            dlsiteDao.contents().map { it.toContent() }.forEach { content ->
+                if (content.isQueued() || content.isDownloading()) {
+                    dlsiteDao.upsertContent(content.asPaused().toEntity())
+                }
+            }
+        }
+    }
+
+    private fun updateContents(
+        workId: String?,
+        optionIds: List<String>,
+        transform: (DlsiteContent) -> DlsiteContent,
+    ) {
+        if (workId.isNullOrEmpty()) {
+            return
+        }
+        DbIo.run {
+            val ids = optionIds.ifEmpty { listOf("") }.toSet()
+            dlsiteDao.contentsForWork(workId).map { it.toContent() }.forEach { content ->
+                if (ids.contains(content.optionId)) {
+                    dlsiteDao.upsertContent(transform(content).toEntity())
+                }
+            }
+        }
+    }
+
+    private fun updateWorkFromContents(workId: String?) {
+        if (workId.isNullOrEmpty()) {
+            return
+        }
+        DbIo.run {
+            val work = dlsiteDao.workById(workId)?.toWork() ?: return@run
+            val contents = dlsiteDao.contentsForWork(workId).map { it.toContent() }
+            if (contents.isEmpty()) {
+                return@run
+            }
+            val downloaded = contents.filter { it.isDownloaded() }
+            val updated = when {
+                contents.any { it.isDownloading() } -> work.asDownloading()
+                contents.any { it.isQueued() } -> work.asQueued()
+                contents.any { it.isFailed() } -> work.asFailed(contents.first { it.isFailed() }.error)
+                contents.any { it.isPaused() } -> work.asPaused()
+                downloaded.isNotEmpty() -> work.asDownloaded(
+                    playlistId = work.playlistId,
+                    localPath = work.localPath,
+                    trackCount = downloaded.sumOf { it.trackCount },
+                )
+                else -> work.asCacheDeleted()
+            }
+            dlsiteDao.upsert(updated.toEntity())
+        }
     }
 
     private companion object {
         const val KEY_LAST_SYNC_MS = "dlsite_last_sync_ms"
+        const val OPTION_ID_SEPARATOR = "|"
     }
 }
 

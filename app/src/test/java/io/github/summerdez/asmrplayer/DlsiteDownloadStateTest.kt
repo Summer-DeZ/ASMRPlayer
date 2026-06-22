@@ -50,4 +50,37 @@ class DlsiteDownloadStateTest {
 
         assertFalse(DlsiteDownloadStateBus.state.value.active)
     }
+
+    @Test
+    fun multiTaskStateSummarizesKnownByteProgressAndQueue() {
+        try {
+            DlsiteDownloadStateBus.publishProgress(
+                workId = "RJ000001",
+                title = "One",
+                status = "下载中",
+                bytesDownloaded = 50L,
+                totalBytes = 100L,
+            )
+            DlsiteDownloadStateBus.publishProgress(
+                workId = "RJ000002",
+                title = "Two",
+                status = "下载中",
+                bytesDownloaded = 25L,
+                totalBytes = 100L,
+            )
+            DlsiteDownloadStateBus.publishQueued("RJ000003", "Three", 1)
+
+            val state = DlsiteDownloadStateBus.state.value
+            assertTrue(state.active)
+            assertEquals(3, state.tasks.size)
+            assertEquals(2, state.summary.runningCount)
+            assertEquals(3, state.summary.totalCount)
+            assertEquals(75L, state.summary.bytesDownloaded)
+            assertEquals(200L, state.summary.totalBytes)
+            assertEquals(37, state.summary.progressPercent)
+            assertEquals("排队中 · 第 1 位", state.tasks["RJ000003"]?.statusText)
+        } finally {
+            DlsiteDownloadStateBus.clear()
+        }
+    }
 }

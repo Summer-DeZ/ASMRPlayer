@@ -24,31 +24,51 @@ import android.os.Build;
 import android.os.IBinder;
 import android.text.TextUtils;
 
+import java.io.File;
+import java.util.ArrayList;
+import java.util.LinkedHashMap;
+import java.util.List;
+import java.util.Map;
+
 public class DlsiteDownloadService extends Service {
     static final String ACTION_DOWNLOAD = "io.github.summerdez.asmrplayer.action.DLSITE_DOWNLOAD";
     static final String ACTION_PAUSE = "io.github.summerdez.asmrplayer.action.DLSITE_PAUSE";
     static final String ACTION_DELETE = "io.github.summerdez.asmrplayer.action.DLSITE_DELETE";
     static final String EXTRA_WORK_ID = "extra_work_id";
     static final String EXTRA_OPTION_ID = "extra_option_id";
+    static final String EXTRA_OPTION_IDS = "extra_option_ids";
 
     private static final String STOP_NONE = "";
     private static final String STOP_PAUSE = "pause";
     private static final String STOP_DELETE = "delete";
+    private static final int MAX_CONCURRENT_DOWNLOADS = 2;
 
-    private static volatile boolean activeDownload;
-    private static volatile String activeWorkId = "";
-
+    private final Object lock = new Object();
+    private final LinkedHashMap<String, DownloadRequest> queuedRequests = new LinkedHashMap<>();
+    private final LinkedHashMap<String, DownloadWorker> runningWorkers = new LinkedHashMap<>();
     private DlsiteRepository dlsiteRepository;
     private DlsiteApi dlsiteApi;
     private LibraryRepository libraryRepository;
-    private Thread downloadThread;
-    private volatile String stopRequest = STOP_NONE;
+    private int latestStartId;
 
     public static Intent downloadIntent(Context context, String workId, String optionId) {
+        List<String> optionIds = new ArrayList<>();
+        if (optionId != null) {
+            optionIds.add(optionId);
+        }
+        return downloadIntent(context, workId, optionIds);
+    }
+
+    public static Intent downloadIntent(Context context, String workId, List<String> optionIds) {
         Intent intent = new Intent(context, DlsiteDownloadService.class);
         intent.setAction(ACTION_DOWNLOAD);
         intent.putExtra(EXTRA_WORK_ID, workId == null ? "" : workId);
-        intent.putExtra(EXTRA_OPTION_ID, optionId == null ? "" : optionId);
+        ArrayList<String> ids = new ArrayList<>();
+        if (optionIds != null) {
+            ids.addAll(optionIds);
+        }
+        intent.putStringArrayListExtra(EXTRA_OPTION_IDS, ids);
+        intent.putExtra(EXTRA_OPTION_ID, ids.isEmpty() ? "" : ids.get(0));
         return intent;
     }
 
@@ -82,6 +102,7 @@ public class DlsiteDownloadService extends Service {
             stopSelf(startId);
             return START_NOT_STICKY;
         }
+        latestStartId = startId;
         if (ACTION_PAUSE.equals(intent.getAction())) {
             handlePause(intent.getStringExtra(EXTRA_WORK_ID), startId);
             return START_NOT_STICKY;
@@ -95,24 +116,21 @@ public class DlsiteDownloadService extends Service {
             return START_NOT_STICKY;
         }
         String workId = intent.getStringExtra(EXTRA_WORK_ID);
-        String optionId = intent.getStringExtra(EXTRA_OPTION_ID);
+        ArrayList<String> optionIds = intent.getStringArrayListExtra(EXTRA_OPTION_IDS);
+        if (optionIds == null) {
+            optionIds = new ArrayList<>();
+            String optionId = intent.getStringExtra(EXTRA_OPTION_ID);
+            if (optionId != null) {
+                optionIds.add(optionId);
+            }
+        }
         DlsiteWork work = dlsiteRepository.getWork(workId);
         if (work == null) {
             stopSelf(startId);
             return START_NOT_STICKY;
         }
 
-        if (activeDownload) {
-            return START_NOT_STICKY;
-        }
-        activeDownload = true;
-        activeWorkId = work.workId;
-        stopRequest = STOP_NONE;
-        DlsiteDownloadStateBus.publish(work.workId, work.displayTitle(), "下载中");
-        promoteToForeground(work.displayTitle(), "下载中");
-        dlsiteRepository.markDownloading(work, optionId, work.downloadOptionTitle);
-        downloadThread = new Thread(() -> runDownload(startId, work, optionId), "dlsite-download-service");
-        downloadThread.start();
+        enqueueDownload(work, optionIds);
         return START_NOT_STICKY;
     }
 
@@ -123,48 +141,63 @@ public class DlsiteDownloadService extends Service {
 
     @Override
     public void onDestroy() {
-        if (downloadThread != null && downloadThread.isAlive()) {
-            downloadThread.interrupt();
-        }
-        if (!activeDownload) {
-            DlsiteDownloadStateBus.clear();
+        synchronized (lock) {
+            for (DownloadWorker worker : runningWorkers.values()) {
+                worker.stopRequest = STOP_PAUSE;
+                worker.interrupt();
+            }
         }
         super.onDestroy();
     }
 
-    private void runDownload(int startId, DlsiteWork work, String optionId) {
-        try {
-            DlsiteDownloadStateBus.publish(work.workId, work.displayTitle(), "下载并导入中");
-            DlsiteDownloadNotifications.update(this, work.displayTitle(), "下载并导入中");
-            DlsiteDownloadTask.Result result = DlsiteDownloadTask.downloadAndImport(
-                    this,
-                    dlsiteApi,
-                    libraryRepository,
-                    work,
-                    TextUtils.isEmpty(optionId) ? "" : optionId);
-            if (STOP_NONE.equals(stopRequest)) {
-                DlsiteWork downloadedWork = TextUtils.isEmpty(result.coverUri)
-                        ? work
-                        : work.withCoverUri(result.coverUri);
-                dlsiteRepository.markDownloaded(downloadedWork, result.playlistId, result.localPath, result.trackCount);
+    private void enqueueDownload(DlsiteWork work, List<String> optionIds) {
+        synchronized (lock) {
+            if (queuedRequests.containsKey(work.workId) || runningWorkers.containsKey(work.workId)) {
+                return;
             }
-        } catch (Exception exception) {
-            if (STOP_NONE.equals(stopRequest)) {
-                dlsiteRepository.markFailed(work, shortError(exception));
+            DownloadRequest request = new DownloadRequest(work.workId, work.displayTitle(), new ArrayList<>(optionIds));
+            queuedRequests.put(work.workId, request);
+            dlsiteRepository.markQueued(work, request.optionIds, request.optionIds.size() + " 个内容");
+            publishQueuePositionsLocked();
+            promoteToForeground();
+            scheduleLocked();
+        }
+    }
+
+    private void scheduleLocked() {
+        while (runningWorkers.size() < MAX_CONCURRENT_DOWNLOADS && !queuedRequests.isEmpty()) {
+            Map.Entry<String, DownloadRequest> entry = queuedRequests.entrySet().iterator().next();
+            queuedRequests.remove(entry.getKey());
+            DownloadRequest request = entry.getValue();
+            DlsiteWork work = dlsiteRepository.getWork(request.workId);
+            if (work == null) {
+                DlsiteDownloadStateBus.remove(request.workId);
+                continue;
             }
-        } finally {
-            String finalStopRequest = stopRequest;
-            if (STOP_PAUSE.equals(finalStopRequest)) {
-                markPausedSafely(work);
-            } else if (STOP_DELETE.equals(finalStopRequest)) {
-                deleteCachedWorkSafely(work);
+            DownloadWorker worker = new DownloadWorker(request, work);
+            runningWorkers.put(request.workId, worker);
+            worker.start();
+        }
+        publishQueuePositionsLocked();
+        updateNotification();
+    }
+
+    private void publishQueuePositionsLocked() {
+        int index = 1;
+        for (DownloadRequest request : queuedRequests.values()) {
+            DlsiteDownloadStateBus.publishQueued(request.workId, request.title, index);
+            index++;
+        }
+    }
+
+    private void finishWorker(DownloadWorker worker) {
+        synchronized (lock) {
+            runningWorkers.remove(worker.request.workId);
+            scheduleLocked();
+            if (runningWorkers.isEmpty() && queuedRequests.isEmpty()) {
+                stopForegroundSafely();
+                stopSelf(latestStartId);
             }
-            activeDownload = false;
-            activeWorkId = "";
-            stopRequest = STOP_NONE;
-            DlsiteDownloadStateBus.clear();
-            stopForegroundSafely();
-            stopSelf(startId);
         }
     }
 
@@ -174,15 +207,25 @@ public class DlsiteDownloadService extends Service {
             stopSelf(startId);
             return;
         }
-        if (activeDownload && work.workId.equals(activeWorkId)) {
-            stopRequest = STOP_PAUSE;
-            DlsiteDownloadStateBus.publish(work.workId, work.displayTitle(), "暂停中");
-            markPausedSafely(work);
-            interruptDownload();
-            return;
-        }
-        if (work.isDownloading()) {
-            markPausedSafely(work);
+        synchronized (lock) {
+            DownloadWorker worker = runningWorkers.get(work.workId);
+            if (worker != null) {
+                worker.stopRequest = STOP_PAUSE;
+                DlsiteDownloadStateBus.publishPaused(work.workId, work.displayTitle());
+                markPausedSafely(work);
+                worker.interrupt();
+                return;
+            }
+            DownloadRequest queued = queuedRequests.remove(work.workId);
+            if (queued != null) {
+                markPausedSafely(work);
+                dlsiteRepository.markContentPaused(work.workId, queued.optionIds);
+                DlsiteDownloadStateBus.publishPaused(work.workId, work.displayTitle());
+                publishQueuePositionsLocked();
+                updateNotification();
+                stopIfIdleLocked(startId);
+                return;
+            }
         }
         stopSelf(startId);
     }
@@ -193,20 +236,37 @@ public class DlsiteDownloadService extends Service {
             stopSelf(startId);
             return;
         }
-        if (activeDownload && work.workId.equals(activeWorkId)) {
-            stopRequest = STOP_DELETE;
-            DlsiteDownloadStateBus.publish(work.workId, work.displayTitle(), "删除中");
-            dlsiteRepository.markCacheDeleted(work);
-            interruptDownload();
-            return;
+        synchronized (lock) {
+            DownloadWorker worker = runningWorkers.get(work.workId);
+            if (worker != null) {
+                worker.stopRequest = STOP_DELETE;
+                DlsiteDownloadStateBus.publishTask(
+                        work.workId,
+                        work.displayTitle(),
+                        DlsiteDownloadTaskStatus.DOWNLOADING,
+                        "删除中");
+                dlsiteRepository.markCacheDeleted(work);
+                worker.interrupt();
+                return;
+            }
+            DownloadRequest queued = queuedRequests.remove(work.workId);
+            if (queued != null) {
+                deleteCachedWork(work);
+                DlsiteDownloadStateBus.remove(work.workId);
+                publishQueuePositionsLocked();
+                updateNotification();
+                stopIfIdleLocked(startId);
+                return;
+            }
         }
         deleteCachedWork(work);
         stopSelf(startId);
     }
 
-    private void interruptDownload() {
-        if (downloadThread != null && downloadThread.isAlive()) {
-            downloadThread.interrupt();
+    private void stopIfIdleLocked(int startId) {
+        if (runningWorkers.isEmpty() && queuedRequests.isEmpty()) {
+            stopForegroundSafely();
+            stopSelf(startId);
         }
     }
 
@@ -239,18 +299,22 @@ public class DlsiteDownloadService extends Service {
         }
     }
 
-    private void promoteToForeground(String title, String status) {
+    private void promoteToForeground() {
         DlsiteDownloadNotifications.ensureChannel(this);
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
             startForeground(
                     DlsiteDownloadNotifications.NOTIFICATION_ID,
-                    DlsiteDownloadNotifications.build(this, title, status),
+                    DlsiteDownloadNotifications.buildSummary(this, DlsiteDownloadStateBus.snapshot()),
                     ServiceInfo.FOREGROUND_SERVICE_TYPE_DATA_SYNC);
         } else {
             startForeground(
                     DlsiteDownloadNotifications.NOTIFICATION_ID,
-                    DlsiteDownloadNotifications.build(this, title, status));
+                    DlsiteDownloadNotifications.buildSummary(this, DlsiteDownloadStateBus.snapshot()));
         }
+    }
+
+    private void updateNotification() {
+        DlsiteDownloadNotifications.updateSummary(this, DlsiteDownloadStateBus.snapshot());
     }
 
     private String shortError(Exception exception) {
@@ -259,5 +323,104 @@ public class DlsiteDownloadService extends Service {
             message = "下载失败";
         }
         return message.length() > 42 ? message.substring(0, 42) + "..." : message;
+    }
+
+    private static final class DownloadRequest {
+        final String workId;
+        final String title;
+        final List<String> optionIds;
+
+        DownloadRequest(String workId, String title, List<String> optionIds) {
+            this.workId = workId == null ? "" : workId;
+            this.title = title == null ? "" : title;
+            this.optionIds = optionIds == null ? new ArrayList<>() : new ArrayList<>(optionIds);
+        }
+    }
+
+    private final class DownloadWorker extends Thread implements DlsiteDownloadTask.ContentListener {
+        final DownloadRequest request;
+        final DlsiteWork initialWork;
+        volatile String stopRequest = STOP_NONE;
+
+        DownloadWorker(DownloadRequest request, DlsiteWork work) {
+            super("dlsite-download-" + request.workId);
+            this.request = request;
+            this.initialWork = work;
+        }
+
+        @Override
+        public void run() {
+            DlsiteWork work = initialWork;
+            try {
+                dlsiteRepository.markDownloading(work, TextUtils.join("|", request.optionIds), request.optionIds.size() + " 个内容");
+                DlsiteDownloadStateBus.publishTask(
+                        work.workId,
+                        work.displayTitle(),
+                        DlsiteDownloadTaskStatus.DOWNLOADING,
+                        "下载中");
+                updateNotification();
+                DlsiteDownloadTask.Result result = DlsiteDownloadTask.downloadAndImport(
+                        DlsiteDownloadService.this,
+                        dlsiteApi,
+                        libraryRepository,
+                        work,
+                        request.optionIds,
+                        this);
+                if (STOP_NONE.equals(stopRequest)) {
+                    DlsiteWork downloadedWork = TextUtils.isEmpty(result.coverUri)
+                            ? work
+                            : work.withCoverUri(result.coverUri);
+                    dlsiteRepository.markDownloaded(downloadedWork, result.playlistId, result.localPath, result.trackCount);
+                    DlsiteDownloadStateBus.publishCompleted(work.workId, work.displayTitle());
+                    updateNotification();
+                }
+            } catch (Exception exception) {
+                if (STOP_PAUSE.equals(stopRequest)) {
+                    markPausedSafely(work);
+                    dlsiteRepository.markContentPaused(work.workId, request.optionIds);
+                    DlsiteDownloadStateBus.publishPaused(work.workId, work.displayTitle());
+                } else if (STOP_DELETE.equals(stopRequest)) {
+                    deleteCachedWorkSafely(work);
+                    DlsiteDownloadStateBus.remove(work.workId);
+                } else {
+                    String message = shortError(exception);
+                    dlsiteRepository.markFailed(work, message);
+                    for (String optionId : request.optionIds) {
+                        dlsiteRepository.markContentFailed(work.workId, optionId, message);
+                    }
+                    DlsiteDownloadStateBus.publishFailed(work.workId, work.displayTitle(), message);
+                }
+                updateNotification();
+            } finally {
+                finishWorker(this);
+            }
+        }
+
+        @Override
+        public void onContentStarted(DlsiteDownloadOption option, File contentDir) {
+            dlsiteRepository.markContentDownloading(request.workId, option.id);
+            DlsiteDownloadStateBus.publishTask(
+                    request.workId,
+                    initialWork.displayTitle(),
+                    DlsiteDownloadTaskStatus.DOWNLOADING,
+                    "下载中",
+                    0,
+                    0L,
+                    -1L,
+                    0L,
+                    option.id,
+                    option.title);
+            updateNotification();
+        }
+
+        @Override
+        public void onContentFinished(DlsiteDownloadOption option, DlsiteDownloadTask.ContentResult result) {
+            dlsiteRepository.markContentDownloaded(
+                    request.workId,
+                    option.id,
+                    result.localPath,
+                    result.trackIds,
+                    result.trackCount);
+        }
     }
 }

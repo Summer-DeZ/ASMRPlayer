@@ -46,6 +46,22 @@ final class DlsiteDownloadNotifications {
     }
 
     static Notification build(Context context, String title, String status) {
+        return build(context, title, status, 0, 0);
+    }
+
+    static Notification buildSummary(Context context, DlsiteDownloadState state) {
+        DlsiteDownloadSummary summary = state == null ? new DlsiteDownloadSummary() : state.getSummary();
+        String title = summary.getVisible()
+                ? "DLsite 下载 · 正在下载 " + summary.getRunningCount() + " / " + summary.getTotalCount() + " 项"
+                : "DLsite 下载";
+        String text = summary.getProgressPercent() == null
+                ? formatBytes(summary.getSpeedBytesPerSecond()) + "/s"
+                : summary.getProgressPercent() + "% · " + formatBytes(summary.getSpeedBytesPerSecond()) + "/s · "
+                + formatBytes(summary.getBytesDownloaded()) + " / " + formatBytes(summary.getTotalBytes());
+        return build(context, title, text, summary.getProgressPercent() == null ? 0 : summary.getProgressPercent(), summary.getTotalBytes());
+    }
+
+    static Notification build(Context context, String title, String status, int progressPercent, long totalBytes) {
         Intent openIntent = new Intent(context, MainActivity.class);
         PendingIntent contentIntent = PendingIntent.getActivity(
                 context,
@@ -53,14 +69,17 @@ final class DlsiteDownloadNotifications {
                 openIntent,
                 PendingIntent.FLAG_UPDATE_CURRENT | PendingIntent.FLAG_IMMUTABLE);
 
-        return new Notification.Builder(context, CHANNEL_ID)
+        Notification.Builder builder = new Notification.Builder(context, CHANNEL_ID)
                 .setSmallIcon(R.drawable.ic_notification)
                 .setContentTitle(TextUtils.isEmpty(title) ? "DLsite 下载" : title)
                 .setContentText(TextUtils.isEmpty(status) ? "下载中" : status)
                 .setContentIntent(contentIntent)
                 .setOngoing(true)
-                .setOnlyAlertOnce(true)
-                .build();
+                .setOnlyAlertOnce(true);
+        if (totalBytes > 0L) {
+            builder.setProgress(100, progressPercent, false);
+        }
+        return builder.build();
     }
 
     static void update(Context context, String title, String status) {
@@ -69,5 +88,30 @@ final class DlsiteDownloadNotifications {
             return;
         }
         manager.notify(NOTIFICATION_ID, build(context, title, status));
+    }
+
+    static void updateSummary(Context context, DlsiteDownloadState state) {
+        NotificationManager manager = context.getSystemService(NotificationManager.class);
+        if (manager == null) {
+            return;
+        }
+        manager.notify(NOTIFICATION_ID, buildSummary(context, state));
+    }
+
+    private static String formatBytes(long bytes) {
+        if (bytes <= 0L) {
+            return "--";
+        }
+        final String[] units = {"B", "KB", "MB", "GB"};
+        double value = bytes;
+        int unit = 0;
+        while (value >= 1024.0 && unit < units.length - 1) {
+            value /= 1024.0;
+            unit++;
+        }
+        if (unit == 0) {
+            return ((long) value) + " " + units[unit];
+        }
+        return String.format(java.util.Locale.US, "%.1f %s", value, units[unit]);
     }
 }
