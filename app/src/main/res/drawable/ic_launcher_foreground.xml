@@ -1,0 +1,33 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- 暖夜琥珀 · 应用图标前景层
+     一弯暖白新月（夜/助眠）+ 三道琥珀声波弧（柔和音声/耳边低语）。
+     图形落在 66dp 安全区内（中心 54,54）。 -->
+<vector xmlns:android="http://schemas.android.com/apk/res/android"
+    android:width="108dp"
+    android:height="108dp"
+    android:viewportWidth="108"
+    android:viewportHeight="108">
+    <!-- 新月：暖柔白实心，开口朝右 -->
+    <path
+        android:fillColor="#FFF7EFE2"
+        android:pathData="M52,32 C30,37 30,71 52,76 C44,63 44,45 52,32 Z" />
+    <!-- 声波弧三道：琥珀，自月牙开口向右发散 -->
+    <path
+        android:strokeColor="#FFE7AE78"
+        android:strokeWidth="3.6"
+        android:strokeLineCap="round"
+        android:fillColor="#00000000"
+        android:pathData="M58,44 A13,13 0 0 1 58,64" />
+    <path
+        android:strokeColor="#FFE0A26B"
+        android:strokeWidth="3.6"
+        android:strokeLineCap="round"
+        android:fillColor="#00000000"
+        android:pathData="M62.5,39 A20,20 0 0 1 62.5,69" />
+    <path
+        android:strokeColor="#FFD98C5E"
+        android:strokeWidth="3.6"
+        android:strokeLineCap="round"
+        android:fillColor="#00000000"
+        android:pathData="M67,34 A27,27 0 0 1 67,74" />
+</vector>

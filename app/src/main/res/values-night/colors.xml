@@ -1,0 +1,19 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <color name="accent">#E0A26B</color>
+    <color name="accent2">#D98C7A</color>
+    <color name="switch_on">#E0A26B</color>
+    <color name="switch_off">#3A322A</color>
+    <color name="bg">#17120E</color>
+    <color name="grouped">#17120E</color>
+    <color name="gray6">#221A14</color>
+    <color name="gray5">#2C231B</color>
+    <color name="gray4">#3A322A</color>
+    <color name="gray3">#4A3B2E</color>
+    <color name="label">#F6F1EA</color>
+    <color name="label2">#8CF6F1EA</color>
+    <color name="label3">#4DF6F1EA</color>
+    <color name="separator">#29BEA078</color>
+    <color name="bar_material">#DB211A14</color>
+    <color name="sheet_material">#F0261E16</color>
+</resources>

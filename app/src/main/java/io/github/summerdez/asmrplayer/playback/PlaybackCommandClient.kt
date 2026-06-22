@@ -1,0 +1,241 @@
+package io.github.summerdez.asmrplayer.playback
+
+import io.github.summerdez.asmrplayer.R
+import io.github.summerdez.asmrplayer.data.*
+import io.github.summerdez.asmrplayer.data.remote.*
+import io.github.summerdez.asmrplayer.data.download.*
+import io.github.summerdez.asmrplayer.data.files.*
+import io.github.summerdez.asmrplayer.domain.*
+import io.github.summerdez.asmrplayer.domain.model.*
+import io.github.summerdez.asmrplayer.playback.*
+import io.github.summerdez.asmrplayer.presentation.*
+import io.github.summerdez.asmrplayer.ui.*
+import io.github.summerdez.asmrplayer.ui.activity.*
+import io.github.summerdez.asmrplayer.ui.components.*
+import io.github.summerdez.asmrplayer.ui.screens.*
+import io.github.summerdez.asmrplayer.ui.theme.*
+import io.github.summerdez.asmrplayer.ui.util.*
+import io.github.summerdez.asmrplayer.di.*
+import android.app.Application
+import android.content.ComponentName
+import android.net.Uri
+import android.os.Bundle
+import androidx.core.content.ContextCompat
+import androidx.media3.common.C
+import androidx.media3.common.Player
+import androidx.media3.session.MediaController
+import androidx.media3.session.SessionCommand
+import androidx.media3.session.SessionToken
+import com.google.common.util.concurrent.ListenableFuture
+import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.Job
+import kotlinx.coroutines.SupervisorJob
+import kotlinx.coroutines.channels.awaitClose
+import kotlinx.coroutines.delay
+import kotlinx.coroutines.flow.MutableStateFlow
+import kotlinx.coroutines.flow.StateFlow
+import kotlinx.coroutines.flow.asStateFlow
+import kotlinx.coroutines.flow.callbackFlow
+import kotlinx.coroutines.flow.launchIn
+import kotlinx.coroutines.flow.onEach
+import kotlinx.coroutines.isActive
+import kotlinx.coroutines.launch
+
+data class PlaybackControllerSnapshot(
+    val connected: Boolean = false,
+    val mediaId: String = "",
+    val isPlaying: Boolean = false,
+    val durationMs: Int = 0,
+    val positionMs: Int = 0,
+    val hasNextMediaItem: Boolean = false,
+)
+
+class PlaybackCommandClient(private val application: Application) {
+    private val scope = CoroutineScope(SupervisorJob() + Dispatchers.Main.immediate)
+    private val _snapshots = MutableStateFlow(PlaybackControllerSnapshot())
+    private var controllerFuture: ListenableFuture<MediaController>? = null
+    private var controller: MediaController? = null
+    private var controllerJob: Job? = null
+
+    val snapshots: StateFlow<PlaybackControllerSnapshot> = _snapshots.asStateFlow()
+
+    fun connect() {
+        if (controllerFuture != null) {
+            return
+        }
+        val token = SessionToken(application, ComponentName(application, PlaybackService::class.java))
+        val future = MediaController.Builder(application, token).buildAsync()
+        controllerFuture = future
+        future.addListener(
+            {
+                controller = runCatching { future.get() }.getOrNull()
+                controller?.let(::observeController)
+            },
+            ContextCompat.getMainExecutor(application),
+        )
+    }
+
+    fun playMedia(
+        audioUri: Uri,
+        title: String,
+        subtitleUri: Uri?,
+        playlistId: String,
+        playlistIndex: Int,
+    ) {
+        val args = Bundle().apply {
+            putString(PlaybackService.EXTRA_AUDIO_URI, audioUri.toString())
+            putString(PlaybackService.EXTRA_TRACK_TITLE, title)
+            putString(PlaybackService.EXTRA_SUBTITLE_URI, subtitleUri?.toString().orEmpty())
+            putString(PlaybackService.EXTRA_PLAYLIST_ID, playlistId)
+            putInt(PlaybackService.EXTRA_PLAYLIST_INDEX, playlistIndex)
+        }
+        if (sendCommand(PlaybackService.COMMAND_PLAY_MEDIA, args)) {
+            return
+        }
+        application.startService(
+            PlaybackIntents.playMedia(application, audioUri, title, subtitleUri, playlistId, playlistIndex),
+        )
+    }
+
+    fun togglePlayback(isPlaying: Boolean) {
+        val activeController = controller
+        if (activeController != null) {
+            if (isPlaying) {
+                activeController.pause()
+            } else {
+                activeController.play()
+            }
+            return
+        }
+        application.startService(PlaybackIntents.simpleAction(application, PlaybackService.ACTION_TOGGLE_PLAYBACK))
+    }
+
+    fun seekTo(positionMs: Int) {
+        val activeController = controller
+        if (activeController != null) {
+            activeController.seekTo(positionMs.toLong())
+            return
+        }
+        application.startService(PlaybackIntents.seekTo(application, positionMs.toLong()))
+    }
+
+    fun setSubtitle(uri: Uri) {
+        val args = Bundle().apply {
+            putString(PlaybackService.EXTRA_SUBTITLE_URI, uri.toString())
+        }
+        if (!sendCommand(PlaybackService.COMMAND_SET_SUBTITLE, args)) {
+            application.startService(PlaybackIntents.setSubtitle(application, uri))
+        }
+    }
+
+    fun setOverlayVisible(visible: Boolean) {
+        val action = if (visible) PlaybackService.COMMAND_SHOW_OVERLAY else PlaybackService.COMMAND_HIDE_OVERLAY
+        if (!sendCommand(action, Bundle.EMPTY)) {
+            val fallbackAction = if (visible) PlaybackService.ACTION_SHOW_OVERLAY else PlaybackService.ACTION_HIDE_OVERLAY
+            application.startService(PlaybackIntents.simpleAction(application, fallbackAction))
+        }
+    }
+
+    fun unlockOverlay() {
+        if (!sendCommand(PlaybackService.COMMAND_UNLOCK_OVERLAY, Bundle.EMPTY)) {
+            application.startService(PlaybackIntents.simpleAction(application, PlaybackService.ACTION_UNLOCK_OVERLAY))
+        }
+    }
+
+    fun setSleepMinutes(minutes: Int): Boolean {
+        val args = Bundle().apply {
+            putInt(PlaybackService.EXTRA_SLEEP_MINUTES, minutes)
+        }
+        if (!sendCommand(PlaybackService.COMMAND_SET_SLEEP_MINUTES, args)) {
+            application.startService(PlaybackIntents.setSleepMinutes(application, minutes))
+        }
+        return true
+    }
+
+    fun setSleepAtEndOfTrack(): Boolean {
+        if (!sendCommand(PlaybackService.COMMAND_SET_SLEEP_AT_END, Bundle.EMPTY)) {
+            application.startService(PlaybackIntents.simpleAction(application, PlaybackService.ACTION_SET_SLEEP_AT_END))
+        }
+        return true
+    }
+
+    fun cancelSleepTimer() {
+        if (!sendCommand(PlaybackService.COMMAND_CANCEL_SLEEP, Bundle.EMPTY)) {
+            application.startService(PlaybackIntents.simpleAction(application, PlaybackService.ACTION_CANCEL_SLEEP))
+        }
+    }
+
+    fun hasNextMediaItem(): Boolean {
+        return controller?.hasNextMediaItem() == true
+    }
+
+    fun seekToNextMediaItem() {
+        controller?.seekToNextMediaItem()
+    }
+
+    fun seekToPreviousMediaItem() {
+        controller?.seekToPreviousMediaItem()
+    }
+
+    private fun sendCommand(action: String, args: Bundle): Boolean {
+        val activeController = controller ?: return false
+        activeController.sendCustomCommand(SessionCommand(action, Bundle.EMPTY), args)
+        return true
+    }
+
+    private fun observeController(activeController: MediaController) {
+        controllerJob?.cancel()
+        controllerJob = controllerSnapshotFlow(activeController)
+            .onEach { _snapshots.value = it }
+            .launchIn(scope)
+    }
+
+    private fun controllerSnapshotFlow(activeController: MediaController) = callbackFlow {
+        fun emitSnapshot() {
+            trySend(activeController.snapshot())
+        }
+
+        val listener = object : Player.Listener {
+            override fun onEvents(player: Player, events: Player.Events) {
+                emitSnapshot()
+            }
+        }
+        activeController.addListener(listener)
+        emitSnapshot()
+        val positionTicker = launch {
+            while (isActive) {
+                delay(CONTROLLER_POSITION_REFRESH_MS)
+                if (activeController.isPlaying) {
+                    emitSnapshot()
+                }
+            }
+        }
+        awaitClose {
+            positionTicker.cancel()
+            activeController.removeListener(listener)
+        }
+    }
+
+    private fun MediaController.snapshot(): PlaybackControllerSnapshot {
+        return PlaybackControllerSnapshot(
+            connected = true,
+            mediaId = currentMediaItem?.mediaId.orEmpty(),
+            isPlaying = isPlaying,
+            durationMs = duration.toPlaybackIntMs(),
+            positionMs = currentPosition.toPlaybackIntMs(),
+            hasNextMediaItem = hasNextMediaItem(),
+        )
+    }
+
+    private fun Long.toPlaybackIntMs(): Int {
+        if (this == C.TIME_UNSET || this <= 0L) {
+            return 0
+        }
+        return coerceAtMost(Int.MAX_VALUE.toLong()).toInt()
+    }
+
+    private companion object {
+        const val CONTROLLER_POSITION_REFRESH_MS = 250L
+    }
+}

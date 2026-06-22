@@ -1,0 +1,23 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- 暖夜琥珀 · 应用图标背景层
+     睡前暖灯 radial：中心偏上暖光，四周沉入暖炭褐，呼应 DESIGN_GUIDE 歌词页背景。 -->
+<vector xmlns:android="http://schemas.android.com/apk/res/android"
+    xmlns:aapt="http://schemas.android.com/aapt"
+    android:width="108dp"
+    android:height="108dp"
+    android:viewportWidth="108"
+    android:viewportHeight="108">
+    <path android:pathData="M0,0h108v108h-108z">
+        <aapt:attr name="android:fillColor">
+            <gradient
+                android:type="radial"
+                android:centerX="54"
+                android:centerY="40"
+                android:gradientRadius="76">
+                <item android:color="#FF4E351F" android:offset="0.0" />
+                <item android:color="#FF2C1E13" android:offset="0.55" />
+                <item android:color="#FF150E09" android:offset="1.0" />
+            </gradient>
+        </aapt:attr>
+    </path>
+</vector>

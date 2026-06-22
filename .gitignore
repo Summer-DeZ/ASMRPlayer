@@ -1,0 +1,41 @@
+# Gradle / Android build outputs
+.gradle/
+.kotlin/
+build/
+**/build/
+captures/
+.externalNativeBuild/
+.cxx/
+*.apk
+*.ap_
+*.aab
+*.aar
+
+# Local SDK, signing, and environment files
+local.properties
+keystore.properties
+*.jks
+*.keystore
+*.env
+
+# IDE and editor local state
+*.iml
+.idea/
+.vscode/
+
+# Local assistant/tool context
+.agents/
+.claude/
+.codex/
+
+# Design/reference materials and internal docs (not needed to build the app,
+# kept local so design + refactor plans are not pushed to GitHub by accident)
+docs/
+ICON/
+
+# OS, logs, and temporary files
+.DS_Store
+Thumbs.db
+*.log
+*.tmp
+*.swp
