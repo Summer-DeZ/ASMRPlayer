@@ -7,20 +7,42 @@ import io.github.summerdez.asmrplayer.domain.model.SubtitleLine
 import java.io.File
 import java.net.URLDecoder
 import java.net.URLEncoder
+import java.security.MessageDigest
 import java.util.Base64
+import kotlinx.coroutines.CancellationException
 
-internal class AiSubtitleTranslationCache(
+internal class SceneContextBuilder(
     private val rootDir: File,
+    private val translator: OpenAiCompatibleTranslator = OpenAiCompatibleTranslator(),
 ) {
-    constructor(context: Context) : this(File(context.cacheDir, "ai-subtitles/translations"))
+    constructor(
+        context: Context,
+        translator: OpenAiCompatibleTranslator = OpenAiCompatibleTranslator(),
+    ) : this(File(context.cacheDir, "ai-subtitles/scene-contexts"), translator)
+
+    suspend fun loadOrBuild(
+        settings: AiSubtitleSettings,
+        target: SubtitleGenerationTarget,
+        sourceLines: List<SubtitleLine>,
+    ): SceneContext {
+        load(target, settings, sourceLines)?.let { return it }
+        return try {
+            translator.summarizeSceneContext(settings, target, sourceLines).also { sceneContext ->
+                save(target, settings, sourceLines, sceneContext)
+            }
+        } catch (error: Throwable) {
+            if (error is CancellationException) {
+                throw error
+            }
+            SceneContext()
+        }
+    }
 
     fun load(
         target: SubtitleGenerationTarget,
-        whisperModelId: String,
         settings: AiSubtitleSettings,
         sourceLines: List<SubtitleLine>,
-        sceneContext: SceneContext,
-    ): List<SubtitleLine>? {
+    ): SceneContext? {
         val file = cacheFile(target.trackId)
         if (!file.isFile) {
             return null
@@ -30,12 +52,12 @@ internal class AiSubtitleTranslationCache(
             if (lines.firstOrNull() != HEADER) {
                 return@runCatching null
             }
-            val lineStart = lines.indexOf(KEY_LINES)
-            if (lineStart <= 0) {
+            val contextStart = lines.indexOf(KEY_CONTEXT_JSON)
+            if (contextStart <= 0 || contextStart + 1 >= lines.size) {
                 return@runCatching null
             }
             val metadata = lines
-                .subList(1, lineStart)
+                .subList(1, contextStart)
                 .mapNotNull { raw ->
                     val separator = raw.indexOf('=')
                     if (separator <= 0) {
@@ -47,40 +69,28 @@ internal class AiSubtitleTranslationCache(
                 .toMap()
             if (metadata[KEY_TRACK_ID] != target.trackId ||
                 metadata[KEY_AUDIO_URI] != target.audioUri ||
-                metadata[KEY_WHISPER_MODEL_ID] != whisperModelId ||
                 metadata[KEY_TRANSLATION_ENGINE] != settings.translationEngine.name ||
                 metadata[KEY_BASE_URL] != settings.activeBaseUrl.trim().trimEnd('/') ||
                 metadata[KEY_MODEL] != settings.activeModel ||
                 metadata[KEY_CONTEXT_TITLE] != target.contextTitle ||
-                metadata[KEY_PROMPT_VERSION] != PROMPT_VERSION ||
-                metadata[KEY_TRANSLATION_PROTOCOL_VERSION] != TRANSLATION_PROTOCOL_VERSION ||
+                metadata[KEY_TRACK_TITLE] != target.trackTitle ||
                 metadata[KEY_SCENE_CONTEXT_VERSION] != SCENE_CONTEXT_VERSION ||
-                metadata[KEY_BATCH_STRATEGY_VERSION] != BATCH_STRATEGY_VERSION ||
-                metadata[KEY_SCENE_CONTEXT_SIGNATURE] != sceneContextSignature(sceneContext) ||
                 metadata[KEY_SOURCE_SIGNATURE] != aiSubtitleSourceSignature(sourceLines)
             ) {
                 return@runCatching null
             }
-            lines
-                .drop(lineStart + 1)
-                .mapNotNull { it.toSubtitleLineOrNull() }
-                .takeIf { it.isNotEmpty() }
+            val json = Base64.getDecoder().decode(lines[contextStart + 1]).toString(Charsets.UTF_8)
+            OpenAiCompatibleTranslator.parseSceneContextContent(json, finishReason = "stop")
         }.getOrNull()
     }
 
     fun save(
         target: SubtitleGenerationTarget,
-        whisperModelId: String,
         settings: AiSubtitleSettings,
         sourceLines: List<SubtitleLine>,
-        translatedLines: List<SubtitleLine>,
         sceneContext: SceneContext,
     ) {
-        val translatedById = translatedLines
-            .filter { it.translatedText.isNotBlank() }
-            .associateBy { it.id }
-        val completed = sourceLines.mapNotNull { source -> translatedById[source.id] }
-        if (sourceLines.isEmpty() || completed.isEmpty()) {
+        if (sourceLines.isEmpty()) {
             return
         }
         rootDir.mkdirs()
@@ -89,30 +99,20 @@ internal class AiSubtitleTranslationCache(
             appendLine(HEADER)
             appendLine("$KEY_TRACK_ID=${encode(target.trackId)}")
             appendLine("$KEY_AUDIO_URI=${encode(target.audioUri)}")
-            appendLine("$KEY_WHISPER_MODEL_ID=${encode(whisperModelId)}")
             appendLine("$KEY_TRANSLATION_ENGINE=${encode(settings.translationEngine.name)}")
             appendLine("$KEY_BASE_URL=${encode(settings.activeBaseUrl.trim().trimEnd('/'))}")
             appendLine("$KEY_MODEL=${encode(settings.activeModel)}")
             appendLine("$KEY_CONTEXT_TITLE=${encode(target.contextTitle)}")
-            appendLine("$KEY_PROMPT_VERSION=${encode(PROMPT_VERSION)}")
-            appendLine("$KEY_TRANSLATION_PROTOCOL_VERSION=${encode(TRANSLATION_PROTOCOL_VERSION)}")
+            appendLine("$KEY_TRACK_TITLE=${encode(target.trackTitle)}")
             appendLine("$KEY_SCENE_CONTEXT_VERSION=${encode(SCENE_CONTEXT_VERSION)}")
-            appendLine("$KEY_BATCH_STRATEGY_VERSION=${encode(BATCH_STRATEGY_VERSION)}")
-            appendLine("$KEY_SCENE_CONTEXT_SIGNATURE=${encode(sceneContextSignature(sceneContext))}")
             appendLine("$KEY_SOURCE_SIGNATURE=${encode(aiSubtitleSourceSignature(sourceLines))}")
             appendLine("$KEY_CREATED_AT=${System.currentTimeMillis()}")
-            appendLine(KEY_LINES)
-            completed.forEach { line ->
-                appendLine(
-                    listOf(
-                        encode(line.id),
-                        line.startMs.toString(),
-                        line.endMs.toString(),
-                        Base64.getEncoder().encodeToString(line.sourceText.toByteArray(Charsets.UTF_8)),
-                        Base64.getEncoder().encodeToString(line.translatedText.toByteArray(Charsets.UTF_8)),
-                    ).joinToString("\t"),
-                )
-            }
+            appendLine(KEY_CONTEXT_JSON)
+            appendLine(
+                Base64.getEncoder().encodeToString(
+                    sceneContextToJsonString(sceneContext).toByteArray(Charsets.UTF_8),
+                ),
+            )
         }
         val tmp = File(file.parentFile, "${file.name}.tmp")
         tmp.writeText(body, Charsets.UTF_8)
@@ -130,33 +130,7 @@ internal class AiSubtitleTranslationCache(
         val safeName = trackId
             .replace(Regex("[^A-Za-z0-9._-]+"), "_")
             .ifBlank { "track" }
-        return File(rootDir, "$safeName.translations")
-    }
-
-    private fun String.toSubtitleLineOrNull(): SubtitleLine? {
-        val parts = split('\t')
-        if (parts.size != 5) {
-            return null
-        }
-        val id = decode(parts[0])
-        val startMs = parts[1].toLongOrNull() ?: return null
-        val endMs = parts[2].toLongOrNull() ?: return null
-        val sourceText = runCatching {
-            Base64.getDecoder().decode(parts[3]).toString(Charsets.UTF_8)
-        }.getOrDefault("")
-        val translatedText = runCatching {
-            Base64.getDecoder().decode(parts[4]).toString(Charsets.UTF_8)
-        }.getOrDefault("")
-        if (id.isBlank() || sourceText.isBlank() || translatedText.isBlank() || endMs <= startMs) {
-            return null
-        }
-        return SubtitleLine(
-            id = id,
-            startMs = startMs,
-            endMs = endMs,
-            sourceText = sourceText,
-            translatedText = translatedText,
-        )
+        return File(rootDir, "$safeName.scene")
     }
 
     private fun encode(value: String): String {
@@ -168,22 +142,56 @@ internal class AiSubtitleTranslationCache(
     }
 
     private companion object {
-        const val HEADER = "ASMRPLAYER_AI_TRANSLATIONS_V1"
-        const val PROMPT_VERSION = TRANSLATION_PROMPT_VERSION
+        const val HEADER = "ASMRPLAYER_AI_SCENE_CONTEXT_V1"
         const val KEY_TRACK_ID = "trackId"
         const val KEY_AUDIO_URI = "audioUri"
-        const val KEY_WHISPER_MODEL_ID = "whisperModelId"
         const val KEY_TRANSLATION_ENGINE = "translationEngine"
         const val KEY_BASE_URL = "baseUrl"
         const val KEY_MODEL = "model"
         const val KEY_CONTEXT_TITLE = "contextTitle"
-        const val KEY_PROMPT_VERSION = "promptVersion"
-        const val KEY_TRANSLATION_PROTOCOL_VERSION = "translationProtocolVersion"
+        const val KEY_TRACK_TITLE = "trackTitle"
         const val KEY_SCENE_CONTEXT_VERSION = "sceneContextVersion"
-        const val KEY_BATCH_STRATEGY_VERSION = "batchStrategyVersion"
-        const val KEY_SCENE_CONTEXT_SIGNATURE = "sceneContextSignature"
         const val KEY_SOURCE_SIGNATURE = "sourceSignature"
         const val KEY_CREATED_AT = "createdAt"
-        const val KEY_LINES = "lines"
+        const val KEY_CONTEXT_JSON = "contextJson"
     }
+}
+
+internal fun sceneContextSignature(sceneContext: SceneContext): String {
+    val digest = MessageDigest.getInstance("SHA-256")
+    digest.update(sceneContext.signatureMaterial.toByteArray(Charsets.UTF_8))
+    return digest.digest().joinToString("") { "%02x".format(it.toInt() and 0xff) }
+}
+
+internal fun sceneContextToJsonString(sceneContext: SceneContext): String {
+    val glossary = sceneContext.glossary
+        .toSortedMap()
+        .entries
+        .joinToString(",") { (key, value) -> "${jsonStringLiteral(key)}:${jsonStringLiteral(value)}" }
+    return buildString {
+        append("{")
+        append("\"scene\":${jsonStringLiteral(sceneContext.scene)},")
+        append("\"speaker\":${jsonStringLiteral(sceneContext.speaker)},")
+        append("\"listenerAddress\":${jsonStringLiteral(sceneContext.listenerAddress)},")
+        append("\"tone\":${jsonStringLiteral(sceneContext.tone)},")
+        append("\"glossary\":{$glossary},")
+        append("\"summary\":${jsonStringLiteral(sceneContext.rawSummary)}")
+        append("}")
+    }
+}
+
+internal fun jsonStringLiteral(value: String): String {
+    val escaped = buildString {
+        value.forEach { char ->
+            when (char) {
+                '\\' -> append("\\\\")
+                '"' -> append("\\\"")
+                '\n' -> append("\\n")
+                '\r' -> append("\\r")
+                '\t' -> append("\\t")
+                else -> append(char)
+            }
+        }
+    }
+    return "\"$escaped\""
 }

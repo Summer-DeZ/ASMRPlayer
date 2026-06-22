@@ -439,6 +439,16 @@ fun ASMRPlayerApp(
                                     AiSubtitleGenerationService.startIntent(context, task.target),
                                 )
                             },
+                            onRegenerate = {
+                                ContextCompat.startForegroundService(
+                                    context,
+                                    AiSubtitleGenerationService.startIntent(
+                                        context = context,
+                                        target = task.target,
+                                        forceRegenerate = true,
+                                    ),
+                                )
+                            },
                             onCancel = {
                                 context.startService(AiSubtitleGenerationService.cancelIntent(context, trackId))
                                 activeAiSubtitleTrackId = null

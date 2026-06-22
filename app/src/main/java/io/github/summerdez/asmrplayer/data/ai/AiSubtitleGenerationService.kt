@@ -16,6 +16,8 @@ import java.io.File
 import java.io.IOException
 import java.util.Locale
 import java.util.concurrent.ConcurrentHashMap
+import kotlin.math.max
+import kotlin.math.min
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
@@ -57,6 +59,7 @@ class AiSubtitleGenerationService : Service() {
             audioUri = intent.getStringExtra(EXTRA_AUDIO_URI).orEmpty(),
             contextTitle = intent.getStringExtra(EXTRA_CONTEXT_TITLE).orEmpty(),
         )
+        val forceRegenerate = intent.getBooleanExtra(EXTRA_FORCE_REGENERATE, false)
         if (target.playlistId.isBlank() || target.trackId.isBlank() || target.audioUri.isBlank()) {
             stopSelf()
             return
@@ -70,16 +73,21 @@ class AiSubtitleGenerationService : Service() {
             AiSubtitleNotifications.build(this, AiSubtitleTaskStateBus.taskFor(target.trackId)!!),
         )
         jobs[target.trackId] = scope.launch {
-            runGeneration(target)
+            runGeneration(target, forceRegenerate)
         }
     }
 
-    private suspend fun runGeneration(target: SubtitleGenerationTarget) {
+    private suspend fun runGeneration(target: SubtitleGenerationTarget, forceRegenerate: Boolean) {
         try {
             val container = AppGraph.container(this)
             val settings = container.settingsRepository.aiSubtitleSettings()
             val modelSpec = WhisperModelSpec.byId(settings.whisperModelId)
             val segmentCache = AiSubtitleSegmentCache(this)
+            val translationCache = AiSubtitleTranslationCache(this)
+            val sceneContextBuilder = SceneContextBuilder(this, translator)
+            if (forceRegenerate) {
+                clearAiSubtitleCaches(target.trackId, segmentCache, translationCache, sceneContextBuilder)
+            }
             val sourceLines = segmentCache.load(target, modelSpec.id)
                 ?.also { cachedLines ->
                     AiSubtitleTaskStateBus.publishTranscribing(
@@ -104,7 +112,8 @@ class AiSubtitleGenerationService : Service() {
                 settings = settings,
                 whisperModelId = modelSpec.id,
                 sourceLines = sourceLines,
-                translationCache = AiSubtitleTranslationCache(this),
+                translationCache = translationCache,
+                sceneContextBuilder = sceneContextBuilder,
             )
             AiSubtitleTaskStateBus.publish(target, AiSubtitleStage.BINDING)
             updateNotification(target)
@@ -164,12 +173,20 @@ class AiSubtitleGenerationService : Service() {
         whisperModelId: String,
         sourceLines: List<SubtitleLine>,
         translationCache: AiSubtitleTranslationCache,
+        sceneContextBuilder: SceneContextBuilder = SceneContextBuilder(this, translator),
     ): List<SubtitleLine> {
         if (sourceLines.isEmpty()) {
             return emptyList()
         }
+        val sceneContext = sceneContextBuilder.loadOrBuild(settings, target, sourceLines)
         val translatedById = translationCache
-            .load(target, whisperModelId, settings, sourceLines)
+            .load(
+                target = target,
+                whisperModelId = whisperModelId,
+                settings = settings,
+                sourceLines = sourceLines,
+                sceneContext = sceneContext,
+            )
             .orEmpty()
             .associateBy { it.id }
             .toMutableMap()
@@ -197,7 +214,16 @@ class AiSubtitleGenerationService : Service() {
             }
             val result = translator.translate(
                 settings = settings,
-                batch = TranslationBatch(lines = batch, contextTitle = target.contextTitle),
+                batch = buildTranslationBatch(
+                    sourceLines = sourceLines,
+                    batchLines = batch,
+                    batchIndex = index,
+                    totalBatches = batches.size,
+                    translatedById = translatedById,
+                    contextTitle = target.contextTitle,
+                    sceneContext = sceneContext,
+                    contextWindowSize = TRANSLATION_CONTEXT_WINDOW_SIZE,
+                ),
             )
             result.forEach { line ->
                 translatedById[line.id] = line
@@ -210,6 +236,7 @@ class AiSubtitleGenerationService : Service() {
                 settings = settings,
                 sourceLines = sourceLines,
                 translatedLines = translated,
+                sceneContext = sceneContext,
             )
             AiSubtitleTaskStateBus.publishTranslating(
                 target = target,
@@ -234,8 +261,7 @@ class AiSubtitleGenerationService : Service() {
             AiSubtitleTaskStateBus.publishPaused(target)
             updateNotification(target, force = true)
         } else {
-            AiSubtitleSegmentCache(this).clear(trackId)
-            AiSubtitleTranslationCache(this).clear(trackId)
+            clearAiSubtitleCaches(trackId)
             AiSubtitleTaskStateBus.remove(trackId)
         }
         clearNotificationState(trackId)
@@ -279,6 +305,17 @@ class AiSubtitleGenerationService : Service() {
         lastNotificationAt.remove(trackId)
         lastNotificationProgress.remove(trackId)
         lastNotificationStage.remove(trackId)
+    }
+
+    private fun clearAiSubtitleCaches(
+        trackId: String,
+        segmentCache: AiSubtitleSegmentCache = AiSubtitleSegmentCache(this),
+        translationCache: AiSubtitleTranslationCache = AiSubtitleTranslationCache(this),
+        sceneContextBuilder: SceneContextBuilder = SceneContextBuilder(this, translator),
+    ) {
+        segmentCache.clear(trackId)
+        translationCache.clear(trackId)
+        sceneContextBuilder.clear(trackId)
     }
 
     private fun progressPercent(progress: Float): Int {
@@ -328,12 +365,18 @@ class AiSubtitleGenerationService : Service() {
         private const val EXTRA_TRACK_TITLE = "trackTitle"
         private const val EXTRA_AUDIO_URI = "audioUri"
         private const val EXTRA_CONTEXT_TITLE = "contextTitle"
-        private const val TRANSLATION_BATCH_SIZE = 40
+        private const val EXTRA_FORCE_REGENERATE = "forceRegenerate"
+        private const val TRANSLATION_BATCH_SIZE = 60
+        private const val TRANSLATION_CONTEXT_WINDOW_SIZE = 4
         private const val TRANSLATION_PREVIEW_SIZE = 4
         private const val NOTIFICATION_MIN_INTERVAL_MS = 1_000L
         private const val NOTIFICATION_STALE_INTERVAL_MS = 5_000L
 
-        fun startIntent(context: Context, target: SubtitleGenerationTarget): Intent {
+        fun startIntent(
+            context: Context,
+            target: SubtitleGenerationTarget,
+            forceRegenerate: Boolean = false,
+        ): Intent {
             return Intent(context, AiSubtitleGenerationService::class.java)
                 .setAction(ACTION_START)
                 .putExtra(EXTRA_PLAYLIST_ID, target.playlistId)
@@ -341,6 +384,7 @@ class AiSubtitleGenerationService : Service() {
                 .putExtra(EXTRA_TRACK_TITLE, target.trackTitle)
                 .putExtra(EXTRA_AUDIO_URI, target.audioUri)
                 .putExtra(EXTRA_CONTEXT_TITLE, target.contextTitle)
+                .putExtra(EXTRA_FORCE_REGENERATE, forceRegenerate)
         }
 
         fun pauseIntent(context: Context, trackId: String): Intent {
@@ -355,4 +399,43 @@ class AiSubtitleGenerationService : Service() {
                 .putExtra(EXTRA_TRACK_ID, trackId)
         }
     }
+}
+
+internal fun buildTranslationBatch(
+    sourceLines: List<SubtitleLine>,
+    batchLines: List<SubtitleLine>,
+    batchIndex: Int,
+    totalBatches: Int,
+    translatedById: Map<String, SubtitleLine>,
+    contextTitle: String,
+    sceneContext: SceneContext,
+    contextWindowSize: Int,
+): TranslationBatch {
+    val batchStart = sourceLines.indexOfFirst { it.id == batchLines.firstOrNull()?.id }
+        .takeIf { it >= 0 }
+        ?: 0
+    val batchEndExclusive = (batchStart + batchLines.size).coerceAtMost(sourceLines.size)
+    val previousStart = max(0, batchStart - contextWindowSize)
+    val nextEnd = min(sourceLines.size, batchEndExclusive + contextWindowSize)
+    val previousContext = sourceLines
+        .subList(previousStart, batchStart)
+        .map { line ->
+            TranslationContextLine(
+                id = line.id,
+                ja = line.sourceText,
+                zh = translatedById[line.id]?.translatedText.orEmpty(),
+            )
+        }
+    val nextContext = sourceLines
+        .subList(batchEndExclusive, nextEnd)
+        .map { line -> TranslationContextLine(id = line.id, ja = line.sourceText) }
+    return TranslationBatch(
+        lines = batchLines,
+        contextTitle = contextTitle,
+        sceneContext = sceneContext,
+        previousContext = previousContext,
+        nextContext = nextContext,
+        batchIndex = batchIndex,
+        totalBatches = totalBatches,
+    )
 }

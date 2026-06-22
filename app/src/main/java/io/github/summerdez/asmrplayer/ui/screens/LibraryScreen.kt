@@ -447,6 +447,7 @@ fun AiSubtitleGenerationSheet(
     onPause: () -> Unit,
     onResume: () -> Unit,
     onRetry: () -> Unit,
+    onRegenerate: () -> Unit,
     onCancel: () -> Unit,
     onDismiss: () -> Unit,
 ) {
@@ -507,11 +508,17 @@ fun AiSubtitleGenerationSheet(
                         val label = if (task.transcribeProgress >= 1f) "重试翻译" else "重试生成"
                         Text(label, color = tokens.accent)
                     }
+                    TextButton(onClick = onRegenerate) {
+                        Text("重新分片并翻译", color = tokens.accent)
+                    }
                     TextButton(onClick = onCancel) {
                         Text("取消", color = tokens.accent2)
                     }
                 }
                 AiSubtitleStage.COMPLETED -> {
+                    TextButton(onClick = onRegenerate) {
+                        Text("重新分片并翻译", color = tokens.accent)
+                    }
                     TextButton(onClick = onDismiss) {
                         Text("完成", color = tokens.accent)
                     }
