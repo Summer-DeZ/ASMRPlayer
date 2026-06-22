@@ -10,6 +10,8 @@ captures/
 *.ap_
 *.aab
 *.aar
+!app/libs/
+!app/libs/sherpa-onnx-1.13.3.aar
 
 # Local SDK, signing, and environment files
 local.properties

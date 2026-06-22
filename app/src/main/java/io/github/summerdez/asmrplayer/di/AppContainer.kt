@@ -41,7 +41,7 @@ class AppContainer(private val application: Application) {
     }
 
     val settingsRepository: SettingsRepository by lazy {
-        AppSettingsRepository(application)
+        AppSettingsRepository(application, database.appSettingsDao())
     }
 
     val updateRepository: AppUpdateRepository by lazy {

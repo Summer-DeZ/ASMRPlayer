@@ -9,10 +9,20 @@ import android.provider.Settings
 import androidx.core.content.ContextCompat
 import androidx.lifecycle.AndroidViewModel
 import androidx.lifecycle.viewModelScope
+import io.github.summerdez.asmrplayer.data.ai.GpuWhisperModelRepository
+import io.github.summerdez.asmrplayer.data.ai.GpuWhisperModelState
+import io.github.summerdez.asmrplayer.data.ai.WhisperCppVulkanWorker
+import io.github.summerdez.asmrplayer.data.ai.WhisperModelRepository
+import io.github.summerdez.asmrplayer.data.ai.WhisperModelState
 import io.github.summerdez.asmrplayer.data.SettingsRepository
 import io.github.summerdez.asmrplayer.data.update.AppUpdateCheckResult
 import io.github.summerdez.asmrplayer.data.update.AppUpdateRelease
 import io.github.summerdez.asmrplayer.data.update.AppUpdateRepository
+import io.github.summerdez.asmrplayer.domain.model.AiAsrBackendPreference
+import io.github.summerdez.asmrplayer.domain.model.AiSubtitleSettings
+import io.github.summerdez.asmrplayer.domain.model.AiTranslationEngine
+import io.github.summerdez.asmrplayer.domain.model.GpuWhisperModelSpec
+import io.github.summerdez.asmrplayer.domain.model.WhisperModelSpec
 import io.github.summerdez.asmrplayer.playback.PlaybackCommandClient
 import io.github.summerdez.asmrplayer.playback.PlaybackServiceSnapshot
 import io.github.summerdez.asmrplayer.playback.PlaybackServiceState
@@ -39,6 +49,15 @@ data class SettingsUiState(
     val updateDownloadStatus: AppUpdateDownloadStatus = AppUpdateDownloadStatus.Idle,
     val updateDialogRelease: AppUpdateRelease? = null,
     val installPromptRelease: AppUpdateRelease? = null,
+    val aiSubtitleSettings: AiSubtitleSettings = AiSubtitleSettings(),
+    val whisperModelState: WhisperModelState = WhisperModelState(
+        spec = WhisperModelSpec.BASE,
+        downloaded = false,
+    ),
+    val gpuWhisperModelState: GpuWhisperModelState = GpuWhisperModelState(
+        spec = GpuWhisperModelSpec.BASE,
+        downloaded = false,
+    ),
 )
 
 sealed class AppUpdateStatus {
@@ -82,22 +101,44 @@ class SettingsViewModel(
     private val playbackCommands: PlaybackCommandClient,
     private val updateRepository: AppUpdateRepository,
 ) : AndroidViewModel(application) {
+    private val whisperModelRepository = WhisperModelRepository(application)
+    private val gpuWhisperModelRepository = GpuWhisperModelRepository(application)
     private val _state = MutableStateFlow(
         SettingsUiState(
             themeMode = settingsRepository.themeMode(),
             currentVersionName = application.installedVersionName(),
+            aiSubtitleSettings = settingsRepository.aiSubtitleSettings(),
+            whisperModelState = WhisperModelRepository(application)
+                .state(WhisperModelSpec.byId(settingsRepository.aiSubtitleSettings().whisperModelId)),
+            gpuWhisperModelState = GpuWhisperModelRepository(application)
+                .state(GpuWhisperModelSpec.byId(settingsRepository.aiSubtitleSettings().gpuWhisperModelId)),
         ),
     )
     val state: StateFlow<SettingsUiState> = _state.asStateFlow()
     private val _events = MutableSharedFlow<SettingsEvent>()
     val events: SharedFlow<SettingsEvent> = _events.asSharedFlow()
     private var updateDownloadJob: Job? = null
+    private var whisperModelDownloadJob: Job? = null
+    private var gpuWhisperModelDownloadJob: Job? = null
 
     init {
         playbackCommands.connect()
         viewModelScope.launch {
             PlaybackServiceState.snapshots.collect { snapshot ->
                 updateState(snapshot)
+            }
+        }
+        viewModelScope.launch {
+            settingsRepository.aiSubtitleSettingsFlow.collect { settings ->
+                _state.update {
+                    it.copy(
+                        aiSubtitleSettings = settings,
+                        whisperModelState = whisperModelRepository.state(WhisperModelSpec.byId(settings.whisperModelId)),
+                        gpuWhisperModelState = gpuWhisperModelRepository.state(
+                            GpuWhisperModelSpec.byId(settings.gpuWhisperModelId),
+                        ),
+                    )
+                }
             }
         }
     }
@@ -274,6 +315,135 @@ class SettingsViewModel(
         _state.update { it.copy(installPromptRelease = null) }
         viewModelScope.launch {
             _events.emit(SettingsEvent.InstallUpdate(downloaded.apkPath))
+        }
+    }
+
+    fun setAiTranslationEngine(engine: AiTranslationEngine) {
+        settingsRepository.setAiTranslationEngine(engine)
+    }
+
+    fun setAiOllamaBaseUrl(value: String) {
+        settingsRepository.setAiOllamaBaseUrl(value)
+    }
+
+    fun setAiOllamaModel(value: String) {
+        settingsRepository.setAiOllamaModel(value)
+    }
+
+    fun setAiDeepSeekBaseUrl(value: String) {
+        settingsRepository.setAiDeepSeekBaseUrl(value)
+    }
+
+    fun setAiDeepSeekModel(value: String) {
+        settingsRepository.setAiDeepSeekModel(value)
+    }
+
+    fun setAiDeepSeekApiKey(value: String) {
+        settingsRepository.setAiDeepSeekApiKey(value)
+    }
+
+    fun setAiWhisperModelId(value: String) {
+        settingsRepository.setAiWhisperModelId(value)
+    }
+
+    fun setAiAsrBackendPreference(value: AiAsrBackendPreference) {
+        settingsRepository.setAiAsrBackendPreference(value)
+    }
+
+    fun setAiGpuWhisperModelId(value: String) {
+        settingsRepository.setAiGpuWhisperModelId(value)
+    }
+
+    fun downloadWhisperModel() {
+        val spec = WhisperModelSpec.byId(_state.value.aiSubtitleSettings.whisperModelId)
+        if (_state.value.whisperModelState.downloading || _state.value.whisperModelState.downloaded) {
+            return
+        }
+        whisperModelDownloadJob?.cancel()
+        whisperModelDownloadJob = viewModelScope.launch {
+            try {
+                _state.update {
+                    it.copy(whisperModelState = whisperModelRepository.state(spec).copy(downloading = true))
+                }
+                val state = whisperModelRepository.download(spec) { progress ->
+                    _state.update { it.copy(whisperModelState = progress) }
+                }
+                _state.update { it.copy(whisperModelState = state) }
+                _events.emit(SettingsEvent.Message("${spec.label} 已下载"))
+            } catch (error: Throwable) {
+                if (error is CancellationException) {
+                    _state.update { it.copy(whisperModelState = whisperModelRepository.state(spec)) }
+                    return@launch
+                }
+                _state.update {
+                    it.copy(
+                        whisperModelState = whisperModelRepository.state(spec).copy(
+                            error = error.message ?: "模型下载失败",
+                        ),
+                    )
+                }
+            }
+        }
+    }
+
+    fun cancelWhisperModelDownload() {
+        whisperModelDownloadJob?.cancel()
+        whisperModelDownloadJob = null
+        val spec = WhisperModelSpec.byId(_state.value.aiSubtitleSettings.whisperModelId)
+        _state.update { it.copy(whisperModelState = whisperModelRepository.state(spec)) }
+    }
+
+    fun deleteWhisperModel() {
+        val spec = WhisperModelSpec.byId(_state.value.aiSubtitleSettings.whisperModelId)
+        whisperModelRepository.delete(spec)
+        _state.update { it.copy(whisperModelState = whisperModelRepository.state(spec)) }
+    }
+
+    fun downloadGpuWhisperModel() {
+        val spec = GpuWhisperModelSpec.byId(_state.value.aiSubtitleSettings.gpuWhisperModelId)
+        if (_state.value.gpuWhisperModelState.downloading || _state.value.gpuWhisperModelState.downloaded) {
+            return
+        }
+        gpuWhisperModelDownloadJob?.cancel()
+        gpuWhisperModelDownloadJob = viewModelScope.launch {
+            try {
+                _state.update {
+                    it.copy(gpuWhisperModelState = gpuWhisperModelRepository.state(spec).copy(downloading = true))
+                }
+                val state = gpuWhisperModelRepository.download(spec) { progress ->
+                    _state.update { it.copy(gpuWhisperModelState = progress) }
+                }
+                _state.update { it.copy(gpuWhisperModelState = state) }
+                _events.emit(SettingsEvent.Message("${spec.label} 已下载"))
+            } catch (error: Throwable) {
+                if (error is CancellationException) {
+                    _state.update { it.copy(gpuWhisperModelState = gpuWhisperModelRepository.state(spec)) }
+                    return@launch
+                }
+                _state.update {
+                    it.copy(
+                        gpuWhisperModelState = gpuWhisperModelRepository.state(spec).copy(
+                            error = error.message ?: "GPU 模型下载失败",
+                        ),
+                    )
+                }
+            }
+        }
+    }
+
+    fun cancelGpuWhisperModelDownload() {
+        gpuWhisperModelDownloadJob?.cancel()
+        gpuWhisperModelDownloadJob = null
+        val spec = GpuWhisperModelSpec.byId(_state.value.aiSubtitleSettings.gpuWhisperModelId)
+        _state.update { it.copy(gpuWhisperModelState = gpuWhisperModelRepository.state(spec)) }
+    }
+
+    fun deleteGpuWhisperModel() {
+        val spec = GpuWhisperModelSpec.byId(_state.value.aiSubtitleSettings.gpuWhisperModelId)
+        viewModelScope.launch {
+            WhisperCppVulkanWorker.releaseModel(gpuWhisperModelRepository.modelFile(spec).absolutePath)
+            gpuWhisperModelRepository.delete(spec)
+            _state.update { it.copy(gpuWhisperModelState = gpuWhisperModelRepository.state(spec)) }
         }
     }
 }

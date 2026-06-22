@@ -59,6 +59,11 @@
             android:name=".data.download.DlsiteDownloadService"
             android:exported="false"
             android:foregroundServiceType="dataSync" />
+
+        <service
+            android:name=".data.ai.AiSubtitleGenerationService"
+            android:exported="false"
+            android:foregroundServiceType="dataSync" />
     </application>
 
 </manifest>

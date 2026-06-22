@@ -6,6 +6,7 @@ import android.widget.Toast
 import androidx.activity.compose.BackHandler
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
+import androidx.core.content.ContextCompat
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -26,8 +27,12 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import io.github.summerdez.asmrplayer.data.files.DocumentFiles
+import io.github.summerdez.asmrplayer.data.ai.AiSubtitleGenerationService
+import io.github.summerdez.asmrplayer.data.ai.AiSubtitleTaskStateBus
 import io.github.summerdez.asmrplayer.domain.PlaylistQueries
+import io.github.summerdez.asmrplayer.domain.model.AiSubtitleStage
 import io.github.summerdez.asmrplayer.domain.model.Playlist
+import io.github.summerdez.asmrplayer.domain.model.SubtitleGenerationTarget
 import io.github.summerdez.asmrplayer.domain.model.TrackItem
 import io.github.summerdez.asmrplayer.presentation.DlsiteEvent
 import io.github.summerdez.asmrplayer.presentation.DlsiteViewModel
@@ -49,6 +54,7 @@ import io.github.summerdez.asmrplayer.ui.components.UpdateDetailsDialog
 import io.github.summerdez.asmrplayer.ui.screens.DownloadContentsSheet
 import io.github.summerdez.asmrplayer.ui.screens.DownloadManagerSheet
 import io.github.summerdez.asmrplayer.ui.screens.DlsiteTab
+import io.github.summerdez.asmrplayer.ui.screens.AiSubtitleGenerationSheet
 import io.github.summerdez.asmrplayer.ui.screens.LibraryTab
 import io.github.summerdez.asmrplayer.ui.screens.QueueContent
 import io.github.summerdez.asmrplayer.ui.screens.SettingsTab
@@ -56,6 +62,14 @@ import io.github.summerdez.asmrplayer.ui.screens.SleepTab
 import io.github.summerdez.asmrplayer.ui.screens.SubtitlePlayerScreen
 import io.github.summerdez.asmrplayer.ui.theme.ASMRPlayerTheme
 import io.github.summerdez.asmrplayer.ui.theme.LocalAmberTokens
+
+private enum class AiSettingField {
+    OLLAMA_BASE_URL,
+    OLLAMA_MODEL,
+    DEEPSEEK_BASE_URL,
+    DEEPSEEK_MODEL,
+    DEEPSEEK_API_KEY,
+}
 
 @OptIn(ExperimentalMaterial3Api::class)
 
@@ -81,6 +95,7 @@ fun ASMRPlayerApp(
     val settingsState by settingsViewModel.state.collectAsStateWithLifecycle()
     val sleepState by sleepTimerViewModel.state.collectAsStateWithLifecycle()
     val dlsiteState by dlsiteViewModel.state.collectAsStateWithLifecycle()
+    val aiSubtitleTasks by AiSubtitleTaskStateBus.tasks.collectAsStateWithLifecycle()
     val toast: (String) -> Unit = { message ->
         if (message.isNotEmpty()) {
             Toast.makeText(context, message, Toast.LENGTH_SHORT).show()
@@ -168,6 +183,8 @@ fun ASMRPlayerApp(
         var moveTrack by remember { mutableStateOf<Pair<Playlist, TrackItem>?>(null) }
         var customSleepDialog by remember { mutableStateOf(false) }
         var downloadManagerOpen by remember { mutableStateOf(false) }
+        var aiSettingField by remember { mutableStateOf<AiSettingField?>(null) }
+        var activeAiSubtitleTrackId by remember { mutableStateOf<String?>(null) }
 
         BackHandler(enabled = playerOpen || queueOpen) {
             if (queueOpen) {
@@ -232,9 +249,25 @@ fun ASMRPlayerApp(
                                     libraryViewModel.startSubtitlePicker(playlist, track)
                                     subtitleLauncher.launch(DocumentFiles.subtitlePickerIntent())
                                 },
+                                onGenerateSubtitle = { playlist, track ->
+                                    val target = SubtitleGenerationTarget(
+                                        playlistId = playlist.id,
+                                        trackId = track.id,
+                                        trackTitle = track.title,
+                                        audioUri = track.uri,
+                                        contextTitle = playlist.name,
+                                    )
+                                    ContextCompat.startForegroundService(
+                                        context,
+                                        AiSubtitleGenerationService.startIntent(context, target),
+                                    )
+                                    activeAiSubtitleTrackId = track.id
+                                },
+                                onOpenSubtitleGeneration = { trackId -> activeAiSubtitleTrackId = trackId },
                                 onRenameTrack = { playlist, track -> renameTrack = playlist to track },
                                 onDeleteTrack = { playlist, track, index -> deleteTrack = Triple(playlist, track, index) },
                                 onMoveTrack = { playlist, track -> moveTrack = playlist to track },
+                                subtitleTasks = aiSubtitleTasks,
                             )
                             MainTab.SETTINGS -> SettingsTab(
                                 state = settingsState,
@@ -250,6 +283,21 @@ fun ASMRPlayerApp(
                                 onShowUpdateDetails = settingsViewModel::showUpdateDetails,
                                 onCancelUpdateDownload = settingsViewModel::cancelUpdateDownload,
                                 onRetryUpdateDownload = settingsViewModel::retryUpdateDownload,
+                                onAiEngineSelected = settingsViewModel::setAiTranslationEngine,
+                                onAiAsrBackendSelected = settingsViewModel::setAiAsrBackendPreference,
+                                onEditAiOllamaBaseUrl = { aiSettingField = AiSettingField.OLLAMA_BASE_URL },
+                                onEditAiOllamaModel = { aiSettingField = AiSettingField.OLLAMA_MODEL },
+                                onEditAiDeepSeekBaseUrl = { aiSettingField = AiSettingField.DEEPSEEK_BASE_URL },
+                                onEditAiDeepSeekModel = { aiSettingField = AiSettingField.DEEPSEEK_MODEL },
+                                onEditAiDeepSeekApiKey = { aiSettingField = AiSettingField.DEEPSEEK_API_KEY },
+                                onAiWhisperModelSelected = settingsViewModel::setAiWhisperModelId,
+                                onDownloadWhisperModel = settingsViewModel::downloadWhisperModel,
+                                onCancelWhisperModelDownload = settingsViewModel::cancelWhisperModelDownload,
+                                onDeleteWhisperModel = settingsViewModel::deleteWhisperModel,
+                                onAiGpuWhisperModelSelected = settingsViewModel::setAiGpuWhisperModelId,
+                                onDownloadGpuWhisperModel = settingsViewModel::downloadGpuWhisperModel,
+                                onCancelGpuWhisperModelDownload = settingsViewModel::cancelGpuWhisperModelDownload,
+                                onDeleteGpuWhisperModel = settingsViewModel::deleteGpuWhisperModel,
                             )
                             MainTab.SLEEP -> SleepTab(
                                 state = sleepState,
@@ -369,6 +417,44 @@ fun ASMRPlayerApp(
                     )
                 }
             }
+            activeAiSubtitleTrackId?.let { trackId ->
+                val task = aiSubtitleTasks[trackId]
+                if (task != null) {
+                    val sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true)
+                    ModalBottomSheet(
+                        onDismissRequest = { activeAiSubtitleTrackId = null },
+                        sheetState = sheetState,
+                        containerColor = tokens.sheet,
+                        dragHandle = null,
+                    ) {
+                        AiSubtitleGenerationSheet(
+                            task = task,
+                            onPause = {
+                                context.startService(AiSubtitleGenerationService.pauseIntent(context, trackId))
+                            },
+                            onResume = {
+                                ContextCompat.startForegroundService(
+                                    context,
+                                    AiSubtitleGenerationService.startIntent(context, task.target),
+                                )
+                            },
+                            onRetry = {
+                                ContextCompat.startForegroundService(
+                                    context,
+                                    AiSubtitleGenerationService.startIntent(context, task.target),
+                                )
+                            },
+                            onCancel = {
+                                context.startService(AiSubtitleGenerationService.cancelIntent(context, trackId))
+                                activeAiSubtitleTrackId = null
+                            },
+                            onDismiss = { activeAiSubtitleTrackId = null },
+                        )
+                    }
+                } else if (activeAiSubtitleTrackId != null) {
+                    activeAiSubtitleTrackId = null
+                }
+            }
             settingsState.updateDialogRelease?.let { release ->
                 UpdateDetailsDialog(
                     release = release,
@@ -457,6 +543,37 @@ fun ASMRPlayerApp(
                         playbackViewModel.onTrackMoved(result)
                         moveTrack = null
                         toast("已移动到 ${targetPlaylist.name}")
+                    },
+                )
+            }
+            aiSettingField?.let { field ->
+                val aiSettings = settingsState.aiSubtitleSettings
+                TextInputDialog(
+                    title = when (field) {
+                        AiSettingField.OLLAMA_BASE_URL -> "Ollama 接口地址"
+                        AiSettingField.OLLAMA_MODEL -> "Ollama 模型"
+                        AiSettingField.DEEPSEEK_BASE_URL -> "DeepSeek 接口地址"
+                        AiSettingField.DEEPSEEK_MODEL -> "DeepSeek 模型"
+                        AiSettingField.DEEPSEEK_API_KEY -> "DeepSeek API Key"
+                    },
+                    initialValue = when (field) {
+                        AiSettingField.OLLAMA_BASE_URL -> aiSettings.ollamaBaseUrl
+                        AiSettingField.OLLAMA_MODEL -> aiSettings.ollamaModel
+                        AiSettingField.DEEPSEEK_BASE_URL -> aiSettings.deepSeekBaseUrl
+                        AiSettingField.DEEPSEEK_MODEL -> aiSettings.deepSeekModel
+                        AiSettingField.DEEPSEEK_API_KEY -> aiSettings.deepSeekApiKey
+                    },
+                    confirmText = "保存",
+                    onDismiss = { aiSettingField = null },
+                    onConfirm = { value ->
+                        when (field) {
+                            AiSettingField.OLLAMA_BASE_URL -> settingsViewModel.setAiOllamaBaseUrl(value)
+                            AiSettingField.OLLAMA_MODEL -> settingsViewModel.setAiOllamaModel(value)
+                            AiSettingField.DEEPSEEK_BASE_URL -> settingsViewModel.setAiDeepSeekBaseUrl(value)
+                            AiSettingField.DEEPSEEK_MODEL -> settingsViewModel.setAiDeepSeekModel(value)
+                            AiSettingField.DEEPSEEK_API_KEY -> settingsViewModel.setAiDeepSeekApiKey(value)
+                        }
+                        aiSettingField = null
                     },
                 )
             }

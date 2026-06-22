@@ -17,14 +17,51 @@ import io.github.summerdez.asmrplayer.ui.theme.*
 import io.github.summerdez.asmrplayer.ui.util.*
 import io.github.summerdez.asmrplayer.di.*
 import android.content.Context
+import io.github.summerdez.asmrplayer.domain.model.AiAsrBackendPreference
+import io.github.summerdez.asmrplayer.domain.model.AiSubtitleSettings
+import io.github.summerdez.asmrplayer.domain.model.AiTranslationEngine
+import io.github.summerdez.asmrplayer.domain.model.GpuWhisperModelSpec
+import io.github.summerdez.asmrplayer.domain.model.WhisperModelSpec
+import kotlinx.coroutines.flow.Flow
+import kotlinx.coroutines.flow.combine
 
 interface SettingsRepository {
+    val aiSubtitleSettingsFlow: Flow<AiSubtitleSettings>
+
     fun themeMode(): AppThemeMode
     fun setThemeMode(mode: AppThemeMode)
+    fun aiSubtitleSettings(): AiSubtitleSettings
+    fun setAiTranslationEngine(engine: AiTranslationEngine)
+    fun setAiOllamaBaseUrl(value: String)
+    fun setAiOllamaModel(value: String)
+    fun setAiDeepSeekBaseUrl(value: String)
+    fun setAiDeepSeekModel(value: String)
+    fun setAiDeepSeekApiKey(value: String)
+    fun setAiWhisperModelId(value: String)
+    fun setAiAsrBackendPreference(value: AiAsrBackendPreference)
+    fun setAiGpuWhisperModelId(value: String)
 }
 
-class AppSettingsRepository(context: Context) : SettingsRepository {
+class AppSettingsRepository(
+    context: Context,
+    private val settingsDao: AppSettingsDao,
+) : SettingsRepository {
     private val appContext = context.applicationContext
+    override val aiSubtitleSettingsFlow: Flow<AiSubtitleSettings> = combine(
+        listOf(
+            settingsDao.valueFlow(KEY_AI_TRANSLATION_ENGINE),
+            settingsDao.valueFlow(KEY_AI_OLLAMA_BASE_URL),
+            settingsDao.valueFlow(KEY_AI_OLLAMA_MODEL),
+            settingsDao.valueFlow(KEY_AI_DEEPSEEK_BASE_URL),
+            settingsDao.valueFlow(KEY_AI_DEEPSEEK_MODEL),
+            settingsDao.valueFlow(KEY_AI_DEEPSEEK_API_KEY),
+            settingsDao.valueFlow(KEY_AI_WHISPER_MODEL_ID),
+            settingsDao.valueFlow(KEY_AI_ASR_BACKEND_PREFERENCE),
+            settingsDao.valueFlow(KEY_AI_GPU_WHISPER_MODEL_ID),
+        ),
+    ) { values ->
+        aiSettingsFromValues(values)
+    }
 
     override fun themeMode(): AppThemeMode {
         return AppUi.themeMode()
@@ -32,5 +69,106 @@ class AppSettingsRepository(context: Context) : SettingsRepository {
 
     override fun setThemeMode(mode: AppThemeMode) {
         AppUi.setThemeMode(appContext, mode)
+    }
+
+    override fun aiSubtitleSettings(): AiSubtitleSettings {
+        return DbIo.run {
+            aiSettingsFromValues(
+                arrayOf(
+                    settingsDao.value(KEY_AI_TRANSLATION_ENGINE),
+                    settingsDao.value(KEY_AI_OLLAMA_BASE_URL),
+                    settingsDao.value(KEY_AI_OLLAMA_MODEL),
+                    settingsDao.value(KEY_AI_DEEPSEEK_BASE_URL),
+                    settingsDao.value(KEY_AI_DEEPSEEK_MODEL),
+                    settingsDao.value(KEY_AI_DEEPSEEK_API_KEY),
+                    settingsDao.value(KEY_AI_WHISPER_MODEL_ID),
+                    settingsDao.value(KEY_AI_ASR_BACKEND_PREFERENCE),
+                    settingsDao.value(KEY_AI_GPU_WHISPER_MODEL_ID),
+                ),
+            )
+        }
+    }
+
+    override fun setAiTranslationEngine(engine: AiTranslationEngine) {
+        put(KEY_AI_TRANSLATION_ENGINE, engine.name)
+    }
+
+    override fun setAiOllamaBaseUrl(value: String) {
+        put(KEY_AI_OLLAMA_BASE_URL, value.trim())
+    }
+
+    override fun setAiOllamaModel(value: String) {
+        put(KEY_AI_OLLAMA_MODEL, value.trim())
+    }
+
+    override fun setAiDeepSeekBaseUrl(value: String) {
+        put(KEY_AI_DEEPSEEK_BASE_URL, value.trim())
+    }
+
+    override fun setAiDeepSeekModel(value: String) {
+        put(KEY_AI_DEEPSEEK_MODEL, value.trim())
+    }
+
+    override fun setAiDeepSeekApiKey(value: String) {
+        put(KEY_AI_DEEPSEEK_API_KEY, value.trim())
+    }
+
+    override fun setAiWhisperModelId(value: String) {
+        put(KEY_AI_WHISPER_MODEL_ID, WhisperModelSpec.byId(value).id)
+    }
+
+    override fun setAiAsrBackendPreference(value: AiAsrBackendPreference) {
+        put(KEY_AI_ASR_BACKEND_PREFERENCE, value.name)
+    }
+
+    override fun setAiGpuWhisperModelId(value: String) {
+        put(KEY_AI_GPU_WHISPER_MODEL_ID, GpuWhisperModelSpec.byId(value).id)
+    }
+
+    private fun put(key: String, value: String) {
+        DbIo.run {
+            settingsDao.put(AppSettingEntity(key, value))
+        }
+    }
+
+    private fun aiSettingsFromValues(values: Array<String?>): AiSubtitleSettings {
+        val engine = values.getOrNull(0).orEmpty()
+            .let { raw -> AiTranslationEngine.entries.firstOrNull { it.name == raw } }
+            ?: AiTranslationEngine.OLLAMA
+        return AiSubtitleSettings(
+            translationEngine = engine,
+            ollamaBaseUrl = values.getOrNull(1).orEmpty().ifBlank { AiTranslationEngine.OLLAMA.defaultBaseUrl },
+            ollamaModel = values.getOrNull(2).orEmpty().ifBlank { AiTranslationEngine.OLLAMA.defaultModel },
+            deepSeekBaseUrl = values.getOrNull(3).orEmpty().ifBlank { AiTranslationEngine.DEEPSEEK.defaultBaseUrl },
+            deepSeekModel = normalizeDeepSeekModel(values.getOrNull(4)),
+            deepSeekApiKey = values.getOrNull(5).orEmpty(),
+            whisperModelId = WhisperModelSpec.byId(values.getOrNull(6)).id,
+            asrBackendPreference = values.getOrNull(7).orEmpty()
+                .let { raw -> AiAsrBackendPreference.entries.firstOrNull { it.name == raw } }
+                ?: AiAsrBackendPreference.AUTO,
+            gpuWhisperModelId = GpuWhisperModelSpec.byId(values.getOrNull(8)).id,
+        )
+    }
+
+    private fun normalizeDeepSeekModel(value: String?): String {
+        val raw = value.orEmpty().trim()
+        return when {
+            raw.isBlank() -> AiTranslationEngine.DEEPSEEK.defaultModel
+            raw in LEGACY_DEEPSEEK_DEFAULT_MODELS -> AiTranslationEngine.DEEPSEEK.defaultModel
+            else -> raw
+        }
+    }
+
+    private companion object {
+        const val KEY_AI_TRANSLATION_ENGINE = "ai_translation_engine"
+        const val KEY_AI_OLLAMA_BASE_URL = "ai_ollama_base_url"
+        const val KEY_AI_OLLAMA_MODEL = "ai_ollama_model"
+        const val KEY_AI_DEEPSEEK_BASE_URL = "ai_deepseek_base_url"
+        const val KEY_AI_DEEPSEEK_MODEL = "ai_deepseek_model"
+        const val KEY_AI_DEEPSEEK_API_KEY = "ai_deepseek_api_key"
+        const val KEY_AI_WHISPER_MODEL_ID = "ai_whisper_model_id"
+        const val KEY_AI_ASR_BACKEND_PREFERENCE = "ai_asr_backend_preference"
+        const val KEY_AI_GPU_WHISPER_MODEL_ID = "ai_gpu_whisper_model_id"
+        val LEGACY_DEEPSEEK_DEFAULT_MODELS = setOf("deepseek-v4-pro")
     }
 }

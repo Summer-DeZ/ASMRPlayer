@@ -37,6 +37,10 @@ import androidx.compose.ui.unit.sp
 import io.github.summerdez.asmrplayer.presentation.AppUpdateDownloadStatus
 import io.github.summerdez.asmrplayer.presentation.AppUpdateStatus
 import io.github.summerdez.asmrplayer.presentation.SettingsUiState
+import io.github.summerdez.asmrplayer.domain.model.AiAsrBackendPreference
+import io.github.summerdez.asmrplayer.domain.model.AiTranslationEngine
+import io.github.summerdez.asmrplayer.domain.model.GpuWhisperModelSpec
+import io.github.summerdez.asmrplayer.domain.model.WhisperModelSpec
 import io.github.summerdez.asmrplayer.ui.components.GroupFooter
 import io.github.summerdez.asmrplayer.ui.components.GroupedCard
 import io.github.summerdez.asmrplayer.ui.components.SettingsPermissionRow
@@ -57,6 +61,21 @@ fun SettingsTab(
     onShowUpdateDetails: () -> Unit,
     onCancelUpdateDownload: () -> Unit,
     onRetryUpdateDownload: () -> Unit,
+    onAiEngineSelected: (AiTranslationEngine) -> Unit,
+    onAiAsrBackendSelected: (AiAsrBackendPreference) -> Unit,
+    onEditAiOllamaBaseUrl: () -> Unit,
+    onEditAiOllamaModel: () -> Unit,
+    onEditAiDeepSeekBaseUrl: () -> Unit,
+    onEditAiDeepSeekModel: () -> Unit,
+    onEditAiDeepSeekApiKey: () -> Unit,
+    onAiWhisperModelSelected: (String) -> Unit,
+    onDownloadWhisperModel: () -> Unit,
+    onCancelWhisperModelDownload: () -> Unit,
+    onDeleteWhisperModel: () -> Unit,
+    onAiGpuWhisperModelSelected: (String) -> Unit,
+    onDownloadGpuWhisperModel: () -> Unit,
+    onCancelGpuWhisperModelDownload: () -> Unit,
+    onDeleteGpuWhisperModel: () -> Unit,
 ) {
     val tokens = LocalAmberTokens.current
     Column(
@@ -101,6 +120,108 @@ fun SettingsTab(
                 }
             }
         }
+        Spacer(Modifier.height(18.dp))
+        SectionLabel("AI 字幕")
+        GroupedCard {
+            Column(Modifier.padding(16.dp)) {
+                Text("翻译引擎", fontSize = 17.sp, fontWeight = FontWeight.SemiBold, color = tokens.label)
+                Spacer(Modifier.height(10.dp))
+                Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                    ThemeChip("本地 Ollama", state.aiSubtitleSettings.translationEngine == AiTranslationEngine.OLLAMA) {
+                        onAiEngineSelected(AiTranslationEngine.OLLAMA)
+                    }
+                    ThemeChip("云端 DeepSeek", state.aiSubtitleSettings.translationEngine == AiTranslationEngine.DEEPSEEK) {
+                        onAiEngineSelected(AiTranslationEngine.DEEPSEEK)
+                    }
+                }
+            }
+            HorizontalDivider(color = tokens.separator, modifier = Modifier.padding(start = 16.dp))
+            when (state.aiSubtitleSettings.translationEngine) {
+                AiTranslationEngine.OLLAMA -> {
+                    SettingsActionRow("接口地址", state.aiSubtitleSettings.ollamaBaseUrl, onEditAiOllamaBaseUrl)
+                    HorizontalDivider(color = tokens.separator, modifier = Modifier.padding(start = 16.dp))
+                    SettingsActionRow("模型", state.aiSubtitleSettings.ollamaModel, onEditAiOllamaModel)
+                    HorizontalDivider(color = tokens.separator, modifier = Modifier.padding(start = 16.dp))
+                    SettingsValueRow("API Key", "本地无需")
+                }
+                AiTranslationEngine.DEEPSEEK -> {
+                    SettingsActionRow("接口地址", state.aiSubtitleSettings.deepSeekBaseUrl, onEditAiDeepSeekBaseUrl)
+                    HorizontalDivider(color = tokens.separator, modifier = Modifier.padding(start = 16.dp))
+                    SettingsActionRow("模型", state.aiSubtitleSettings.deepSeekModel, onEditAiDeepSeekModel)
+                    HorizontalDivider(color = tokens.separator, modifier = Modifier.padding(start = 16.dp))
+                    SettingsActionRow(
+                        "API Key",
+                        if (state.aiSubtitleSettings.deepSeekApiKey.isBlank()) "未设置" else "已设置",
+                        onEditAiDeepSeekApiKey,
+                    )
+                }
+            }
+        }
+        GroupFooter("音频只在本机转写；翻译阶段只发送文本。DeepSeek 需自填 API Key，应用不内置。")
+        Spacer(Modifier.height(14.dp))
+        GroupedCard {
+            Column(Modifier.padding(16.dp)) {
+                Text("转写推理后端", fontSize = 17.sp, fontWeight = FontWeight.SemiBold, color = tokens.label)
+                Spacer(Modifier.height(10.dp))
+                Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                    AiAsrBackendPreference.entries.forEach { backend ->
+                        ThemeChip(
+                            backend.label,
+                            state.aiSubtitleSettings.asrBackendPreference == backend,
+                        ) {
+                            onAiAsrBackendSelected(backend)
+                        }
+                    }
+                }
+            }
+        }
+        GroupFooter("自动模式优先尝试可用 GPU；GPU 后端初始化、运行或性能异常时会回退 CPU。")
+        Spacer(Modifier.height(14.dp))
+        SectionLabel("CPU 转写模型")
+        GroupedCard {
+            WhisperModelSpec.ALL.forEachIndexed { index, spec ->
+                SettingsSelectableRow(
+                    title = spec.label,
+                    value = formatUpdateBytes(spec.sizeBytes),
+                    selected = state.aiSubtitleSettings.whisperModelId == spec.id,
+                    onClick = { onAiWhisperModelSelected(spec.id) },
+                )
+                if (index != WhisperModelSpec.ALL.lastIndex) {
+                    HorizontalDivider(color = tokens.separator, modifier = Modifier.padding(start = 16.dp))
+                }
+            }
+            HorizontalDivider(color = tokens.separator, modifier = Modifier.padding(start = 16.dp))
+            WhisperModelStatusRow(
+                state = state,
+                onDownload = onDownloadWhisperModel,
+                onCancel = onCancelWhisperModelDownload,
+                onDelete = onDeleteWhisperModel,
+            )
+        }
+        GroupFooter("首次生成前下载 Whisper 模型；模型文件保存在本机应用私有目录。")
+        Spacer(Modifier.height(14.dp))
+        SectionLabel("GPU 转写模型")
+        GroupedCard {
+            GpuWhisperModelSpec.ALL.forEachIndexed { index, spec ->
+                SettingsSelectableRow(
+                    title = spec.label,
+                    value = formatUpdateBytes(spec.sizeBytes),
+                    selected = state.aiSubtitleSettings.gpuWhisperModelId == spec.id,
+                    onClick = { onAiGpuWhisperModelSelected(spec.id) },
+                )
+                if (index != GpuWhisperModelSpec.ALL.lastIndex) {
+                    HorizontalDivider(color = tokens.separator, modifier = Modifier.padding(start = 16.dp))
+                }
+            }
+            HorizontalDivider(color = tokens.separator, modifier = Modifier.padding(start = 16.dp))
+            GpuWhisperModelStatusRow(
+                state = state,
+                onDownload = onDownloadGpuWhisperModel,
+                onCancel = onCancelGpuWhisperModelDownload,
+                onDelete = onDeleteGpuWhisperModel,
+            )
+        }
+        GroupFooter("GPU 模型使用 whisper.cpp ggml 文件，和 CPU 后端的 sherpa ONNX 模型分开保存。")
         Spacer(Modifier.height(18.dp))
         SectionLabel("关于")
         GroupedCard {
@@ -149,6 +270,186 @@ private fun SettingsValueRow(title: String, value: String) {
     ) {
         Text(title, fontSize = 17.sp, color = tokens.label, modifier = Modifier.weight(1f))
         Text(value, fontSize = 17.sp, color = tokens.label2, maxLines = 1, overflow = TextOverflow.Ellipsis)
+    }
+}
+
+@Composable
+private fun SettingsActionRow(title: String, value: String, onClick: () -> Unit) {
+    val tokens = LocalAmberTokens.current
+    Row(
+        modifier = Modifier
+            .fillMaxWidth()
+            .height(52.dp)
+            .clickable(onClick = onClick)
+            .padding(start = 16.dp, end = 14.dp),
+        verticalAlignment = Alignment.CenterVertically,
+    ) {
+        Text(title, fontSize = 17.sp, color = tokens.label, modifier = Modifier.weight(1f))
+        Text(value, fontSize = 17.sp, color = tokens.label2, maxLines = 1, overflow = TextOverflow.Ellipsis)
+        Spacer(Modifier.width(8.dp))
+        Icon(Icons.AutoMirrored.Filled.KeyboardArrowRight, contentDescription = null, tint = tokens.label3, modifier = Modifier.size(18.dp))
+    }
+}
+
+@Composable
+private fun SettingsSelectableRow(title: String, value: String, selected: Boolean, onClick: () -> Unit) {
+    val tokens = LocalAmberTokens.current
+    Row(
+        modifier = Modifier
+            .fillMaxWidth()
+            .height(52.dp)
+            .clickable(onClick = onClick)
+            .padding(start = 16.dp, end = 14.dp),
+        verticalAlignment = Alignment.CenterVertically,
+    ) {
+        Text(title, fontSize = 17.sp, color = tokens.label, modifier = Modifier.weight(1f))
+        Text(value, fontSize = 15.sp, color = tokens.label2, maxLines = 1, overflow = TextOverflow.Ellipsis)
+        Spacer(Modifier.width(10.dp))
+        Text(if (selected) "✓" else "", fontSize = 17.sp, color = tokens.accent, fontWeight = FontWeight.Bold)
+    }
+}
+
+@Composable
+private fun WhisperModelStatusRow(
+    state: SettingsUiState,
+    onDownload: () -> Unit,
+    onCancel: () -> Unit,
+    onDelete: () -> Unit,
+) {
+    val tokens = LocalAmberTokens.current
+    val model = state.whisperModelState
+    Column(Modifier.fillMaxWidth().padding(start = 16.dp, end = 14.dp, top = 11.dp, bottom = 11.dp)) {
+        Row(verticalAlignment = Alignment.CenterVertically) {
+            Text("模型状态", fontSize = 17.sp, color = tokens.label, modifier = Modifier.weight(1f))
+            Text(
+                when {
+                    model.downloading -> "下载中 ${(model.progress * 100).toInt()}%"
+                    model.downloaded -> "已下载"
+                    model.error.isNotBlank() -> "下载失败"
+                    else -> "未下载"
+                },
+                fontSize = 17.sp,
+                color = if (model.error.isNotBlank()) tokens.accent2 else tokens.label2,
+            )
+        }
+        if (model.downloading || model.error.isNotBlank()) {
+            Box(
+                modifier = Modifier
+                    .padding(top = 11.dp)
+                    .fillMaxWidth()
+                    .height(4.dp)
+                    .background(tokens.label3.copy(alpha = 0.28f), RoundedCornerShape(3.dp)),
+            ) {
+                Box(
+                    modifier = Modifier
+                        .fillMaxHeight()
+                        .fillMaxWidth(model.progress)
+                        .background(if (model.error.isNotBlank()) tokens.accent2 else tokens.accent, RoundedCornerShape(3.dp)),
+                )
+            }
+        }
+        Row(Modifier.fillMaxWidth().padding(top = 6.dp), verticalAlignment = Alignment.CenterVertically) {
+            Text(
+                text = model.error.ifBlank {
+                    if (model.downloaded) formatUpdateBytes(model.bytesDownloaded) else formatUpdateBytes(model.totalBytes)
+                },
+                color = tokens.label2,
+                fontSize = 13.sp,
+                maxLines = 1,
+                overflow = TextOverflow.Ellipsis,
+                modifier = Modifier.weight(1f),
+            )
+            TextButton(
+                onClick = when {
+                    model.downloading -> onCancel
+                    model.downloaded -> onDelete
+                    else -> onDownload
+                },
+            ) {
+                Text(
+                    when {
+                        model.downloading -> "取消"
+                        model.downloaded -> "删除"
+                        else -> "下载"
+                    },
+                    color = if (model.downloaded || model.downloading) tokens.accent2 else tokens.accent,
+                    fontSize = 13.sp,
+                    fontWeight = FontWeight.Medium,
+                )
+            }
+        }
+    }
+}
+
+@Composable
+private fun GpuWhisperModelStatusRow(
+    state: SettingsUiState,
+    onDownload: () -> Unit,
+    onCancel: () -> Unit,
+    onDelete: () -> Unit,
+) {
+    val tokens = LocalAmberTokens.current
+    val model = state.gpuWhisperModelState
+    Column(Modifier.fillMaxWidth().padding(start = 16.dp, end = 14.dp, top = 11.dp, bottom = 11.dp)) {
+        Row(verticalAlignment = Alignment.CenterVertically) {
+            Text("模型状态", fontSize = 17.sp, color = tokens.label, modifier = Modifier.weight(1f))
+            Text(
+                when {
+                    model.downloading -> "下载中 ${(model.progress * 100).toInt()}%"
+                    model.downloaded -> "已下载"
+                    model.error.isNotBlank() -> "下载失败"
+                    else -> "未下载"
+                },
+                fontSize = 17.sp,
+                color = if (model.error.isNotBlank()) tokens.accent2 else tokens.label2,
+            )
+        }
+        if (model.downloading || model.error.isNotBlank()) {
+            Box(
+                modifier = Modifier
+                    .padding(top = 11.dp)
+                    .fillMaxWidth()
+                    .height(4.dp)
+                    .background(tokens.label3.copy(alpha = 0.28f), RoundedCornerShape(3.dp)),
+            ) {
+                Box(
+                    modifier = Modifier
+                        .fillMaxHeight()
+                        .fillMaxWidth(model.progress)
+                        .background(if (model.error.isNotBlank()) tokens.accent2 else tokens.accent, RoundedCornerShape(3.dp)),
+                )
+            }
+        }
+        Row(Modifier.fillMaxWidth().padding(top = 6.dp), verticalAlignment = Alignment.CenterVertically) {
+            Text(
+                text = model.error.ifBlank {
+                    if (model.downloaded) formatUpdateBytes(model.bytesDownloaded) else formatUpdateBytes(model.totalBytes)
+                },
+                color = tokens.label2,
+                fontSize = 13.sp,
+                maxLines = 1,
+                overflow = TextOverflow.Ellipsis,
+                modifier = Modifier.weight(1f),
+            )
+            TextButton(
+                onClick = when {
+                    model.downloading -> onCancel
+                    model.downloaded -> onDelete
+                    else -> onDownload
+                },
+            ) {
+                Text(
+                    when {
+                        model.downloading -> "取消"
+                        model.downloaded -> "删除"
+                        else -> "下载"
+                    },
+                    color = if (model.downloaded || model.downloading) tokens.accent2 else tokens.accent,
+                    fontSize = 13.sp,
+                    fontWeight = FontWeight.Medium,
+                )
+            }
+        }
     }
 }
 
