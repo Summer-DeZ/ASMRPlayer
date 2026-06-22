@@ -26,6 +26,7 @@ keystore.properties
 .vscode/
 
 # Local assistant/tool context
+AGENTS.md
 .agents/
 .claude/
 .codex/
