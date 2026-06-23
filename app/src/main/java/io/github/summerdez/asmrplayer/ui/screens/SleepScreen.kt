@@ -121,6 +121,7 @@ import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.StrokeCap
+import androidx.compose.ui.graphics.compositeOver
 import androidx.compose.ui.graphics.drawscope.Stroke
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.input.pointer.pointerInput
@@ -269,22 +270,41 @@ fun SleepRing(state: SleepTimerUiState) {
 @Composable
 fun SleepChip(minutes: Int, selected: Boolean, modifier: Modifier, onClick: () -> Unit) {
     val tokens = LocalAmberTokens.current
+    val shape = RoundedCornerShape(20.dp)
+    val background = if (selected) {
+        Brush.verticalGradient(
+            listOf(
+                tokens.accent.copy(alpha = 0.24f).compositeOver(tokens.cardTop),
+                tokens.accent.copy(alpha = 0.18f).compositeOver(tokens.cardBottom),
+            ),
+        )
+    } else {
+        Brush.verticalGradient(listOf(tokens.cardTop, tokens.cardBottom))
+    }
     Surface(
         modifier = modifier.height(96.dp).noRippleClickable(onClick = onClick),
-        shape = RoundedCornerShape(20.dp),
-        color = if (selected) tokens.accentSoft else tokens.card,
+        shape = shape,
+        color = Color.Transparent,
         border = BorderStroke(1.dp, if (selected) tokens.accent else tokens.separator),
         shadowElevation = if (selected) 3.dp else 1.dp,
     ) {
-        Column(horizontalAlignment = Alignment.CenterHorizontally, verticalArrangement = Arrangement.Center) {
-            Text(
-                minutes.toString(),
-                color = if (selected) tokens.accent else tokens.label,
-                fontSize = 36.sp,
-                fontWeight = FontWeight.Bold,
-                lineHeight = 38.sp,
-            )
-            Text("分钟", color = if (selected) tokens.accent else tokens.label2, fontSize = 16.sp, modifier = Modifier.padding(top = 4.dp))
+        Box(
+            modifier = Modifier
+                .fillMaxSize()
+                .clip(shape)
+                .background(background),
+            contentAlignment = Alignment.Center,
+        ) {
+            Column(horizontalAlignment = Alignment.CenterHorizontally, verticalArrangement = Arrangement.Center) {
+                Text(
+                    minutes.toString(),
+                    color = if (selected) tokens.accent else tokens.label,
+                    fontSize = 36.sp,
+                    fontWeight = FontWeight.Bold,
+                    lineHeight = 38.sp,
+                )
+                Text("分钟", color = if (selected) tokens.accent else tokens.label2, fontSize = 16.sp, modifier = Modifier.padding(top = 4.dp))
+            }
         }
     }
 }

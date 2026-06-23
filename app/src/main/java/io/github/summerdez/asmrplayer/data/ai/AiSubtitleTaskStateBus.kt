@@ -39,11 +39,11 @@ object AiSubtitleTaskStateBus {
         }
     }
 
-    fun publishTranscriptionDetails(target: SubtitleGenerationTarget, title: String, meta: String) {
+    fun publishTranscriptionDetails(target: SubtitleGenerationTarget, title: String) {
         publish(
             taskFor(target.trackId) ?: AiSubtitleTaskState(target = target),
         ) {
-            it.copy(transcriptionTitle = title, transcriptionMeta = meta)
+            it.copy(transcriptionTitle = title)
         }
     }
 

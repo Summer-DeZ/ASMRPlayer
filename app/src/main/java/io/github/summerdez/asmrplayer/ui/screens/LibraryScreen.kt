@@ -25,7 +25,6 @@ import androidx.activity.compose.BackHandler
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.BorderStroke
-import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.gestures.detectDragGestures
@@ -110,7 +109,6 @@ import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.runtime.staticCompositionLocalOf
-import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.geometry.Size
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -120,8 +118,6 @@ import androidx.compose.ui.graphics.TransformOrigin
 import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
-import androidx.compose.ui.graphics.StrokeCap
-import androidx.compose.ui.graphics.drawscope.Stroke
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.platform.LocalContext
@@ -459,7 +455,6 @@ fun TrackRow(
     modifier: Modifier = Modifier,
     showArtwork: Boolean = false,
     showMenu: Boolean = true,
-    showDragHandle: Boolean = false,
     elevated: Boolean = false,
 ) {
     var menuExpanded by remember { mutableStateOf(false) }
@@ -531,9 +526,6 @@ fun TrackRow(
             IconButton(onClick = onSubtitle) {
                 Icon(Icons.Default.Subtitles, contentDescription = "字幕", tint = tokens.label3)
             }
-            if (showDragHandle) {
-                DragHandleIcon(Modifier.padding(end = 10.dp).size(width = 28.dp, height = 22.dp))
-            }
             if (showMenu) {
                 Box {
                     IconButton(onClick = { menuExpanded = true }) {
@@ -580,20 +572,6 @@ fun TrackRow(
                 }
             }
         }
-    }
-}
-
-@Composable
-private fun DragHandleIcon(modifier: Modifier = Modifier) {
-    val tokens = LocalAmberTokens.current
-    Canvas(modifier) {
-        val stroke = 2.4.dp.toPx()
-        val startX = size.width * 0.18f
-        val endX = size.width * 0.82f
-        val y1 = size.height * 0.36f
-        val y2 = size.height * 0.64f
-        drawLine(tokens.label3, Offset(startX, y1), Offset(endX, y1), stroke, StrokeCap.Round)
-        drawLine(tokens.label3, Offset(startX, y2), Offset(endX, y2), stroke, StrokeCap.Round)
     }
 }
 
@@ -663,7 +641,6 @@ fun AiSubtitleGenerationSheet(
             done = task.transcribeProgress >= 1f,
             failed = task.stage == AiSubtitleStage.FAILED && task.transcribeProgress < 1f,
             progress = task.transcribeProgress,
-            meta = task.transcriptionMeta,
         )
         Spacer(Modifier.height(12.dp))
         AiSubtitleStageCard(
@@ -673,7 +650,6 @@ fun AiSubtitleGenerationSheet(
             done = task.translateProgress >= 1f,
             failed = task.stage == AiSubtitleStage.FAILED && task.transcribeProgress >= 1f,
             progress = task.translateProgress,
-            meta = "逐句 JSON 对齐生成中文字幕",
         )
         if (task.error.isNotBlank()) {
             Spacer(Modifier.height(12.dp))
@@ -755,7 +731,6 @@ private fun AiSubtitleStageCard(
     done: Boolean,
     failed: Boolean,
     progress: Float,
-    meta: String,
 ) {
     val tokens = LocalAmberTokens.current
     Surface(color = tokens.card, shape = RoundedCornerShape(16.dp), modifier = Modifier.fillMaxWidth()) {
@@ -821,7 +796,6 @@ private fun AiSubtitleStageCard(
                         .background(if (failed) tokens.accent2 else tokens.accent, RoundedCornerShape(3.dp)),
                 )
             }
-            Text(meta, color = tokens.label2, fontSize = 14.sp, modifier = Modifier.padding(top = 10.dp))
         }
     }
 }

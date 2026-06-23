@@ -166,14 +166,15 @@ fun BottomPlaybackArea(
             .background(Brush.verticalGradient(listOf(tokens.glass, tokens.solidBar)))
             .navigationBarsPadding(),
     ) {
+        val miniPlayerShape = RoundedCornerShape(20.dp)
         Surface(
             modifier = Modifier
                 .fillMaxWidth()
                 .padding(start = 12.dp, end = 12.dp, top = 8.dp, bottom = 7.dp)
                 .height(66.dp)
                 .noRippleClickable(onClick = onOpenPlayer),
-            shape = RoundedCornerShape(20.dp),
-            color = tokens.glass,
+            shape = miniPlayerShape,
+            color = Color.Transparent,
             border = BorderStroke(0.5.dp, tokens.separator),
             tonalElevation = 0.dp,
             shadowElevation = 6.dp,
@@ -181,6 +182,8 @@ fun BottomPlaybackArea(
             Row(
                 modifier = Modifier
                     .fillMaxSize()
+                    .clip(miniPlayerShape)
+                    .background(Brush.linearGradient(listOf(tokens.cardTop, tokens.cardBottom)))
                     .padding(start = 12.dp, end = 10.dp),
                 verticalAlignment = Alignment.CenterVertically,
             ) {

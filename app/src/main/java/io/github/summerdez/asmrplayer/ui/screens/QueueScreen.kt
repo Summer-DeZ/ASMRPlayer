@@ -177,7 +177,7 @@ fun QueueContent(
             color = tokens.label,
         )
         Text(
-            "${playlist?.name ?: "未选择播放列表"} · 顺序播放",
+            playlist?.name ?: "未选择播放列表",
             color = tokens.label2,
             fontSize = 15.sp,
             modifier = Modifier.padding(top = 6.dp, bottom = 20.dp),
@@ -227,7 +227,6 @@ fun QueueContent(
                 onMove = {},
                 showArtwork = true,
                 showMenu = false,
-                showDragHandle = true,
                 modifier = Modifier.padding(vertical = 4.dp),
             )
         }

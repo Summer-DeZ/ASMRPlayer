@@ -19,7 +19,9 @@ import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
+import androidx.activity.compose.BackHandler
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.automirrored.filled.KeyboardArrowRight
 import androidx.compose.material.icons.automirrored.filled.OpenInNew
 import androidx.compose.material.icons.filled.Close
@@ -39,6 +41,10 @@ import androidx.compose.material3.SwitchDefaults
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
@@ -54,7 +60,6 @@ import io.github.summerdez.asmrplayer.presentation.AppUpdateDownloadStatus
 import io.github.summerdez.asmrplayer.presentation.AppUpdateStatus
 import io.github.summerdez.asmrplayer.presentation.RemoteWhisperTestStatus
 import io.github.summerdez.asmrplayer.presentation.SettingsUiState
-import io.github.summerdez.asmrplayer.ui.components.GroupFooter
 import io.github.summerdez.asmrplayer.ui.components.GroupedCard
 import io.github.summerdez.asmrplayer.ui.theme.AppThemeMode
 import io.github.summerdez.asmrplayer.ui.theme.LocalAmberTokens
@@ -88,7 +93,31 @@ fun SettingsTab(
     onCancelWhisperModelDownload: () -> Unit,
     onDeleteWhisperModel: () -> Unit,
 ) {
-    val settings = state.aiSubtitleSettings
+    var aiSettingsOpen by remember { mutableStateOf(false) }
+    if (aiSettingsOpen) {
+        AiSettingsPage(
+            state = state,
+            onBack = { aiSettingsOpen = false },
+            onAiTranscriptionBackendSelected = onAiTranscriptionBackendSelected,
+            onAiEngineSelected = onAiEngineSelected,
+            onEditAiOllamaBaseUrl = onEditAiOllamaBaseUrl,
+            onEditAiOllamaModel = onEditAiOllamaModel,
+            onEditAiDeepSeekBaseUrl = onEditAiDeepSeekBaseUrl,
+            onEditAiDeepSeekModel = onEditAiDeepSeekModel,
+            onEditAiDeepSeekApiKey = onEditAiDeepSeekApiKey,
+            onAiAdultContentTranslationAllowedChange = onAiAdultContentTranslationAllowedChange,
+            onAiWhisperModelSelected = onAiWhisperModelSelected,
+            onEditRemoteWhisperBaseUrl = onEditRemoteWhisperBaseUrl,
+            onEditRemoteWhisperModel = onEditRemoteWhisperModel,
+            onEditRemoteWhisperToken = onEditRemoteWhisperToken,
+            onTestRemoteWhisperConnection = onTestRemoteWhisperConnection,
+            onDownloadWhisperModel = onDownloadWhisperModel,
+            onCancelWhisperModelDownload = onCancelWhisperModelDownload,
+            onDeleteWhisperModel = onDeleteWhisperModel,
+        )
+        return
+    }
+
     Column(
         Modifier
             .fillMaxSize()
@@ -145,9 +174,87 @@ fun SettingsTab(
             },
         )
 
-        Spacer(Modifier.height(22.dp))
-        SectionLabel("AI 字幕")
-        InlineSectionTitle("翻译引擎")
+        Spacer(Modifier.height(18.dp))
+        SectionLabel("高级设置")
+        GroupedCard {
+            SettingsActionRow(
+                icon = Icons.Default.Subtitles,
+                title = "AI 字幕与翻译",
+                value = "翻译与转写",
+                onClick = { aiSettingsOpen = true },
+            )
+        }
+
+        Spacer(Modifier.height(18.dp))
+        SectionLabel("关于")
+        GroupedCard {
+            SettingsValueRow(Icons.Default.Settings, "版本", state.currentVersionName)
+            SettingsDivider()
+            UpdateCheckRow(
+                status = state.updateStatus,
+                onClick = {
+                    when (state.updateStatus) {
+                        is AppUpdateStatus.Available -> onShowUpdateDetails()
+                        AppUpdateStatus.Checking -> Unit
+                        else -> onCheckForUpdates()
+                    }
+                },
+            )
+        }
+        UpdateDownloadCard(
+            status = state.updateDownloadStatus,
+            onCancel = onCancelUpdateDownload,
+            onRetry = onRetryUpdateDownload,
+        )
+        Spacer(Modifier.height(24.dp))
+    }
+}
+
+@Composable
+private fun AiSettingsPage(
+    state: SettingsUiState,
+    onBack: () -> Unit,
+    onAiTranscriptionBackendSelected: (AiTranscriptionBackend) -> Unit,
+    onAiEngineSelected: (AiTranslationEngine) -> Unit,
+    onEditAiOllamaBaseUrl: () -> Unit,
+    onEditAiOllamaModel: () -> Unit,
+    onEditAiDeepSeekBaseUrl: () -> Unit,
+    onEditAiDeepSeekModel: () -> Unit,
+    onEditAiDeepSeekApiKey: () -> Unit,
+    onAiAdultContentTranslationAllowedChange: (Boolean) -> Unit,
+    onAiWhisperModelSelected: (String) -> Unit,
+    onEditRemoteWhisperBaseUrl: () -> Unit,
+    onEditRemoteWhisperModel: () -> Unit,
+    onEditRemoteWhisperToken: () -> Unit,
+    onTestRemoteWhisperConnection: () -> Unit,
+    onDownloadWhisperModel: () -> Unit,
+    onCancelWhisperModelDownload: () -> Unit,
+    onDeleteWhisperModel: () -> Unit,
+) {
+    val settings = state.aiSubtitleSettings
+    val tokens = LocalAmberTokens.current
+    BackHandler(onBack = onBack)
+    Column(
+        Modifier
+            .fillMaxSize()
+            .verticalScroll(rememberScrollState())
+            .padding(horizontal = 16.dp, vertical = 6.dp),
+        verticalArrangement = Arrangement.spacedBy(0.dp),
+    ) {
+        Row(
+            modifier = Modifier
+                .fillMaxWidth()
+                .height(48.dp)
+                .clickable(onClick = onBack),
+            verticalAlignment = Alignment.CenterVertically,
+        ) {
+            Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = "返回", tint = tokens.label, modifier = Modifier.size(22.dp))
+            Spacer(Modifier.width(10.dp))
+            Text("AI 字幕与翻译", color = tokens.label, fontSize = 22.sp, fontWeight = FontWeight.Bold)
+        }
+
+        Spacer(Modifier.height(16.dp))
+        InlineSectionTitle("AI翻译接口")
         SettingsSegmentedControl(
             labels = listOf("本地 Ollama", "OpenAI 兼容"),
             selectedIndex = if (settings.translationEngine == AiTranslationEngine.OLLAMA) 0 else 1,
@@ -211,8 +318,6 @@ fun SettingsTab(
                 alt = true,
             )
         }
-        GroupFooter(translationFooterText(state))
-
         Spacer(Modifier.height(16.dp))
         InlineSectionTitle("转写后端")
         SettingsSegmentedControl(
@@ -274,30 +379,6 @@ fun SettingsTab(
                 }
             }
         }
-        GroupFooter(transcriptionFooterText(state))
-
-        Spacer(Modifier.height(18.dp))
-        SectionLabel("关于")
-        GroupedCard {
-            SettingsValueRow(Icons.Default.Settings, "版本", state.currentVersionName)
-            SettingsDivider()
-            UpdateCheckRow(
-                status = state.updateStatus,
-                onClick = {
-                    when (state.updateStatus) {
-                        is AppUpdateStatus.Available -> onShowUpdateDetails()
-                        AppUpdateStatus.Checking -> Unit
-                        else -> onCheckForUpdates()
-                    }
-                },
-            )
-        }
-        GroupFooter(updateFooterText(state.updateStatus))
-        UpdateDownloadCard(
-            status = state.updateDownloadStatus,
-            onCancel = onCancelUpdateDownload,
-            onRetry = onRetryUpdateDownload,
-        )
         Spacer(Modifier.height(24.dp))
     }
 }
@@ -756,12 +837,18 @@ private fun UpdateCheckRow(status: AppUpdateStatus, onClick: () -> Unit) {
             }
             AppUpdateStatus.UpToDate -> Text("已是最新", fontSize = 16.sp, color = tokens.label2)
             is AppUpdateStatus.Failed -> {
-                Text("检查失败", fontSize = 16.sp, color = tokens.accent2)
+                Text(
+                    text = status.message.ifBlank { "检查失败" },
+                    fontSize = 16.sp,
+                    color = tokens.accent2,
+                    maxLines = 1,
+                    overflow = TextOverflow.Ellipsis,
+                )
                 Spacer(Modifier.width(8.dp))
                 Icon(Icons.AutoMirrored.Filled.KeyboardArrowRight, contentDescription = null, tint = tokens.label3, modifier = Modifier.size(19.dp))
             }
             AppUpdateStatus.Idle -> {
-                Text("点击检查", fontSize = 16.sp, color = tokens.label2)
+                Text("未检查", fontSize = 16.sp, color = tokens.label2)
                 Spacer(Modifier.width(8.dp))
                 Icon(Icons.AutoMirrored.Filled.KeyboardArrowRight, contentDescription = null, tint = tokens.label3, modifier = Modifier.size(19.dp))
             }
@@ -893,32 +980,6 @@ private fun ProgressLine(progress: Float, failed: Boolean, modifier: Modifier = 
                 .fillMaxWidth(progress.coerceIn(0f, 1f))
                 .background(if (failed) tokens.accent2 else tokens.accent, RoundedCornerShape(3.dp)),
         )
-    }
-}
-
-private fun translationFooterText(state: SettingsUiState): String {
-    return if (state.aiSubtitleSettings.translationEngine == AiTranslationEngine.OLLAMA) {
-        "本地 Ollama 模式无需 API Key；翻译阶段只发送字幕文本。"
-    } else {
-        "OpenAI 兼容模式默认可使用 DeepSeek 预设，也可以保存任意兼容接口和模型名。"
-    }
-}
-
-private fun transcriptionFooterText(state: SettingsUiState): String {
-    return if (state.aiSubtitleSettings.transcriptionBackend == AiTranscriptionBackend.LOCAL) {
-        "本机转写使用 sherpa-onnx Whisper，音频不上传；首次生成前需要下载模型。"
-    } else {
-        "远程模式会把整段音频上传到你配置的 Whisper 服务器；App 不提供官方后端。"
-    }
-}
-
-private fun updateFooterText(status: AppUpdateStatus): String {
-    return when (status) {
-        is AppUpdateStatus.Failed -> status.message
-        is AppUpdateStatus.Available -> "发现新版本时点此查看详情，并由你确认后再下载或安装。"
-        AppUpdateStatus.Checking -> "正在获取最新版本信息。"
-        AppUpdateStatus.UpToDate -> "当前已是最新版本。"
-        AppUpdateStatus.Idle -> "点击检查更新获取最新版本信息。"
     }
 }
 

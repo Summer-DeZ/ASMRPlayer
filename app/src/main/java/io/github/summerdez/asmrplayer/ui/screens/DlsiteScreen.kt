@@ -237,7 +237,7 @@ fun DlsiteWorkRow(
     onDelete: () -> Unit,
 ) {
     val tokens = LocalAmberTokens.current
-    val statusLabel = taskState?.statusText ?: contentAwareStatusLabel(work, contents)
+    val statusLabel = dlsiteWorkStatusText(work, taskState, contents)
     val progress = dlsiteProgressFraction(work, taskState)
     val failed = taskState?.status == DlsiteDownloadTaskStatus.FAILED || work.isFailed()
     Surface(
@@ -269,7 +269,6 @@ fun DlsiteWorkRow(
                         workId = work.workId,
                         status = statusLabel,
                         failed = failed,
-                        badged = dlsiteShouldBadgeStatus(work, taskState, statusLabel),
                     )
                 }
                 Spacer(Modifier.width(10.dp))
@@ -539,8 +538,8 @@ fun DownloadContentsSheet(
                             downloaded -> TextButton(onClick = { onDeleteContent(content) }) {
                                 Text("删除", color = tokens.accent2)
                             }
-                            active -> DlsiteStatusPill("下载中", failed = false)
-                            content?.isFailed() == true -> DlsiteStatusPill("失败", failed = true)
+                            active -> DlsiteStatusPill("载入中", failed = false)
+                            content?.isFailed() == true -> DlsiteStatusPill("载入失败", failed = true)
                         }
                     }
                     if (index != options.lastIndex) {
@@ -629,31 +628,58 @@ private fun DlsiteWorkActions(
     onDelete: () -> Unit,
 ) {
     val status = taskState?.status
-    Row(horizontalArrangement = Arrangement.spacedBy(8.dp), verticalAlignment = Alignment.CenterVertically) {
-        when {
-            status == DlsiteDownloadTaskStatus.QUEUED || work.isQueued() -> {
-                DlsiteIconActionButton(Icons.Default.Close, "取消", onDelete, enabled = !busy, destructive = true)
+    val tokens = LocalAmberTokens.current
+    var menuExpanded by remember { mutableStateOf(false) }
+    Box {
+        IconButton(onClick = { menuExpanded = true }, enabled = !busy) {
+            Icon(Icons.Default.MoreVert, contentDescription = "作品操作", tint = tokens.label2)
+        }
+        DropdownMenu(expanded = menuExpanded, onDismissRequest = { menuExpanded = false }) {
+            fun closeThen(action: () -> Unit): () -> Unit = {
+                menuExpanded = false
+                action()
             }
-            status == DlsiteDownloadTaskStatus.DOWNLOADING || work.isDownloading() -> {
-                DlsiteIconActionButton(Icons.Default.Pause, "暂停", onPause, enabled = !busy)
-            }
-            status == DlsiteDownloadTaskStatus.PAUSED || work.isPaused() -> {
-                DlsiteIconActionButton(Icons.Default.PlayArrow, "继续", onResume, enabled = !busy)
-                DlsiteIconActionButton(Icons.Default.Delete, "删除", onDelete, enabled = !busy, destructive = true, size = 44.dp)
-            }
-            status == DlsiteDownloadTaskStatus.FAILED || work.isFailed() -> {
-                DlsiteIconActionButton(Icons.Default.Download, "重试", onResume, enabled = !busy)
-                DlsiteIconActionButton(Icons.Default.Delete, "删除", onDelete, enabled = !busy, destructive = true, size = 44.dp)
-            }
-            work.isDownloaded() -> {
-                DlsiteIconActionButton(Icons.Default.FolderOpen, "选择内容", onDownload, enabled = !busy, size = 44.dp)
-                DlsiteIconActionButton(Icons.Default.Delete, "删除缓存", onDelete, enabled = !busy, destructive = true, size = 44.dp)
-            }
-            else -> {
-                DlsiteIconActionButton(Icons.Default.Download, "下载", onDownload, enabled = !busy)
+            when {
+                status == DlsiteDownloadTaskStatus.QUEUED || work.isQueued() -> {
+                    DlsiteMenuAction("取消载入", Icons.Default.Close, closeThen(onDelete), destructive = true)
+                }
+                status == DlsiteDownloadTaskStatus.DOWNLOADING || work.isDownloading() -> {
+                    DlsiteMenuAction("暂停载入", Icons.Default.Pause, closeThen(onPause))
+                }
+                status == DlsiteDownloadTaskStatus.PAUSED || work.isPaused() -> {
+                    DlsiteMenuAction("继续载入", Icons.Default.PlayArrow, closeThen(onResume))
+                    DlsiteMenuAction("删除缓存", Icons.Default.Delete, closeThen(onDelete), destructive = true)
+                }
+                status == DlsiteDownloadTaskStatus.FAILED || work.isFailed() -> {
+                    DlsiteMenuAction("重试载入", Icons.Default.Download, closeThen(onResume))
+                    DlsiteMenuAction("删除缓存", Icons.Default.Delete, closeThen(onDelete), destructive = true)
+                }
+                work.isDownloaded() -> {
+                    DlsiteMenuAction("选择内容", Icons.Default.FolderOpen, closeThen(onDownload))
+                    DlsiteMenuAction("删除缓存", Icons.Default.Delete, closeThen(onDelete), destructive = true)
+                }
+                else -> {
+                    DlsiteMenuAction("载入内容", Icons.Default.Download, closeThen(onDownload))
+                }
             }
         }
     }
+}
+
+@Composable
+private fun DlsiteMenuAction(
+    text: String,
+    icon: ImageVector,
+    onClick: () -> Unit,
+    destructive: Boolean = false,
+) {
+    val tokens = LocalAmberTokens.current
+    val color = if (destructive) tokens.accent2 else tokens.label
+    DropdownMenuItem(
+        text = { Text(text, color = color) },
+        leadingIcon = { Icon(icon, contentDescription = null, tint = color) },
+        onClick = onClick,
+    )
 }
 
 @Composable
@@ -667,7 +693,7 @@ private fun DlsiteDownloadTaskRow(
     onCancel: () -> Unit,
 ) {
     val tokens = LocalAmberTokens.current
-    val statusLabel = taskState.statusText.ifEmpty { contentAwareStatusLabel(work, contents) }
+    val statusLabel = dlsiteTaskStatusText(taskState, work, contents)
     val progress = dlsiteProgressFraction(work, taskState)
     val failed = taskState.status == DlsiteDownloadTaskStatus.FAILED || work.isFailed()
     Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
@@ -680,7 +706,6 @@ private fun DlsiteDownloadTaskRow(
                     workId = work.workId,
                     status = statusLabel,
                     failed = failed,
-                    badged = dlsiteShouldBadgeStatus(work, taskState, statusLabel),
                 )
             }
             Spacer(Modifier.width(10.dp))
@@ -703,23 +728,12 @@ private fun DlsiteStatusLine(
     workId: String,
     status: String,
     failed: Boolean,
-    badged: Boolean,
 ) {
     val tokens = LocalAmberTokens.current
     Row(verticalAlignment = Alignment.CenterVertically) {
         Text(workId, color = tokens.label2, fontSize = 13.sp, maxLines = 1, overflow = TextOverflow.Ellipsis)
         Text(" · ", color = tokens.label2, fontSize = 13.sp)
-        if (badged) {
-            DlsiteStatusPill(status, failed)
-        } else {
-            Text(
-                status,
-                color = if (failed) tokens.accent2 else tokens.label2,
-                fontSize = 13.sp,
-                maxLines = 1,
-                overflow = TextOverflow.Ellipsis,
-            )
-        }
+        DlsiteStatusPill(status, failed)
     }
 }
 
@@ -727,8 +741,9 @@ private fun DlsiteStatusLine(
 private fun DlsiteStatusPill(text: String, failed: Boolean) {
     val tokens = LocalAmberTokens.current
     Surface(
-        shape = RoundedCornerShape(12.dp),
+        shape = RoundedCornerShape(8.dp),
         color = if (failed) tokens.accent2Soft else tokens.accentSoft,
+        border = BorderStroke(0.5.dp, if (failed) tokens.accent2.copy(alpha = 0.45f) else tokens.separator),
     ) {
         Text(
             text,
@@ -737,7 +752,7 @@ private fun DlsiteStatusPill(text: String, failed: Boolean) {
             fontWeight = FontWeight.SemiBold,
             maxLines = 1,
             overflow = TextOverflow.Ellipsis,
-            modifier = Modifier.padding(horizontal = 9.dp, vertical = 3.dp),
+            modifier = Modifier.padding(horizontal = 8.dp, vertical = 4.dp),
         )
     }
 }
@@ -871,21 +886,6 @@ private fun dlsiteProgressFraction(work: DlsiteWork, taskState: DlsiteDownloadTa
     }
 }
 
-private fun dlsiteShouldBadgeStatus(
-    work: DlsiteWork,
-    taskState: DlsiteDownloadTaskState?,
-    statusLabel: String,
-): Boolean {
-    return when {
-        taskState?.status == DlsiteDownloadTaskStatus.QUEUED -> true
-        taskState?.status == DlsiteDownloadTaskStatus.FAILED -> true
-        taskState?.status == DlsiteDownloadTaskStatus.COMPLETED -> true
-        work.isDownloaded() || work.isQueued() || work.isFailed() -> true
-        statusLabel.startsWith("已下载") -> true
-        else -> false
-    }
-}
-
 private fun downloadManagerCaption(
     tasks: List<DlsiteDownloadTaskState>,
     summary: DlsiteDownloadSummary,
@@ -897,24 +897,60 @@ private fun downloadManagerCaption(
     }
 }
 
+private fun dlsiteWorkStatusText(
+    work: DlsiteWork,
+    taskState: DlsiteDownloadTaskState?,
+    contents: List<DlsiteContent>,
+): String {
+    return when {
+        taskState?.status == DlsiteDownloadTaskStatus.QUEUED || work.isQueued() -> "排队中"
+        taskState?.status == DlsiteDownloadTaskStatus.DOWNLOADING || work.isDownloading() -> {
+            taskState?.progressPercent?.let { "载入中 $it%" } ?: "载入中"
+        }
+        taskState?.status == DlsiteDownloadTaskStatus.PAUSED || work.isPaused() -> "已暂停"
+        taskState?.status == DlsiteDownloadTaskStatus.FAILED || work.isFailed() -> "载入失败"
+        taskState?.status == DlsiteDownloadTaskStatus.COMPLETED -> "已载入"
+        else -> contentAwareStatusLabel(work, contents)
+    }
+}
+
+private fun dlsiteTaskStatusText(
+    taskState: DlsiteDownloadTaskState,
+    work: DlsiteWork,
+    contents: List<DlsiteContent>,
+): String {
+    return when (taskState.status) {
+        DlsiteDownloadTaskStatus.QUEUED -> "排队中"
+        DlsiteDownloadTaskStatus.DOWNLOADING ->
+            taskState.progressPercent?.let { "载入中 $it%" } ?: "载入中"
+        DlsiteDownloadTaskStatus.PAUSED -> "已暂停"
+        DlsiteDownloadTaskStatus.FAILED -> "载入失败"
+        DlsiteDownloadTaskStatus.COMPLETED -> contentAwareStatusLabel(work, contents)
+    }
+}
+
 private fun contentAwareStatusLabel(work: DlsiteWork, contents: List<DlsiteContent>): String {
     val downloadedCount = contents.count { it.isDownloaded() }
     return when {
-        downloadedCount > 0 && downloadedCount < contents.size -> "已下载 $downloadedCount / ${contents.size} 项"
-        downloadedCount > 0 -> work.statusLabel()
-        else -> work.statusLabel()
+        downloadedCount > 0 && downloadedCount < contents.size -> "部分载入"
+        downloadedCount > 0 || work.isDownloaded() -> "已载入"
+        work.isQueued() -> "排队中"
+        work.isDownloading() -> "载入中"
+        work.isPaused() -> "已暂停"
+        work.isFailed() -> "载入失败"
+        else -> "未载入"
     }
 }
 
 private fun contentStatusText(content: DlsiteContent?): String {
     return when {
-        content == null -> "未下载"
-        content.isDownloaded() -> "已下载"
+        content == null -> "未载入"
+        content.isDownloaded() -> "已载入"
         content.isQueued() -> "排队中"
-        content.isDownloading() -> "下载中"
+        content.isDownloading() -> "载入中"
         content.isPaused() -> "已暂停"
-        content.isFailed() -> content.error.ifEmpty { "失败" }
-        else -> "未下载"
+        content.isFailed() -> content.error.ifEmpty { "载入失败" }
+        else -> "未载入"
     }
 }
 

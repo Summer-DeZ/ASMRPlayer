@@ -106,7 +106,7 @@ data class WhisperModelSpec(
 
         val BASE = WhisperModelSpec(
             id = DEFAULT_ID,
-            label = "Whisper base（默认）",
+            label = "base",
             directoryName = "sherpa-onnx-whisper-base",
             encoderFileName = "base-encoder.int8.onnx",
             decoderFileName = "base-decoder.int8.onnx",
@@ -133,7 +133,7 @@ data class WhisperModelSpec(
 
         val SMALL = WhisperModelSpec(
             id = "small",
-            label = "Whisper small（可选）",
+            label = "small",
             directoryName = "sherpa-onnx-whisper-small",
             encoderFileName = "small-encoder.int8.onnx",
             decoderFileName = "small-decoder.int8.onnx",

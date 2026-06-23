@@ -29,8 +29,7 @@ enum class AiSubtitleStage {
 data class AiSubtitleTaskState(
     val target: SubtitleGenerationTarget,
     val stage: AiSubtitleStage = AiSubtitleStage.TRANSCRIBING,
-    val transcriptionTitle: String = "本机转写（Whisper）",
-    val transcriptionMeta: String = "音频不上传",
+    val transcriptionTitle: String = "本机转写",
     val transcribeProgress: Float = 0f,
     val translateProgress: Float = 0f,
     val previewLines: List<SubtitleLine> = emptyList(),

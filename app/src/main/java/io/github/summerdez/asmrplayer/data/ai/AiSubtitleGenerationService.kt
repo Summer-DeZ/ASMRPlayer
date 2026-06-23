@@ -90,7 +90,6 @@ class AiSubtitleGenerationService : Service() {
             AiSubtitleTaskStateBus.publishTranscriptionDetails(
                 target = target,
                 title = transcriptionTitle(settings),
-                meta = transcriptionMeta(settings),
             )
             if (forceRegenerate) {
                 clearAiSubtitleCaches(target.trackId, segmentCache, translationCache, sceneContextBuilder)
@@ -193,15 +192,8 @@ class AiSubtitleGenerationService : Service() {
 
     private fun transcriptionTitle(settings: AiSubtitleSettings): String {
         return when (settings.transcriptionBackend) {
-            AiTranscriptionBackend.LOCAL -> "本机转写（Whisper）"
-            AiTranscriptionBackend.REMOTE -> "远程转写（Whisper）"
-        }
-    }
-
-    private fun transcriptionMeta(settings: AiSubtitleSettings): String {
-        return when (settings.transcriptionBackend) {
-            AiTranscriptionBackend.LOCAL -> "音频不上传"
-            AiTranscriptionBackend.REMOTE -> "整段音频会上传到你配置的服务器"
+            AiTranscriptionBackend.LOCAL -> "本机转写"
+            AiTranscriptionBackend.REMOTE -> "远程转写"
         }
     }
 

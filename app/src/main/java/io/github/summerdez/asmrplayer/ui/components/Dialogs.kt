@@ -142,7 +142,7 @@ fun DownloadOptionsDialog(
     val tokens = LocalAmberTokens.current
     IosDialog(onDismiss = onDismiss) {
         Column(Modifier.padding(start = 16.dp, end = 16.dp, top = 20.dp, bottom = 10.dp), horizontalAlignment = Alignment.CenterHorizontally) {
-            Text("选择下载版本", color = tokens.label, fontSize = 17.sp, fontWeight = FontWeight.SemiBold)
+            Text("选择下载内容", color = tokens.label, fontSize = 17.sp, fontWeight = FontWeight.SemiBold)
             Text(work.displayTitle(), color = tokens.label2, fontSize = 13.sp, maxLines = 2, overflow = TextOverflow.Ellipsis, textAlign = TextAlign.Center, modifier = Modifier.padding(top = 4.dp))
             Spacer(Modifier.height(10.dp))
             options.forEach { option ->

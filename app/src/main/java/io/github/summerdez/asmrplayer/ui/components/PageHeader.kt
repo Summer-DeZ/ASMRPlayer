@@ -179,19 +179,13 @@ fun PageHeader(
         )
         if (showMenu) {
             Box {
-                Surface(
+                Box(
                     modifier = Modifier
                         .size(40.dp)
                         .noRippleClickable { onMenuExpandedChange(true) },
-                    shape = CircleShape,
-                    color = tokens.glass,
-                    border = BorderStroke(0.5.dp, tokens.separator),
-                    tonalElevation = 0.dp,
-                    shadowElevation = 4.dp,
+                    contentAlignment = Alignment.Center,
                 ) {
-                    Box(contentAlignment = Alignment.Center) {
-                        Icon(Icons.Default.MoreVert, contentDescription = "菜单", tint = tokens.label, modifier = Modifier.size(22.dp))
-                    }
+                    Icon(Icons.Default.MoreVert, contentDescription = "菜单", tint = tokens.label, modifier = Modifier.size(24.dp))
                 }
                 DropdownMenu(
                     expanded = menuExpanded,
