@@ -23,9 +23,9 @@ data class DlsiteContent(
 
     fun trackIdList(): List<String> = trackIds.split('|').filter { it.isNotBlank() }
 
-    fun asQueued(): DlsiteContent = copy(status = STATUS_QUEUED, error = "", updatedAt = System.currentTimeMillis())
+    fun asQueued(): DlsiteContent = copy(status = STATUS_QUEUED, error = "")
 
-    fun asDownloading(): DlsiteContent = copy(status = STATUS_DOWNLOADING, error = "", updatedAt = System.currentTimeMillis())
+    fun asDownloading(): DlsiteContent = copy(status = STATUS_DOWNLOADING, error = "")
 
     fun asPaused(): DlsiteContent = copy(status = STATUS_PAUSED, error = "", updatedAt = System.currentTimeMillis())
 

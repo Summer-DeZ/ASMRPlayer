@@ -465,11 +465,11 @@ fun AiSubtitleGenerationSheet(
         Spacer(Modifier.height(14.dp))
         AiSubtitleStageCard(
             index = 1,
-            title = "本机转写（Whisper）",
+            title = task.transcriptionTitle,
             active = task.stage == AiSubtitleStage.TRANSCRIBING,
             done = task.transcribeProgress >= 1f,
             progress = task.transcribeProgress,
-            meta = "音频不上传",
+            meta = task.transcriptionMeta,
         )
         Spacer(Modifier.height(12.dp))
         AiSubtitleStageCard(
@@ -585,7 +585,7 @@ private fun AiSubtitleStageCard(
 
 private fun aiSubtitleStatusText(task: AiSubtitleTaskState): String {
     return when (task.stage) {
-        AiSubtitleStage.TRANSCRIBING -> "AI 字幕 · 本机转写 ${(task.transcribeProgress * 100).toInt()}%"
+        AiSubtitleStage.TRANSCRIBING -> "AI 字幕 · ${task.transcriptionTitle} ${(task.transcribeProgress * 100).toInt()}%"
         AiSubtitleStage.TRANSLATING -> "AI 字幕 · 翻译 ${(task.translateProgress * 100).toInt()}%"
         AiSubtitleStage.BINDING -> "AI 字幕 · 正在绑定"
         AiSubtitleStage.COMPLETED -> "AI 字幕已生成"

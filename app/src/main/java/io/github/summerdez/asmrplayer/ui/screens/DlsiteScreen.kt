@@ -294,7 +294,7 @@ fun DlsiteWorkRow(
                         TextButton(onClick = onDownload, enabled = !busy) {
                             Icon(Icons.Default.Download, null, tint = tokens.accent)
                             Spacer(Modifier.width(4.dp))
-                            Text("内容", color = tokens.accent)
+                            Text("选内容", color = tokens.accent)
                         }
                         TextButton(onClick = onDelete, enabled = !busy) {
                             Icon(Icons.Default.Delete, null, tint = tokens.accent2)
@@ -446,12 +446,12 @@ fun DownloadContentsSheet(
     val tokens = LocalAmberTokens.current
     val contentsById = contents.associateBy { it.optionId }
     var selectedIds by remember(options) {
-        mutableStateOf(
-            options
-                .filter { contentsById[it.id]?.isDownloaded() != true && contentsById[it.id]?.isDownloading() != true }
-                .map { it.id }
-                .toSet(),
-        )
+        mutableStateOf(emptySet<String>())
+    }
+    val selectableOptions = options.filter {
+        contentsById[it.id]?.isDownloaded() != true &&
+            contentsById[it.id]?.isDownloading() != true &&
+            contentsById[it.id]?.isQueued() != true
     }
     Column(Modifier.padding(horizontal = 18.dp, vertical = 10.dp)) {
         Box(
@@ -464,11 +464,27 @@ fun DownloadContentsSheet(
         Spacer(Modifier.height(12.dp))
         Row(verticalAlignment = Alignment.CenterVertically) {
             Column(Modifier.weight(1f)) {
-                Text("下载内容", color = tokens.label, fontSize = 22.sp, fontWeight = FontWeight.Bold)
+                Text("选择下载内容", color = tokens.label, fontSize = 22.sp, fontWeight = FontWeight.Bold)
                 Text(work.displayTitle(), color = tokens.label2, fontSize = 13.sp, maxLines = 1, overflow = TextOverflow.Ellipsis)
+                Text("已解析文件目录树，共 ${options.size} 项", color = tokens.label2, fontSize = 12.sp)
             }
             IconButton(onClick = onDismiss) {
                 Icon(Icons.Default.Close, contentDescription = null, tint = tokens.label2)
+            }
+        }
+        Row(Modifier.fillMaxWidth().padding(top = 8.dp), verticalAlignment = Alignment.CenterVertically) {
+            Text("勾选要下载的文件夹或根目录音频", color = tokens.label2, fontSize = 13.sp, modifier = Modifier.weight(1f))
+            TextButton(
+                onClick = { selectedIds = selectableOptions.map { it.id }.toSet() },
+                enabled = selectableOptions.isNotEmpty(),
+            ) {
+                Text("全选", color = tokens.accent)
+            }
+            TextButton(
+                onClick = { selectedIds = emptySet() },
+                enabled = selectedIds.isNotEmpty(),
+            ) {
+                Text("清空", color = tokens.accent2)
             }
         }
         options.forEach { option ->

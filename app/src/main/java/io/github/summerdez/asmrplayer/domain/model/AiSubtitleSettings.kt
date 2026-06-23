@@ -13,14 +13,22 @@ enum class AiTranslationEngine(
         requiresApiKey = false,
     ),
     DEEPSEEK(
-        label = "云端 DeepSeek",
+        label = "OpenAI 兼容",
         defaultBaseUrl = "https://api.deepseek.com",
         defaultModel = "deepseek-v4-flash",
         requiresApiKey = true,
     ),
 }
 
+enum class AiTranscriptionBackend(
+    val label: String,
+) {
+    LOCAL("本机 Whisper"),
+    REMOTE("远程服务器"),
+}
+
 data class AiSubtitleSettings(
+    val transcriptionBackend: AiTranscriptionBackend = AiTranscriptionBackend.LOCAL,
     val translationEngine: AiTranslationEngine = AiTranslationEngine.OLLAMA,
     val ollamaBaseUrl: String = AiTranslationEngine.OLLAMA.defaultBaseUrl,
     val ollamaModel: String = AiTranslationEngine.OLLAMA.defaultModel,
@@ -28,6 +36,9 @@ data class AiSubtitleSettings(
     val deepSeekModel: String = AiTranslationEngine.DEEPSEEK.defaultModel,
     val deepSeekApiKey: String = "",
     val whisperModelId: String = WhisperModelSpec.DEFAULT_ID,
+    val remoteWhisperBaseUrl: String = "",
+    val remoteWhisperModel: String = DEFAULT_REMOTE_WHISPER_MODEL,
+    val remoteWhisperToken: String = "",
     val allowAdultContentTranslation: Boolean = false,
 ) {
     val activeBaseUrl: String
@@ -47,6 +58,23 @@ data class AiSubtitleSettings(
             AiTranslationEngine.OLLAMA -> ""
             AiTranslationEngine.DEEPSEEK -> deepSeekApiKey
         }
+
+    val normalizedRemoteWhisperBaseUrl: String
+        get() = remoteWhisperBaseUrl.trim().trimEnd('/')
+
+    val activeRemoteWhisperModel: String
+        get() = remoteWhisperModel.trim().ifBlank { DEFAULT_REMOTE_WHISPER_MODEL }
+
+    val transcriptionCacheKey: String
+        get() = when (transcriptionBackend) {
+            AiTranscriptionBackend.LOCAL -> "local:$whisperModelId"
+            AiTranscriptionBackend.REMOTE ->
+                "remote:${normalizedRemoteWhisperBaseUrl}|${activeRemoteWhisperModel}"
+        }
+
+    companion object {
+        const val DEFAULT_REMOTE_WHISPER_MODEL = "large-v3"
+    }
 }
 
 data class WhisperModelSpec(

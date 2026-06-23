@@ -19,6 +19,7 @@ import io.github.summerdez.asmrplayer.di.*
 import java.io.File
 import java.io.IOException
 import java.util.LinkedHashMap
+import androidx.room.withTransaction
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.map
@@ -49,6 +50,18 @@ interface DlsiteRepository {
     fun getWork(workId: String?): DlsiteWork?
     fun getContents(workId: String?): List<DlsiteContent>
     fun getLastSyncMs(): Long
+    fun enqueueDownload(work: DlsiteWork?, optionIds: List<String>, optionTitle: String?): DlsiteDownloadQueueTask?
+    fun pendingDownloadQueueTasks(limit: Int): List<DlsiteDownloadQueueTask>
+    fun activeDownloadQueueTasks(): List<DlsiteDownloadQueueTask>
+    fun resetRunningDownloadQueue(): Int
+    fun markDownloadQueueTaskRunning(taskId: String?): DlsiteDownloadQueueTask?
+    fun markDownloadQueueTaskCompleted(taskId: String?)
+    fun markDownloadQueueTaskFailed(taskId: String?, error: String?)
+    fun markDownloadQueueTaskPaused(taskId: String?)
+    fun markDownloadQueueTaskCanceled(taskId: String?)
+    fun markDownloadQueueTaskPending(taskId: String?)
+    fun pauseQueuedDownload(workId: String?): DlsiteDownloadQueueTask?
+    fun cancelQueuedDownload(workId: String?): DlsiteDownloadQueueTask?
     fun mergeDiscoveredWorks(discoveredWorks: List<DlsiteWork>): List<DlsiteWork>
     fun saveWork(updatedWork: DlsiteWork?)
     fun saveDownloadOptions(work: DlsiteWork, options: List<DlsiteDownloadOption>): List<DlsiteContent>
@@ -134,6 +147,103 @@ class RoomDlsiteRepository(
         }
     }
 
+    override fun enqueueDownload(
+        work: DlsiteWork?,
+        optionIds: List<String>,
+        optionTitle: String?,
+    ): DlsiteDownloadQueueTask? {
+        if (work == null || work.workId.isEmpty()) {
+            return null
+        }
+        val sanitizedOptionIds = optionIds.filter { it.isNotBlank() }
+        return DbIo.run {
+            database.withTransaction {
+                dlsiteDao.activeDownloadQueueByWorkId(work.workId)?.toQueueTask()?.let { existing ->
+                    return@withTransaction existing
+                }
+                val now = System.currentTimeMillis()
+                val task = DlsiteDownloadQueueTask.create(
+                    workId = work.workId,
+                    optionIds = sanitizedOptionIds,
+                    queueOrder = dlsiteDao.nextDownloadQueueOrder(),
+                    now = now,
+                )
+                dlsiteDao.upsertDownloadQueue(task.toEntity())
+                markQueuedInCurrentTransaction(work, sanitizedOptionIds, optionTitle)
+                task
+            }
+        }
+    }
+
+    override fun pendingDownloadQueueTasks(limit: Int): List<DlsiteDownloadQueueTask> {
+        if (limit <= 0) {
+            return emptyList()
+        }
+        return DbIo.run {
+            dlsiteDao.pendingDownloadQueue(limit).map { it.toQueueTask() }
+        }
+    }
+
+    override fun activeDownloadQueueTasks(): List<DlsiteDownloadQueueTask> {
+        return DbIo.run {
+            dlsiteDao.activeDownloadQueue().map { it.toQueueTask() }
+        }
+    }
+
+    override fun resetRunningDownloadQueue(): Int {
+        return DbIo.run {
+            dlsiteDao.resetRunningDownloadQueue(System.currentTimeMillis())
+        }
+    }
+
+    override fun markDownloadQueueTaskRunning(taskId: String?): DlsiteDownloadQueueTask? {
+        if (taskId.isNullOrEmpty()) {
+            return null
+        }
+        return DbIo.run {
+            val now = System.currentTimeMillis()
+            val changed = dlsiteDao.markDownloadQueueRunning(taskId, now)
+            if (changed == 0) {
+                null
+            } else {
+                dlsiteDao.downloadQueueByTaskId(taskId)?.toQueueTask()
+            }
+        }
+    }
+
+    override fun markDownloadQueueTaskCompleted(taskId: String?) {
+        finishDownloadQueueTask(taskId, DlsiteDownloadQueueTask.STATUS_COMPLETED, null)
+    }
+
+    override fun markDownloadQueueTaskFailed(taskId: String?, error: String?) {
+        finishDownloadQueueTask(taskId, DlsiteDownloadQueueTask.STATUS_FAILED, error)
+    }
+
+    override fun markDownloadQueueTaskPaused(taskId: String?) {
+        finishDownloadQueueTask(taskId, DlsiteDownloadQueueTask.STATUS_PAUSED, null)
+    }
+
+    override fun markDownloadQueueTaskCanceled(taskId: String?) {
+        finishDownloadQueueTask(taskId, DlsiteDownloadQueueTask.STATUS_CANCELED, null)
+    }
+
+    override fun markDownloadQueueTaskPending(taskId: String?) {
+        if (taskId.isNullOrEmpty()) {
+            return
+        }
+        DbIo.run {
+            dlsiteDao.markDownloadQueuePending(taskId, System.currentTimeMillis())
+        }
+    }
+
+    override fun pauseQueuedDownload(workId: String?): DlsiteDownloadQueueTask? {
+        return finishActiveQueueTaskForWork(workId, DlsiteDownloadQueueTask.STATUS_PAUSED, null)
+    }
+
+    override fun cancelQueuedDownload(workId: String?): DlsiteDownloadQueueTask? {
+        return finishActiveQueueTaskForWork(workId, DlsiteDownloadQueueTask.STATUS_CANCELED, null)
+    }
+
     override fun mergeDiscoveredWorks(discoveredWorks: List<DlsiteWork>): List<DlsiteWork> {
         return DbIo.run {
             val byId = LinkedHashMap<String, DlsiteWork>()
@@ -158,9 +268,10 @@ class RoomDlsiteRepository(
             return
         }
         DbIo.run {
+            val existing = dlsiteDao.workById(updatedWork.workId)?.toWork()
             val work = updatedWork
                 .withEnsuredCoverUrl()
-                .copy(updatedAt = System.currentTimeMillis())
+                .withRepositoryUpdatedAt(existing)
             dlsiteDao.upsert(work.toEntity())
         }
     }
@@ -201,8 +312,11 @@ class RoomDlsiteRepository(
     }
 
     override fun markQueued(work: DlsiteWork, optionIds: List<String>, optionTitle: String?) {
-        saveWork(work.withDownloadOption(optionIds.joinToString(OPTION_ID_SEPARATOR), optionTitle).asQueued())
-        markContentQueued(work.workId, optionIds)
+        DbIo.run {
+            database.withTransaction {
+                markQueuedInCurrentTransaction(work, optionIds, optionTitle)
+            }
+        }
     }
 
     override fun markPaused(work: DlsiteWork) {
@@ -220,9 +334,10 @@ class RoomDlsiteRepository(
     override fun markInterruptedDownloads(error: String?): Int {
         return DbIo.run {
             val message = if (error.isNullOrEmpty()) "下载已中断，请重试" else error
+            val activeWorkIds = dlsiteDao.activeDownloadQueue().map { it.workId }.toSet()
             var changed = 0
             dlsiteDao.works().map { it.toWork() }.forEach { work ->
-                if (work.isDownloading()) {
+                if (work.isDownloading() && !activeWorkIds.contains(work.workId)) {
                     dlsiteDao.upsert(work.asFailed(message).toEntity())
                     changed++
                 }
@@ -279,6 +394,10 @@ class RoomDlsiteRepository(
 
     override fun markAllQueuedDownloadsPaused() {
         DbIo.run {
+            val now = System.currentTimeMillis()
+            dlsiteDao.activeDownloadQueue().forEach { task ->
+                dlsiteDao.finishDownloadQueue(task.taskId, DlsiteDownloadQueueTask.STATUS_PAUSED, now, null)
+            }
             dlsiteDao.works().map { it.toWork() }.forEach { work ->
                 if (work.isQueued() || work.isDownloading()) {
                     dlsiteDao.upsert(work.asPaused().toEntity())
@@ -335,6 +454,69 @@ class RoomDlsiteRepository(
             }
             dlsiteDao.upsert(updated.toEntity())
         }
+    }
+
+    private fun finishDownloadQueueTask(taskId: String?, status: String, error: String?) {
+        if (taskId.isNullOrEmpty()) {
+            return
+        }
+        DbIo.run {
+            dlsiteDao.finishDownloadQueue(taskId, status, System.currentTimeMillis(), error)
+        }
+    }
+
+    private fun finishActiveQueueTaskForWork(
+        workId: String?,
+        status: String,
+        error: String?,
+    ): DlsiteDownloadQueueTask? {
+        if (workId.isNullOrEmpty()) {
+            return null
+        }
+        return DbIo.run {
+            val task = dlsiteDao.activeDownloadQueueByWorkId(workId)?.toQueueTask() ?: return@run null
+            dlsiteDao.finishDownloadQueue(task.taskId, status, System.currentTimeMillis(), error)
+            task
+        }
+    }
+
+    private suspend fun markQueuedInCurrentTransaction(
+        work: DlsiteWork,
+        optionIds: List<String>,
+        optionTitle: String?,
+    ) {
+        val existing = dlsiteDao.workById(work.workId)?.toWork()
+        val queued = work
+            .withDownloadOption(optionIds.filter { it.isNotBlank() }.joinToString(OPTION_ID_SEPARATOR), optionTitle)
+            .asQueued()
+            .withRepositoryUpdatedAt(existing)
+        dlsiteDao.upsert(queued.toEntity())
+        updateContentsInCurrentTransaction(work.workId, optionIds) { it.asQueued() }
+    }
+
+    private suspend fun updateContentsInCurrentTransaction(
+        workId: String?,
+        optionIds: List<String>,
+        transform: (DlsiteContent) -> DlsiteContent,
+    ) {
+        if (workId.isNullOrEmpty()) {
+            return
+        }
+        val ids = optionIds.ifEmpty { listOf("") }.toSet()
+        dlsiteDao.contentsForWork(workId).map { it.toContent() }.forEach { content ->
+            if (ids.contains(content.optionId)) {
+                dlsiteDao.upsertContent(transform(content).toEntity())
+            }
+        }
+    }
+
+    private fun DlsiteWork.withRepositoryUpdatedAt(existing: DlsiteWork?): DlsiteWork {
+        return copy(
+            updatedAt = when {
+                isQueued() || isDownloading() -> existing?.updatedAt ?: updatedAt
+                else -> System.currentTimeMillis()
+            },
+        )
     }
 
     private companion object {

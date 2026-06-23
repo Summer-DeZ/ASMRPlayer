@@ -7,6 +7,7 @@ import io.github.summerdez.asmrplayer.domain.model.SubtitleLine
 import java.io.IOException
 import java.net.SocketTimeoutException
 import java.net.UnknownHostException
+import java.util.Locale
 import java.util.concurrent.TimeUnit
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.currentCoroutineContext
@@ -283,7 +284,7 @@ class OpenAiCompatibleTranslator(
             appendLine("全局情景卡 json：")
             appendLine(sceneContextToJsonString(batch.sceneContext))
             if (shouldIncludeGlobalSourceContext(settings, batch)) {
-                appendLine("完整日文字幕全文 json（DeepSeek 1M 上下文只读背景；真正需要输出的 id 只看后面的待翻译 lines）：")
+                appendLine("完整日文字幕全文 json（长上下文模型只读背景；真正需要输出的 id 只看后面的待翻译 lines）：")
                 appendLine(contextLinesJsonString(batch.globalSourceContext, includeZh = false))
                 appendLine("全文背景规则：完整字幕只用于理解作品整体、称呼、语气、术语和音效；不得翻译全文，不得输出待翻译 lines 之外的 id，不得把远处剧情塞进当前句。")
             }
@@ -314,7 +315,7 @@ class OpenAiCompatibleTranslator(
                 TranslationMessage(role = "user", content = user),
             ),
             responseFormatJsonObject = settings.translationEngine == AiTranslationEngine.DEEPSEEK,
-            disableThinking = settings.translationEngine == AiTranslationEngine.DEEPSEEK,
+            disableThinking = shouldDisableThinking(settings),
         )
     }
 
@@ -346,7 +347,7 @@ class OpenAiCompatibleTranslator(
                 TranslationMessage(role = "user", content = user),
             ),
             responseFormatJsonObject = settings.translationEngine == AiTranslationEngine.DEEPSEEK,
-            disableThinking = settings.translationEngine == AiTranslationEngine.DEEPSEEK,
+            disableThinking = shouldDisableThinking(settings),
         )
     }
 
@@ -364,6 +365,15 @@ class OpenAiCompatibleTranslator(
     ): Boolean {
         return settings.translationEngine == AiTranslationEngine.DEEPSEEK &&
             batch.globalSourceContext.isNotEmpty()
+    }
+
+    private fun shouldDisableThinking(settings: AiSubtitleSettings): Boolean {
+        if (settings.translationEngine != AiTranslationEngine.DEEPSEEK) {
+            return false
+        }
+        val baseUrl = settings.activeBaseUrl.lowercase(Locale.US)
+        val model = settings.activeModel.lowercase(Locale.US)
+        return baseUrl.contains("deepseek.com") || model.startsWith("deepseek-")
     }
 
     private fun adultContentRule(settings: AiSubtitleSettings): String {

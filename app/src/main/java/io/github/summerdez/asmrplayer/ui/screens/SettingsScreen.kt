@@ -36,7 +36,9 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import io.github.summerdez.asmrplayer.presentation.AppUpdateDownloadStatus
 import io.github.summerdez.asmrplayer.presentation.AppUpdateStatus
+import io.github.summerdez.asmrplayer.presentation.RemoteWhisperTestStatus
 import io.github.summerdez.asmrplayer.presentation.SettingsUiState
+import io.github.summerdez.asmrplayer.domain.model.AiTranscriptionBackend
 import io.github.summerdez.asmrplayer.domain.model.AiTranslationEngine
 import io.github.summerdez.asmrplayer.domain.model.WhisperModelSpec
 import io.github.summerdez.asmrplayer.ui.components.GroupFooter
@@ -59,6 +61,7 @@ fun SettingsTab(
     onShowUpdateDetails: () -> Unit,
     onCancelUpdateDownload: () -> Unit,
     onRetryUpdateDownload: () -> Unit,
+    onAiTranscriptionBackendSelected: (AiTranscriptionBackend) -> Unit,
     onAiEngineSelected: (AiTranslationEngine) -> Unit,
     onEditAiOllamaBaseUrl: () -> Unit,
     onEditAiOllamaModel: () -> Unit,
@@ -67,6 +70,10 @@ fun SettingsTab(
     onEditAiDeepSeekApiKey: () -> Unit,
     onAiAdultContentTranslationAllowedChange: (Boolean) -> Unit,
     onAiWhisperModelSelected: (String) -> Unit,
+    onEditRemoteWhisperBaseUrl: () -> Unit,
+    onEditRemoteWhisperModel: () -> Unit,
+    onEditRemoteWhisperToken: () -> Unit,
+    onTestRemoteWhisperConnection: () -> Unit,
     onDownloadWhisperModel: () -> Unit,
     onCancelWhisperModelDownload: () -> Unit,
     onDeleteWhisperModel: () -> Unit,
@@ -124,7 +131,7 @@ fun SettingsTab(
                     ThemeChip("本地 Ollama", state.aiSubtitleSettings.translationEngine == AiTranslationEngine.OLLAMA) {
                         onAiEngineSelected(AiTranslationEngine.OLLAMA)
                     }
-                    ThemeChip("云端 DeepSeek", state.aiSubtitleSettings.translationEngine == AiTranslationEngine.DEEPSEEK) {
+                    ThemeChip("OpenAI 兼容", state.aiSubtitleSettings.translationEngine == AiTranslationEngine.DEEPSEEK) {
                         onAiEngineSelected(AiTranslationEngine.DEEPSEEK)
                     }
                 }
@@ -158,30 +165,76 @@ fun SettingsTab(
                 onAiAdultContentTranslationAllowedChange(!state.aiSubtitleSettings.allowAdultContentTranslation)
             }
         }
-        GroupFooter("音频只在本机转写；翻译阶段只发送文本。开启成人内容直译后，AI 会按原文翻译成人向敏感词，不再用模糊说法规避。")
+        GroupFooter(
+            if (state.aiSubtitleSettings.transcriptionBackend == AiTranscriptionBackend.LOCAL) {
+                "当前为本机转写，音频不上传；翻译阶段只发送文本到所选 OpenAI 兼容接口。开启成人内容直译后，AI 会按原文翻译成人向敏感词，不再用模糊说法规避。"
+            } else {
+                "当前为远程转写，整段音频会上传到你配置的 Whisper 服务器；翻译阶段只发送文本到所选 OpenAI 兼容接口。开启成人内容直译后，AI 会按原文翻译成人向敏感词，不再用模糊说法规避。"
+            },
+        )
         Spacer(Modifier.height(14.dp))
-        SectionLabel("转写模型")
+        SectionLabel("转写后端")
         GroupedCard {
-            WhisperModelSpec.ALL.forEachIndexed { index, spec ->
-                SettingsSelectableRow(
-                    title = spec.label,
-                    value = formatUpdateBytes(spec.sizeBytes),
-                    selected = state.aiSubtitleSettings.whisperModelId == spec.id,
-                    onClick = { onAiWhisperModelSelected(spec.id) },
-                )
-                if (index != WhisperModelSpec.ALL.lastIndex) {
-                    HorizontalDivider(color = tokens.separator, modifier = Modifier.padding(start = 16.dp))
+            Column(Modifier.padding(16.dp)) {
+                Text("转写方式", fontSize = 17.sp, fontWeight = FontWeight.SemiBold, color = tokens.label)
+                Spacer(Modifier.height(10.dp))
+                Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                    ThemeChip("本机", state.aiSubtitleSettings.transcriptionBackend == AiTranscriptionBackend.LOCAL) {
+                        onAiTranscriptionBackendSelected(AiTranscriptionBackend.LOCAL)
+                    }
+                    ThemeChip("远程服务器", state.aiSubtitleSettings.transcriptionBackend == AiTranscriptionBackend.REMOTE) {
+                        onAiTranscriptionBackendSelected(AiTranscriptionBackend.REMOTE)
+                    }
                 }
             }
             HorizontalDivider(color = tokens.separator, modifier = Modifier.padding(start = 16.dp))
-            WhisperModelStatusRow(
-                state = state,
-                onDownload = onDownloadWhisperModel,
-                onCancel = onCancelWhisperModelDownload,
-                onDelete = onDeleteWhisperModel,
-            )
+            when (state.aiSubtitleSettings.transcriptionBackend) {
+                AiTranscriptionBackend.LOCAL -> {
+                    WhisperModelSpec.ALL.forEachIndexed { index, spec ->
+                        SettingsSelectableRow(
+                            title = spec.label,
+                            value = formatUpdateBytes(spec.sizeBytes),
+                            selected = state.aiSubtitleSettings.whisperModelId == spec.id,
+                            onClick = { onAiWhisperModelSelected(spec.id) },
+                        )
+                        if (index != WhisperModelSpec.ALL.lastIndex) {
+                            HorizontalDivider(color = tokens.separator, modifier = Modifier.padding(start = 16.dp))
+                        }
+                    }
+                    HorizontalDivider(color = tokens.separator, modifier = Modifier.padding(start = 16.dp))
+                    WhisperModelStatusRow(
+                        state = state,
+                        onDownload = onDownloadWhisperModel,
+                        onCancel = onCancelWhisperModelDownload,
+                        onDelete = onDeleteWhisperModel,
+                    )
+                }
+                AiTranscriptionBackend.REMOTE -> {
+                    SettingsActionRow(
+                        "服务器地址",
+                        state.aiSubtitleSettings.remoteWhisperBaseUrl.ifBlank { "未设置" },
+                        onEditRemoteWhisperBaseUrl,
+                    )
+                    HorizontalDivider(color = tokens.separator, modifier = Modifier.padding(start = 16.dp))
+                    SettingsActionRow("模型", state.aiSubtitleSettings.activeRemoteWhisperModel, onEditRemoteWhisperModel)
+                    HorizontalDivider(color = tokens.separator, modifier = Modifier.padding(start = 16.dp))
+                    SettingsActionRow(
+                        "Bearer Token",
+                        if (state.aiSubtitleSettings.remoteWhisperToken.isBlank()) "未设置" else "已设置",
+                        onEditRemoteWhisperToken,
+                    )
+                    HorizontalDivider(color = tokens.separator, modifier = Modifier.padding(start = 16.dp))
+                    RemoteWhisperTestRow(state.remoteWhisperTestStatus, onTestRemoteWhisperConnection)
+                }
+            }
         }
-        GroupFooter("首次生成前下载 Whisper 模型；模型文件保存在本机应用私有目录，转写使用 CPU 并发处理语音切片。")
+        GroupFooter(
+            if (state.aiSubtitleSettings.transcriptionBackend == AiTranscriptionBackend.LOCAL) {
+                "首次生成前下载 Whisper 模型；模型文件保存在本机应用私有目录，转写使用 CPU 并发处理语音切片。"
+            } else {
+                "远程模式会把整段音频上传到你配置的 Whisper 服务器；服务器返回日文时间轴后，App 继续在翻译阶段只发送文本。"
+            },
+        )
         Spacer(Modifier.height(18.dp))
         SectionLabel("关于")
         GroupedCard {
@@ -336,6 +389,45 @@ private fun WhisperModelStatusRow(
                     fontSize = 13.sp,
                     fontWeight = FontWeight.Medium,
                 )
+            }
+        }
+    }
+}
+
+@Composable
+private fun RemoteWhisperTestRow(status: RemoteWhisperTestStatus, onClick: () -> Unit) {
+    val tokens = LocalAmberTokens.current
+    val checking = status is RemoteWhisperTestStatus.Checking
+    Row(
+        modifier = Modifier
+            .fillMaxWidth()
+            .height(52.dp)
+            .clickable(enabled = !checking, onClick = onClick)
+            .padding(start = 16.dp, end = 14.dp),
+        verticalAlignment = Alignment.CenterVertically,
+    ) {
+        Text("测试连接", fontSize = 17.sp, color = tokens.label, modifier = Modifier.weight(1f))
+        when (status) {
+            RemoteWhisperTestStatus.Idle -> {
+                Text("未测试", fontSize = 17.sp, color = tokens.label2)
+                Spacer(Modifier.width(8.dp))
+                Icon(Icons.AutoMirrored.Filled.KeyboardArrowRight, contentDescription = null, tint = tokens.label3, modifier = Modifier.size(18.dp))
+            }
+            RemoteWhisperTestStatus.Checking -> {
+                CircularProgressIndicator(
+                    modifier = Modifier.size(18.dp),
+                    color = tokens.accent,
+                    trackColor = tokens.label3,
+                    strokeWidth = 2.dp,
+                )
+                Spacer(Modifier.width(8.dp))
+                Text("测试中…", fontSize = 17.sp, color = tokens.label2)
+            }
+            is RemoteWhisperTestStatus.Success -> {
+                Text(status.message, fontSize = 15.sp, color = tokens.accent, maxLines = 1, overflow = TextOverflow.Ellipsis)
+            }
+            is RemoteWhisperTestStatus.Failed -> {
+                Text(status.message, fontSize = 15.sp, color = tokens.accent2, maxLines = 1, overflow = TextOverflow.Ellipsis)
             }
         }
     }

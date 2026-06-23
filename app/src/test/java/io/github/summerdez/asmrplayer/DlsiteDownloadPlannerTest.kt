@@ -22,7 +22,7 @@ import org.junit.Test
 
 class DlsiteDownloadPlannerTest {
     @Test
-    fun detectsNestedFormatOptionsAndKeepsSharedBonus() {
+    fun buildsOptionsFromDirectoryTreeLeaves() {
         val bonus = contentFile("作品/附赠内容/自由谈话.wav")
         val options = DlsiteDownloadPlanner.optionsFor(
             ziptree(
@@ -34,14 +34,14 @@ class DlsiteDownloadPlannerTest {
             )
         )
 
-        assertEquals(listOf("wav", "mp3", "wav/无效果音", "mp3/无效果音"), options.map { it.id })
-        assertEquals(listOf("WAV", "MP3", "WAV / 无效果音", "MP3 / 无效果音"), options.map { it.title })
-        assertTrue(options.all { option -> option.audioFiles.contains(bonus) })
-        assertTrue(options.all { option -> option.audioFiles.size == 2 })
+        assertEquals(listOf("WAV", "mp3", "WAV/无效果音", "mp3/无效果音", "附赠内容"), options.map { it.id })
+        assertEquals(listOf("WAV", "mp3", "WAV / 无效果音", "mp3 / 无效果音", "附赠内容"), options.map { it.title })
+        assertEquals(listOf(1, 1, 1, 1, 1), options.map { it.audioFiles.size })
+        assertEquals(bonus, options.last().audioFiles.single())
     }
 
     @Test
-    fun detectsFormatMarkerBelowSharedFolder() {
+    fun stripsCommonDirectoryPrefixBeforeGrouping() {
         val options = DlsiteDownloadPlanner.optionsFor(
             ziptree(
                 contentFile("作品/本編/mp3/01.mp3"),
@@ -49,11 +49,12 @@ class DlsiteDownloadPlannerTest {
             )
         )
 
-        assertEquals(listOf("mp3", "wav"), options.map { it.id })
+        assertEquals(listOf("mp3", "WAV"), options.map { it.id })
+        assertEquals(listOf("mp3", "WAV"), options.map { it.title })
     }
 
     @Test
-    fun doesNotTreatRegularNestedFoldersAsVersions() {
+    fun regularNestedFoldersBecomeUserSelectableContent() {
         val options = DlsiteDownloadPlanner.optionsFor(
             ziptree(
                 contentFile("作品/本編/01.mp3"),
@@ -61,9 +62,48 @@ class DlsiteDownloadPlannerTest {
             )
         )
 
-        assertEquals(1, options.size)
-        assertEquals("", options[0].id)
-        assertEquals(2, options[0].audioFiles.size)
+        assertEquals(listOf("本編", "特典"), options.map { it.id })
+        assertEquals(listOf("本編", "特典"), options.map { it.title })
+        assertEquals(listOf(1, 1), options.map { it.audioFiles.size })
+    }
+
+    @Test
+    fun rootAudioAndFoldersCanBothBeSelected() {
+        val options = DlsiteDownloadPlanner.optionsFor(
+            ziptree(
+                contentFile("01.mp3"),
+                contentFile("特典/bonus.mp3"),
+            )
+        )
+
+        assertEquals(listOf("根目录音频", "特典"), options.map { it.title })
+        assertEquals(listOf("__root_audio__", "特典"), options.map { it.id })
+    }
+
+    @Test
+    fun rootAudioBelowCommonPrefixAndFoldersCanBothBeSelected() {
+        val options = DlsiteDownloadPlanner.optionsFor(
+            ziptree(
+                contentFile("作品/01.mp3"),
+                contentFile("作品/特典/bonus.mp3"),
+            )
+        )
+
+        assertEquals(listOf("根目录音频", "特典"), options.map { it.title })
+        assertEquals(listOf("__root_audio__", "特典"), options.map { it.id })
+    }
+
+    @Test
+    fun optionIdsEscapeDownloadServiceSeparator() {
+        val options = DlsiteDownloadPlanner.optionsFor(
+            ziptree(
+                contentFile("作品/A|B/01.mp3"),
+                contentFile("作品/A%7CB/02.mp3"),
+            )
+        )
+
+        assertEquals(listOf("A%7CB", "A%257CB"), options.map { it.id })
+        assertTrue(options.none { it.id.contains("|") })
     }
 
     private fun ziptree(vararg files: DlsiteJsonParser.ContentFile): DlsiteJsonParser.DlsiteZiptree {

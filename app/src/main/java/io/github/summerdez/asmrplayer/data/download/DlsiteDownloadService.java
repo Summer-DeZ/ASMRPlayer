@@ -28,7 +28,6 @@ import java.io.File;
 import java.util.ArrayList;
 import java.util.LinkedHashMap;
 import java.util.List;
-import java.util.Map;
 
 public class DlsiteDownloadService extends Service {
     static final String ACTION_DOWNLOAD = "io.github.summerdez.asmrplayer.action.DLSITE_DOWNLOAD";
@@ -41,15 +40,16 @@ public class DlsiteDownloadService extends Service {
     private static final String STOP_NONE = "";
     private static final String STOP_PAUSE = "pause";
     private static final String STOP_DELETE = "delete";
+    private static final String STOP_RESCHEDULE = "reschedule";
     private static final int MAX_CONCURRENT_DOWNLOADS = 2;
 
     private final Object lock = new Object();
-    private final LinkedHashMap<String, DownloadRequest> queuedRequests = new LinkedHashMap<>();
     private final LinkedHashMap<String, DownloadWorker> runningWorkers = new LinkedHashMap<>();
     private DlsiteRepository dlsiteRepository;
     private DlsiteApi dlsiteApi;
     private LibraryRepository libraryRepository;
     private int latestStartId;
+    private boolean destroying;
 
     public static Intent downloadIntent(Context context, String workId, String optionId) {
         List<String> optionIds = new ArrayList<>();
@@ -89,20 +89,28 @@ public class DlsiteDownloadService extends Service {
     @Override
     public void onCreate() {
         super.onCreate();
+        destroying = false;
         AppContainer container = AppGraph.container(this);
         dlsiteRepository = container.getDlsiteRepository();
         dlsiteApi = container.getDlsiteApi();
         libraryRepository = container.getLibraryRepository();
         DlsiteDownloadNotifications.ensureChannel(this);
+        dlsiteRepository.resetRunningDownloadQueue();
     }
 
     @Override
     public int onStartCommand(Intent intent, int flags, int startId) {
+        latestStartId = startId;
         if (intent == null || TextUtils.isEmpty(intent.getAction())) {
-            stopSelf(startId);
+            synchronized (lock) {
+                if (hasPendingDownloadsLocked()) {
+                    promoteToForeground();
+                }
+                scheduleLocked();
+                stopIfIdleLocked(startId);
+            }
             return START_NOT_STICKY;
         }
-        latestStartId = startId;
         if (ACTION_PAUSE.equals(intent.getAction())) {
             handlePause(intent.getStringExtra(EXTRA_WORK_ID), startId);
             return START_NOT_STICKY;
@@ -142,8 +150,11 @@ public class DlsiteDownloadService extends Service {
     @Override
     public void onDestroy() {
         synchronized (lock) {
+            destroying = true;
             for (DownloadWorker worker : runningWorkers.values()) {
-                worker.stopRequest = STOP_PAUSE;
+                if (STOP_NONE.equals(worker.stopRequest)) {
+                    worker.stopRequest = STOP_RESCHEDULE;
+                }
                 worker.interrupt();
             }
         }
@@ -152,12 +163,14 @@ public class DlsiteDownloadService extends Service {
 
     private void enqueueDownload(DlsiteWork work, List<String> optionIds) {
         synchronized (lock) {
-            if (queuedRequests.containsKey(work.workId) || runningWorkers.containsKey(work.workId)) {
+            DlsiteDownloadQueueTask task = dlsiteRepository.enqueueDownload(
+                    work,
+                    optionIds,
+                    optionIds == null ? "" : optionIds.size() + " 个内容");
+            if (task == null) {
+                stopIfIdleLocked(latestStartId);
                 return;
             }
-            DownloadRequest request = new DownloadRequest(work.workId, work.displayTitle(), new ArrayList<>(optionIds));
-            queuedRequests.put(work.workId, request);
-            dlsiteRepository.markQueued(work, request.optionIds, request.optionIds.size() + " 个内容");
             publishQueuePositionsLocked();
             promoteToForeground();
             scheduleLocked();
@@ -165,15 +178,39 @@ public class DlsiteDownloadService extends Service {
     }
 
     private void scheduleLocked() {
-        while (runningWorkers.size() < MAX_CONCURRENT_DOWNLOADS && !queuedRequests.isEmpty()) {
-            Map.Entry<String, DownloadRequest> entry = queuedRequests.entrySet().iterator().next();
-            queuedRequests.remove(entry.getKey());
-            DownloadRequest request = entry.getValue();
-            DlsiteWork work = dlsiteRepository.getWork(request.workId);
-            if (work == null) {
-                DlsiteDownloadStateBus.remove(request.workId);
+        if (destroying) {
+            publishQueuePositionsLocked();
+            updateNotification();
+            return;
+        }
+        if (hasPendingDownloadsLocked()) {
+            promoteToForeground();
+        }
+        while (runningWorkers.size() < MAX_CONCURRENT_DOWNLOADS) {
+            List<DlsiteDownloadQueueTask> pendingTasks = dlsiteRepository.pendingDownloadQueueTasks(1);
+            if (pendingTasks.isEmpty()) {
+                break;
+            }
+            DlsiteDownloadQueueTask pendingTask = pendingTasks.get(0);
+            if (runningWorkers.containsKey(pendingTask.workId)) {
+                dlsiteRepository.markDownloadQueueTaskCanceled(pendingTask.taskId);
                 continue;
             }
+            DlsiteWork work = dlsiteRepository.getWork(pendingTask.workId);
+            if (work == null) {
+                dlsiteRepository.markDownloadQueueTaskFailed(pendingTask.taskId, "找不到作品记录");
+                DlsiteDownloadStateBus.remove(pendingTask.workId);
+                continue;
+            }
+            DlsiteDownloadQueueTask runningTask = dlsiteRepository.markDownloadQueueTaskRunning(pendingTask.taskId);
+            if (runningTask == null) {
+                continue;
+            }
+            DownloadRequest request = new DownloadRequest(
+                    runningTask.taskId,
+                    runningTask.workId,
+                    work.displayTitle(),
+                    runningTask.optionIdList());
             DownloadWorker worker = new DownloadWorker(request, work);
             runningWorkers.put(request.workId, worker);
             worker.start();
@@ -184,8 +221,10 @@ public class DlsiteDownloadService extends Service {
 
     private void publishQueuePositionsLocked() {
         int index = 1;
-        for (DownloadRequest request : queuedRequests.values()) {
-            DlsiteDownloadStateBus.publishQueued(request.workId, request.title, index);
+        for (DlsiteDownloadQueueTask task : dlsiteRepository.pendingDownloadQueueTasks(Integer.MAX_VALUE)) {
+            DlsiteWork work = dlsiteRepository.getWork(task.workId);
+            String title = work == null ? task.workId : work.displayTitle();
+            DlsiteDownloadStateBus.publishQueued(task.workId, title, index);
             index++;
         }
     }
@@ -193,8 +232,10 @@ public class DlsiteDownloadService extends Service {
     private void finishWorker(DownloadWorker worker) {
         synchronized (lock) {
             runningWorkers.remove(worker.request.workId);
-            scheduleLocked();
-            if (runningWorkers.isEmpty() && queuedRequests.isEmpty()) {
+            if (!destroying) {
+                scheduleLocked();
+            }
+            if (runningWorkers.isEmpty() && !hasPendingDownloadsLocked()) {
                 stopForegroundSafely();
                 stopSelf(latestStartId);
             }
@@ -216,13 +257,12 @@ public class DlsiteDownloadService extends Service {
                 worker.interrupt();
                 return;
             }
-            DownloadRequest queued = queuedRequests.remove(work.workId);
+            DlsiteDownloadQueueTask queued = dlsiteRepository.pauseQueuedDownload(work.workId);
             if (queued != null) {
                 markPausedSafely(work);
-                dlsiteRepository.markContentPaused(work.workId, queued.optionIds);
+                dlsiteRepository.markContentPaused(work.workId, queued.optionIdList());
                 DlsiteDownloadStateBus.publishPaused(work.workId, work.displayTitle());
-                publishQueuePositionsLocked();
-                updateNotification();
+                scheduleLocked();
                 stopIfIdleLocked(startId);
                 return;
             }
@@ -249,12 +289,11 @@ public class DlsiteDownloadService extends Service {
                 worker.interrupt();
                 return;
             }
-            DownloadRequest queued = queuedRequests.remove(work.workId);
+            DlsiteDownloadQueueTask queued = dlsiteRepository.cancelQueuedDownload(work.workId);
             if (queued != null) {
                 deleteCachedWork(work);
                 DlsiteDownloadStateBus.remove(work.workId);
-                publishQueuePositionsLocked();
-                updateNotification();
+                scheduleLocked();
                 stopIfIdleLocked(startId);
                 return;
             }
@@ -264,10 +303,14 @@ public class DlsiteDownloadService extends Service {
     }
 
     private void stopIfIdleLocked(int startId) {
-        if (runningWorkers.isEmpty() && queuedRequests.isEmpty()) {
+        if (runningWorkers.isEmpty() && !hasPendingDownloadsLocked()) {
             stopForegroundSafely();
             stopSelf(startId);
         }
+    }
+
+    private boolean hasPendingDownloadsLocked() {
+        return !dlsiteRepository.pendingDownloadQueueTasks(1).isEmpty();
     }
 
     private void deleteCachedWork(DlsiteWork work) {
@@ -326,11 +369,13 @@ public class DlsiteDownloadService extends Service {
     }
 
     private static final class DownloadRequest {
+        final String taskId;
         final String workId;
         final String title;
         final List<String> optionIds;
 
-        DownloadRequest(String workId, String title, List<String> optionIds) {
+        DownloadRequest(String taskId, String workId, String title, List<String> optionIds) {
+            this.taskId = taskId == null ? "" : taskId;
             this.workId = workId == null ? "" : workId;
             this.title = title == null ? "" : title;
             this.optionIds = optionIds == null ? new ArrayList<>() : new ArrayList<>(optionIds);
@@ -371,19 +416,27 @@ public class DlsiteDownloadService extends Service {
                             ? work
                             : work.withCoverUri(result.coverUri);
                     dlsiteRepository.markDownloaded(downloadedWork, result.playlistId, result.localPath, result.trackCount);
+                    dlsiteRepository.markDownloadQueueTaskCompleted(request.taskId);
                     DlsiteDownloadStateBus.publishCompleted(work.workId, work.displayTitle());
                     updateNotification();
                 }
             } catch (Exception exception) {
                 if (STOP_PAUSE.equals(stopRequest)) {
+                    dlsiteRepository.markDownloadQueueTaskPaused(request.taskId);
                     markPausedSafely(work);
                     dlsiteRepository.markContentPaused(work.workId, request.optionIds);
                     DlsiteDownloadStateBus.publishPaused(work.workId, work.displayTitle());
                 } else if (STOP_DELETE.equals(stopRequest)) {
+                    dlsiteRepository.markDownloadQueueTaskCanceled(request.taskId);
                     deleteCachedWorkSafely(work);
                     DlsiteDownloadStateBus.remove(work.workId);
+                } else if (STOP_RESCHEDULE.equals(stopRequest)) {
+                    dlsiteRepository.markDownloadQueueTaskPending(request.taskId);
+                    dlsiteRepository.markQueued(work, request.optionIds, request.optionIds.size() + " 个内容");
+                    DlsiteDownloadStateBus.publishQueued(work.workId, work.displayTitle(), 1);
                 } else {
                     String message = shortError(exception);
+                    dlsiteRepository.markDownloadQueueTaskFailed(request.taskId, message);
                     dlsiteRepository.markFailed(work, message);
                     for (String optionId : request.optionIds) {
                         dlsiteRepository.markContentFailed(work.workId, optionId, message);

@@ -18,6 +18,7 @@ import io.github.summerdez.asmrplayer.ui.util.*
 import io.github.summerdez.asmrplayer.di.*
 import android.content.Context
 import io.github.summerdez.asmrplayer.domain.model.AiSubtitleSettings
+import io.github.summerdez.asmrplayer.domain.model.AiTranscriptionBackend
 import io.github.summerdez.asmrplayer.domain.model.AiTranslationEngine
 import io.github.summerdez.asmrplayer.domain.model.WhisperModelSpec
 import kotlinx.coroutines.flow.Flow
@@ -29,6 +30,7 @@ interface SettingsRepository {
     fun themeMode(): AppThemeMode
     fun setThemeMode(mode: AppThemeMode)
     fun aiSubtitleSettings(): AiSubtitleSettings
+    fun setAiTranscriptionBackend(backend: AiTranscriptionBackend)
     fun setAiTranslationEngine(engine: AiTranslationEngine)
     fun setAiOllamaBaseUrl(value: String)
     fun setAiOllamaModel(value: String)
@@ -36,6 +38,9 @@ interface SettingsRepository {
     fun setAiDeepSeekModel(value: String)
     fun setAiDeepSeekApiKey(value: String)
     fun setAiWhisperModelId(value: String)
+    fun setAiRemoteWhisperBaseUrl(value: String)
+    fun setAiRemoteWhisperModel(value: String)
+    fun setAiRemoteWhisperToken(value: String)
     fun setAiAdultContentTranslationAllowed(value: Boolean)
 }
 
@@ -54,6 +59,10 @@ class AppSettingsRepository(
             settingsDao.valueFlow(KEY_AI_DEEPSEEK_API_KEY),
             settingsDao.valueFlow(KEY_AI_WHISPER_MODEL_ID),
             settingsDao.valueFlow(KEY_AI_ADULT_CONTENT_TRANSLATION),
+            settingsDao.valueFlow(KEY_AI_TRANSCRIPTION_BACKEND),
+            settingsDao.valueFlow(KEY_AI_REMOTE_WHISPER_BASE_URL),
+            settingsDao.valueFlow(KEY_AI_REMOTE_WHISPER_MODEL),
+            settingsDao.valueFlow(KEY_AI_REMOTE_WHISPER_TOKEN),
         ),
     ) { values ->
         aiSettingsFromValues(values)
@@ -79,9 +88,17 @@ class AppSettingsRepository(
                     settingsDao.value(KEY_AI_DEEPSEEK_API_KEY),
                     settingsDao.value(KEY_AI_WHISPER_MODEL_ID),
                     settingsDao.value(KEY_AI_ADULT_CONTENT_TRANSLATION),
+                    settingsDao.value(KEY_AI_TRANSCRIPTION_BACKEND),
+                    settingsDao.value(KEY_AI_REMOTE_WHISPER_BASE_URL),
+                    settingsDao.value(KEY_AI_REMOTE_WHISPER_MODEL),
+                    settingsDao.value(KEY_AI_REMOTE_WHISPER_TOKEN),
                 ),
             )
         }
+    }
+
+    override fun setAiTranscriptionBackend(backend: AiTranscriptionBackend) {
+        put(KEY_AI_TRANSCRIPTION_BACKEND, backend.name)
     }
 
     override fun setAiTranslationEngine(engine: AiTranslationEngine) {
@@ -112,6 +129,18 @@ class AppSettingsRepository(
         put(KEY_AI_WHISPER_MODEL_ID, WhisperModelSpec.byId(value).id)
     }
 
+    override fun setAiRemoteWhisperBaseUrl(value: String) {
+        put(KEY_AI_REMOTE_WHISPER_BASE_URL, value.trim())
+    }
+
+    override fun setAiRemoteWhisperModel(value: String) {
+        put(KEY_AI_REMOTE_WHISPER_MODEL, value.trim())
+    }
+
+    override fun setAiRemoteWhisperToken(value: String) {
+        put(KEY_AI_REMOTE_WHISPER_TOKEN, value.trim())
+    }
+
     override fun setAiAdultContentTranslationAllowed(value: Boolean) {
         put(KEY_AI_ADULT_CONTENT_TRANSLATION, value.toString())
     }
@@ -126,25 +155,24 @@ class AppSettingsRepository(
         val engine = values.getOrNull(0).orEmpty()
             .let { raw -> AiTranslationEngine.entries.firstOrNull { it.name == raw } }
             ?: AiTranslationEngine.OLLAMA
+        val transcriptionBackend = values.getOrNull(8).orEmpty()
+            .let { raw -> AiTranscriptionBackend.entries.firstOrNull { it.name == raw } }
+            ?: AiTranscriptionBackend.LOCAL
         return AiSubtitleSettings(
+            transcriptionBackend = transcriptionBackend,
             translationEngine = engine,
             ollamaBaseUrl = values.getOrNull(1).orEmpty().ifBlank { AiTranslationEngine.OLLAMA.defaultBaseUrl },
             ollamaModel = values.getOrNull(2).orEmpty().ifBlank { AiTranslationEngine.OLLAMA.defaultModel },
             deepSeekBaseUrl = values.getOrNull(3).orEmpty().ifBlank { AiTranslationEngine.DEEPSEEK.defaultBaseUrl },
-            deepSeekModel = normalizeDeepSeekModel(values.getOrNull(4)),
+            deepSeekModel = normalizedOpenAiCompatibleModel(values.getOrNull(4)),
             deepSeekApiKey = values.getOrNull(5).orEmpty(),
             whisperModelId = WhisperModelSpec.byId(values.getOrNull(6)).id,
             allowAdultContentTranslation = values.getOrNull(7)?.toBooleanStrictOrNull() ?: false,
+            remoteWhisperBaseUrl = values.getOrNull(9).orEmpty(),
+            remoteWhisperModel = values.getOrNull(10).orEmpty()
+                .ifBlank { AiSubtitleSettings.DEFAULT_REMOTE_WHISPER_MODEL },
+            remoteWhisperToken = values.getOrNull(11).orEmpty(),
         )
-    }
-
-    private fun normalizeDeepSeekModel(value: String?): String {
-        val raw = value.orEmpty().trim()
-        return when {
-            raw.isBlank() -> AiTranslationEngine.DEEPSEEK.defaultModel
-            raw in LEGACY_DEEPSEEK_DEFAULT_MODELS -> AiTranslationEngine.DEEPSEEK.defaultModel
-            else -> raw
-        }
     }
 
     private companion object {
@@ -156,6 +184,13 @@ class AppSettingsRepository(
         const val KEY_AI_DEEPSEEK_API_KEY = "ai_deepseek_api_key"
         const val KEY_AI_WHISPER_MODEL_ID = "ai_whisper_model_id"
         const val KEY_AI_ADULT_CONTENT_TRANSLATION = "ai_adult_content_translation"
-        val LEGACY_DEEPSEEK_DEFAULT_MODELS = setOf("deepseek-v4-pro")
+        const val KEY_AI_TRANSCRIPTION_BACKEND = "ai_transcription_backend"
+        const val KEY_AI_REMOTE_WHISPER_BASE_URL = "ai_remote_whisper_base_url"
+        const val KEY_AI_REMOTE_WHISPER_MODEL = "ai_remote_whisper_model"
+        const val KEY_AI_REMOTE_WHISPER_TOKEN = "ai_remote_whisper_token"
     }
+}
+
+internal fun normalizedOpenAiCompatibleModel(value: String?): String {
+    return value.orEmpty().trim().ifBlank { AiTranslationEngine.DEEPSEEK.defaultModel }
 }

@@ -245,7 +245,7 @@ class DlsiteViewModel(
                     setBusy(false)
                     refresh()
                     if (options.isEmpty()) {
-                        showMessage("没有找到可下载的版本")
+                        showMessage("没有找到可下载内容")
                     } else {
                         _state.value = _state.value.copy(
                             optionWork = work,
@@ -279,7 +279,7 @@ class DlsiteViewModel(
         }
         setBusy(true)
         val optionIds = options.map { it.id }
-        dlsiteRepository.markQueued(work, optionIds, options.joinToString("、") { it.title })
+        val queuedTask = dlsiteRepository.enqueueDownload(work, optionIds, options.joinToString("、") { it.title })
         refresh()
         try {
             ContextCompat.startForegroundService(
@@ -291,6 +291,7 @@ class DlsiteViewModel(
             showMessage("已加入下载队列")
         } catch (exception: RuntimeException) {
             setBusy(false)
+            dlsiteRepository.markDownloadQueueTaskFailed(queuedTask?.taskId, shortDlsiteError(exception))
             dlsiteRepository.markFailed(work, shortDlsiteError(exception))
             showMessage(shortDlsiteError(exception))
         }

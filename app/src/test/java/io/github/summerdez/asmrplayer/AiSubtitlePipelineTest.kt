@@ -5,6 +5,7 @@ import io.github.summerdez.asmrplayer.data.ai.AiSubtitleSegmentCache
 import io.github.summerdez.asmrplayer.data.ai.AiSubtitleTaskStateBus
 import io.github.summerdez.asmrplayer.data.ai.AiSubtitleTranslationCache
 import io.github.summerdez.asmrplayer.data.ai.OpenAiCompatibleTranslator
+import io.github.summerdez.asmrplayer.data.ai.RemoteWhisperTranscriber
 import io.github.summerdez.asmrplayer.data.ai.SceneContext
 import io.github.summerdez.asmrplayer.data.ai.SceneContextBuilder
 import io.github.summerdez.asmrplayer.data.ai.StreamingLinearResampler
@@ -19,8 +20,10 @@ import io.github.summerdez.asmrplayer.data.ai.WhisperRecognitionConcurrency
 import io.github.summerdez.asmrplayer.data.ai.buildTranslationBatch
 import io.github.summerdez.asmrplayer.data.ai.mergeVadSpeechSegments
 import io.github.summerdez.asmrplayer.data.ai.planWhisperRecognitionConcurrency
+import io.github.summerdez.asmrplayer.data.normalizedOpenAiCompatibleModel
 import io.github.summerdez.asmrplayer.domain.model.AiSubtitleSettings
 import io.github.summerdez.asmrplayer.domain.model.AiSubtitleStage
+import io.github.summerdez.asmrplayer.domain.model.AiTranscriptionBackend
 import io.github.summerdez.asmrplayer.domain.model.AiTranslationEngine
 import io.github.summerdez.asmrplayer.domain.model.SubtitleGenerationTarget
 import io.github.summerdez.asmrplayer.domain.model.SubtitleLine
@@ -350,7 +353,7 @@ class AiSubtitlePipelineTest {
     }
 
     @Test
-    fun deepSeekTranslationPromptIncludesFullSourceContextAsReadOnlyPrefix() {
+    fun openAiCompatibleTranslationPromptIncludesFullSourceContextAsReadOnlyPrefix() {
         val source = (1..4).map { index ->
             SubtitleLine(index.toString(), index * 1_000L, index * 1_000L + 500L, "全局原文$index")
         }
@@ -401,6 +404,39 @@ class AiSubtitlePipelineTest {
         assertTrue(userPrompt.contains("不得输出待翻译 lines 之外的 id"))
         assertTrue(capturedRequest?.responseFormatJsonObject == true)
         assertTrue(capturedRequest?.disableThinking == true)
+    }
+
+    @Test
+    fun genericOpenAiCompatibleModelDoesNotUseDeepSeekThinkingControl() {
+        val source = listOf(SubtitleLine("1", 0L, 1_000L, "耳元に来て"))
+        var capturedRequest: TranslationRequest? = null
+        val translator = OpenAiCompatibleTranslator(
+            requestExecutor = object : TranslationRequestExecutor {
+                override suspend fun execute(
+                    settings: AiSubtitleSettings,
+                    request: TranslationRequest,
+                ): TranslationResponse {
+                    capturedRequest = request
+                    return TranslationResponse("""{"lines":[{"id":"1","zh":"来到耳边"}]}""", "stop")
+                }
+            },
+        )
+
+        runBlocking {
+            translator.translate(
+                aiSettings().copy(
+                    translationEngine = AiTranslationEngine.DEEPSEEK,
+                    deepSeekBaseUrl = "https://api.openai.com/v1",
+                    deepSeekModel = "gpt-4.1",
+                    deepSeekApiKey = "token",
+                ),
+                TranslationBatch(lines = source, contextTitle = "playlist"),
+            )
+        }
+
+        assertEquals("gpt-4.1", capturedRequest?.model)
+        assertTrue(capturedRequest?.responseFormatJsonObject == true)
+        assertTrue(capturedRequest?.disableThinking == false)
     }
 
     @Test
@@ -513,6 +549,54 @@ class AiSubtitlePipelineTest {
         assertEquals(lines, cache.load(target, "base"))
         assertNull(cache.load(target.copy(audioUri = "content://audio/2"), "base"))
         assertNull(cache.load(target, "small"))
+    }
+
+    @Test
+    fun remoteWhisperResponseParsesSegmentsToSubtitleLines() {
+        val parsed = RemoteWhisperTranscriber.parseTranscribeResponse(
+            """
+                {
+                  "model":"large-v3",
+                  "language":"ja",
+                  "segments":[
+                    {"id":1,"start_ms":0,"end_ms":2480,"text":"そうか"},
+                    {"id":"2","start_ms":3120,"end_ms":8940,"text":"あーごめんね"}
+                  ]
+                }
+            """.trimIndent(),
+        )
+
+        assertEquals(listOf("1", "2"), parsed.map { it.id })
+        assertEquals(listOf(0L, 3_120L), parsed.map { it.startMs })
+        assertEquals(listOf(2_480L, 8_940L), parsed.map { it.endMs })
+        assertEquals(listOf("そうか", "あーごめんね"), parsed.map { it.sourceText })
+    }
+
+    @Test
+    fun remoteWhisperResponseRejectsInvalidSegments() {
+        val error = assertThrows(IOException::class.java) {
+            RemoteWhisperTranscriber.parseTranscribeResponse(
+                """{"segments":[{"id":"1","start_ms":1000,"end_ms":900,"text":"だめ"}]}""",
+            )
+        }
+
+        assertTrue(error.message.orEmpty().contains("时间轴"))
+    }
+
+    @Test
+    fun transcriptionCacheKeySeparatesLocalAndRemoteBackends() {
+        val local = aiSettings().copy(
+            transcriptionBackend = AiTranscriptionBackend.LOCAL,
+            whisperModelId = "base",
+        )
+        val remote = aiSettings().copy(
+            transcriptionBackend = AiTranscriptionBackend.REMOTE,
+            remoteWhisperBaseUrl = "http://192.168.1.10:8000/",
+            remoteWhisperModel = "large-v3",
+        )
+
+        assertEquals("local:base", local.transcriptionCacheKey)
+        assertEquals("remote:http://192.168.1.10:8000|large-v3", remote.transcriptionCacheKey)
     }
 
     @Test
@@ -675,6 +759,14 @@ class AiSubtitlePipelineTest {
     @Test
     fun deepSeekDefaultModelUsesFlash() {
         assertEquals("deepseek-v4-flash", AiTranslationEngine.DEEPSEEK.defaultModel)
+    }
+
+    @Test
+    fun openAiCompatibleCustomModelIsPreserved() {
+        assertEquals("deepseek-v4-flash", normalizedOpenAiCompatibleModel(""))
+        assertEquals("deepseek-v4-pro", normalizedOpenAiCompatibleModel(" deepseek-v4-pro "))
+        assertEquals("deepseek-chat", normalizedOpenAiCompatibleModel("deepseek-chat"))
+        assertEquals("gpt-4.1", normalizedOpenAiCompatibleModel("gpt-4.1"))
     }
 
     @Test

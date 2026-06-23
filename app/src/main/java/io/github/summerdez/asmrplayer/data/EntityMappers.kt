@@ -102,3 +102,33 @@ internal fun DlsiteContent.toEntity(): DlsiteContentEntity {
         updatedAt = updatedAt,
     )
 }
+
+internal fun DlsiteDownloadQueueEntity.toQueueTask(): DlsiteDownloadQueueTask {
+    return DlsiteDownloadQueueTask(
+        taskId = taskId,
+        workId = workId,
+        optionIds = optionIds,
+        status = status,
+        queueOrder = queueOrder,
+        createdAt = createdAt,
+        startedAt = startedAt,
+        updatedAt = updatedAt,
+        finishedAt = finishedAt,
+        errorMessage = errorMessage,
+    )
+}
+
+internal fun DlsiteDownloadQueueTask.toEntity(): DlsiteDownloadQueueEntity {
+    return DlsiteDownloadQueueEntity(
+        taskId = taskId,
+        workId = workId,
+        optionIds = optionIds,
+        status = status,
+        queueOrder = queueOrder,
+        createdAt = createdAt,
+        startedAt = startedAt,
+        updatedAt = updatedAt,
+        finishedAt = finishedAt,
+        errorMessage = errorMessage,
+    )
+}

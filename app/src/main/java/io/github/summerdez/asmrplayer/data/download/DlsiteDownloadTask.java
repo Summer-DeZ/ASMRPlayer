@@ -90,21 +90,21 @@ public final class DlsiteDownloadTask {
         }
 
         List<File> importedAudioFiles = new ArrayList<>();
-        List<ContentResult> contentResults = new ArrayList<>();
+        List<DownloadedContent> downloadedContents = new ArrayList<>();
         for (DlsiteDownloadOption option : selectedOptions) {
             throwIfInterrupted();
             File contentDir = contentDir(workDir, option);
             File marker = new File(contentDir, ".downloaded");
             List<File> audioFiles;
+            if (listener != null) {
+                listener.onContentStarted(option, contentDir);
+            }
             if (marker.isFile()) {
                 audioFiles = audioFilesIn(contentDir);
             } else {
                 deleteRecursively(contentDir);
                 if (!contentDir.mkdirs() && !contentDir.isDirectory()) {
                     throw new IOException("无法创建内容目录");
-                }
-                if (listener != null) {
-                    listener.onContentStarted(option, contentDir);
                 }
                 audioFiles = dlsiteApi.downloadWorkFiles(importWork, contentDir, option.id);
                 if (audioFiles.isEmpty()) {
@@ -114,19 +114,11 @@ public final class DlsiteDownloadTask {
                     throw new IOException("无法写入内容下载标记");
                 }
             }
-            ImportResult importResult = importPlaylist(context, libraryRepository, importWork, audioFiles, coverFileForImport(dlsiteApi, importWork, workDir));
-            importWork = importWork.asDownloaded(importResult.playlistId, workDir.getAbsolutePath(), importResult.totalTrackCount);
-            importedAudioFiles.addAll(audioFiles);
-            ContentResult contentResult = new ContentResult(
-                    option.id,
-                    option.title,
-                    contentDir.getAbsolutePath(),
-                    importResult.addedTrackIds,
-                    audioFiles.size());
-            contentResults.add(contentResult);
-            if (listener != null) {
-                listener.onContentFinished(option, contentResult);
+            if (audioFiles.isEmpty()) {
+                throw new IOException("没有找到可导入的音频");
             }
+            importedAudioFiles.addAll(audioFiles);
+            downloadedContents.add(new DownloadedContent(option, contentDir, audioFiles));
         }
 
         File coverFile = existingCoverFile(importWork);
@@ -138,6 +130,12 @@ public final class DlsiteDownloadTask {
             coverUri = Uri.fromFile(coverFile).toString();
         }
         ImportResult importResult = importPlaylist(context, libraryRepository, importWork, importedAudioFiles, coverFile);
+        List<ContentResult> contentResults = contentResultsForImport(downloadedContents, importResult);
+        for (int i = 0; i < downloadedContents.size(); i++) {
+            if (listener != null) {
+                listener.onContentFinished(downloadedContents.get(i).option, contentResults.get(i));
+            }
+        }
         return new Result(
                 importResult.playlistId,
                 workDir.getAbsolutePath(),
@@ -176,14 +174,21 @@ public final class DlsiteDownloadTask {
             libraryRepository.setPlaylistCover(playlist.id, Uri.fromFile(coverFile).toString());
         }
         Set<String> existingUris = new HashSet<>();
+        Map<String, String> existingTrackIdsByUri = new HashMap<>();
         for (TrackItem track : playlist.tracks) {
             existingUris.add(track.uri);
+            existingTrackIdsByUri.put(track.uri, track.id);
         }
         Map<String, File> subtitles = subtitleFilesByName(audioFiles);
         List<String> addedTrackIds = new ArrayList<>();
+        Map<String, String> trackIdsByPath = new HashMap<>();
         for (File audioFile : audioFiles) {
             String audioUri = Uri.fromFile(audioFile).toString();
             if (existingUris.contains(audioUri)) {
+                String existingTrackId = existingTrackIdsByUri.get(audioUri);
+                if (!TextUtils.isEmpty(existingTrackId)) {
+                    trackIdsByPath.put(audioFile.getAbsolutePath(), existingTrackId);
+                }
                 continue;
             }
             File subtitleFile = subtitles.get(normalizedName(audioFile.getName() + ".vtt"));
@@ -199,20 +204,43 @@ public final class DlsiteDownloadTask {
                             DocumentFiles.audioDurationMs(context, Uri.fromFile(audioFile))));
             addedTrackIds.add(trackId);
             existingUris.add(audioUri);
+            existingTrackIdsByUri.put(audioUri, trackId);
+            trackIdsByPath.put(audioFile.getAbsolutePath(), trackId);
         }
         Playlist updated = libraryRepository.getPlaylist(playlist.id);
         return new ImportResult(
                 playlist.id,
                 addedTrackIds,
-                updated == null ? playlist.tracks.size() + addedTrackIds.size() : updated.tracks.size());
+                updated == null ? playlist.tracks.size() + addedTrackIds.size() : updated.tracks.size(),
+                trackIdsByPath);
     }
 
-    private static File coverFileForImport(DlsiteApi dlsiteApi, DlsiteWork work, File workDir) {
-        File coverFile = existingCoverFile(work);
-        if (coverFile == null) {
-            coverFile = downloadCover(dlsiteApi, work, workDir);
+    static List<ContentResult> contentResultsForImport(
+            List<DownloadedContent> downloadedContents,
+            ImportResult importResult) {
+        List<ContentResult> contentResults = new ArrayList<>();
+        if (downloadedContents == null) {
+            return contentResults;
         }
-        return coverFile;
+        Map<String, String> trackIdsByPath = importResult == null
+                ? Collections.emptyMap()
+                : importResult.trackIdsByPath;
+        for (DownloadedContent content : downloadedContents) {
+            List<String> trackIds = new ArrayList<>();
+            for (File audioFile : content.audioFiles) {
+                String trackId = trackIdsByPath.get(audioFile.getAbsolutePath());
+                if (trackId != null && !trackId.isEmpty()) {
+                    trackIds.add(trackId);
+                }
+            }
+            contentResults.add(new ContentResult(
+                    content.option.id,
+                    content.option.title,
+                    content.contentDir.getAbsolutePath(),
+                    trackIds,
+                    content.audioFiles.size()));
+        }
+        return contentResults;
     }
 
     private static List<DlsiteDownloadOption> selectedOptions(
@@ -475,15 +503,37 @@ public final class DlsiteDownloadTask {
         }
     }
 
-    private static final class ImportResult {
+    static final class DownloadedContent {
+        final DlsiteDownloadOption option;
+        final File contentDir;
+        final List<File> audioFiles;
+
+        DownloadedContent(DlsiteDownloadOption option, File contentDir, List<File> audioFiles) {
+            this.option = option;
+            this.contentDir = contentDir;
+            this.audioFiles = audioFiles == null ? Collections.emptyList() : new ArrayList<>(audioFiles);
+        }
+    }
+
+    static final class ImportResult {
         final String playlistId;
         final List<String> addedTrackIds;
         final int totalTrackCount;
+        final Map<String, String> trackIdsByPath;
 
         ImportResult(String playlistId, List<String> addedTrackIds, int totalTrackCount) {
+            this(playlistId, addedTrackIds, totalTrackCount, Collections.emptyMap());
+        }
+
+        ImportResult(
+                String playlistId,
+                List<String> addedTrackIds,
+                int totalTrackCount,
+                Map<String, String> trackIdsByPath) {
             this.playlistId = playlistId == null ? "" : playlistId;
             this.addedTrackIds = addedTrackIds == null ? Collections.emptyList() : new ArrayList<>(addedTrackIds);
             this.totalTrackCount = totalTrackCount;
+            this.trackIdsByPath = trackIdsByPath == null ? Collections.emptyMap() : new HashMap<>(trackIdsByPath);
         }
     }
 }

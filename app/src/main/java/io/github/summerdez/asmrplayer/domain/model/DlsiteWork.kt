@@ -92,11 +92,11 @@ data class DlsiteWork @JvmOverloads constructor(
     }
 
     fun asDownloading(): DlsiteWork {
-        return copy(status = STATUS_DOWNLOADING, error = "", updatedAt = System.currentTimeMillis())
+        return copy(status = STATUS_DOWNLOADING, error = "")
     }
 
     fun asQueued(): DlsiteWork {
-        return copy(status = STATUS_QUEUED, error = "", updatedAt = System.currentTimeMillis())
+        return copy(status = STATUS_QUEUED, error = "")
     }
 
     fun asPaused(): DlsiteWork {

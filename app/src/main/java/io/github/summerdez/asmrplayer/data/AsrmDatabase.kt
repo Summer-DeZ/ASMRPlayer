@@ -29,9 +29,10 @@ import androidx.sqlite.db.SupportSQLiteDatabase
         TrackEntity::class,
         DlsiteWorkEntity::class,
         DlsiteContentEntity::class,
+        DlsiteDownloadQueueEntity::class,
         AppSettingEntity::class,
     ],
-    version = 5,
+    version = 6,
     exportSchema = true,
 )
 abstract class AsrmDatabase : RoomDatabase() {
@@ -50,7 +51,7 @@ abstract class AsrmDatabase : RoomDatabase() {
                     AsrmDatabase::class.java,
                     "asrmplayer.db",
                 )
-                    .addMigrations(MIGRATION_1_2, MIGRATION_2_3, MIGRATION_3_4, MIGRATION_4_5)
+                    .addMigrations(MIGRATION_1_2, MIGRATION_2_3, MIGRATION_3_4, MIGRATION_4_5, MIGRATION_5_6)
                     .build()
                     .also { instance = it }
             }
@@ -94,6 +95,30 @@ abstract class AsrmDatabase : RoomDatabase() {
                     """.trimIndent(),
                 )
                 db.execSQL("CREATE INDEX IF NOT EXISTS index_dlsite_contents_workId ON dlsite_contents(workId)")
+            }
+        }
+
+        private val MIGRATION_5_6 = object : Migration(5, 6) {
+            override fun migrate(db: SupportSQLiteDatabase) {
+                db.execSQL(
+                    """
+                    CREATE TABLE IF NOT EXISTS dlsite_download_queue (
+                        taskId TEXT NOT NULL,
+                        workId TEXT NOT NULL,
+                        optionIds TEXT NOT NULL,
+                        status TEXT NOT NULL,
+                        queueOrder INTEGER NOT NULL,
+                        createdAt INTEGER NOT NULL,
+                        startedAt INTEGER,
+                        updatedAt INTEGER NOT NULL,
+                        finishedAt INTEGER,
+                        errorMessage TEXT,
+                        PRIMARY KEY(taskId)
+                    )
+                    """.trimIndent(),
+                )
+                db.execSQL("CREATE INDEX IF NOT EXISTS index_dlsite_download_queue_workId ON dlsite_download_queue(workId)")
+                db.execSQL("CREATE INDEX IF NOT EXISTS index_dlsite_download_queue_status_queueOrder ON dlsite_download_queue(status, queueOrder)")
             }
         }
     }

@@ -42,4 +42,18 @@ class DlsiteWorkTest {
         assertEquals("file:///cover.jpg", downloaded.coverUri)
         assertEquals("已导入 3 首", downloaded.statusLabel())
     }
+
+    @Test
+    fun queuedAndDownloadingDoNotRefreshSortTimestamp() {
+        val original = DlsiteWork(
+            workId = "RJ432317",
+            title = "Title",
+            detailUrl = "",
+            downloadUrl = "",
+            updatedAt = 1234L,
+        )
+
+        assertEquals(1234L, original.asQueued().updatedAt)
+        assertEquals(1234L, original.asDownloading().updatedAt)
+    }
 }

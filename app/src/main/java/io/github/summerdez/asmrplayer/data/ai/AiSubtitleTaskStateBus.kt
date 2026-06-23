@@ -39,6 +39,14 @@ object AiSubtitleTaskStateBus {
         }
     }
 
+    fun publishTranscriptionDetails(target: SubtitleGenerationTarget, title: String, meta: String) {
+        publish(
+            taskFor(target.trackId) ?: AiSubtitleTaskState(target = target),
+        ) {
+            it.copy(transcriptionTitle = title, transcriptionMeta = meta)
+        }
+    }
+
     fun publishTranslating(target: SubtitleGenerationTarget, progress: Float, preview: List<SubtitleLine>) {
         publish(
             taskFor(target.trackId) ?: AiSubtitleTaskState(target = target),

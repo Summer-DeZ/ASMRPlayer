@@ -69,6 +69,9 @@ private enum class AiSettingField {
     DEEPSEEK_BASE_URL,
     DEEPSEEK_MODEL,
     DEEPSEEK_API_KEY,
+    REMOTE_WHISPER_BASE_URL,
+    REMOTE_WHISPER_MODEL,
+    REMOTE_WHISPER_TOKEN,
 }
 
 @OptIn(ExperimentalMaterial3Api::class)
@@ -283,6 +286,7 @@ fun ASMRPlayerApp(
                                 onShowUpdateDetails = settingsViewModel::showUpdateDetails,
                                 onCancelUpdateDownload = settingsViewModel::cancelUpdateDownload,
                                 onRetryUpdateDownload = settingsViewModel::retryUpdateDownload,
+                                onAiTranscriptionBackendSelected = settingsViewModel::setAiTranscriptionBackend,
                                 onAiEngineSelected = settingsViewModel::setAiTranslationEngine,
                                 onEditAiOllamaBaseUrl = { aiSettingField = AiSettingField.OLLAMA_BASE_URL },
                                 onEditAiOllamaModel = { aiSettingField = AiSettingField.OLLAMA_MODEL },
@@ -291,6 +295,10 @@ fun ASMRPlayerApp(
                                 onEditAiDeepSeekApiKey = { aiSettingField = AiSettingField.DEEPSEEK_API_KEY },
                                 onAiAdultContentTranslationAllowedChange = settingsViewModel::setAiAdultContentTranslationAllowed,
                                 onAiWhisperModelSelected = settingsViewModel::setAiWhisperModelId,
+                                onEditRemoteWhisperBaseUrl = { aiSettingField = AiSettingField.REMOTE_WHISPER_BASE_URL },
+                                onEditRemoteWhisperModel = { aiSettingField = AiSettingField.REMOTE_WHISPER_MODEL },
+                                onEditRemoteWhisperToken = { aiSettingField = AiSettingField.REMOTE_WHISPER_TOKEN },
+                                onTestRemoteWhisperConnection = settingsViewModel::testRemoteWhisperConnection,
                                 onDownloadWhisperModel = settingsViewModel::downloadWhisperModel,
                                 onCancelWhisperModelDownload = settingsViewModel::cancelWhisperModelDownload,
                                 onDeleteWhisperModel = settingsViewModel::deleteWhisperModel,
@@ -558,9 +566,12 @@ fun ASMRPlayerApp(
                     title = when (field) {
                         AiSettingField.OLLAMA_BASE_URL -> "Ollama 接口地址"
                         AiSettingField.OLLAMA_MODEL -> "Ollama 模型"
-                        AiSettingField.DEEPSEEK_BASE_URL -> "DeepSeek 接口地址"
-                        AiSettingField.DEEPSEEK_MODEL -> "DeepSeek 模型"
-                        AiSettingField.DEEPSEEK_API_KEY -> "DeepSeek API Key"
+                        AiSettingField.DEEPSEEK_BASE_URL -> "OpenAI 兼容接口地址"
+                        AiSettingField.DEEPSEEK_MODEL -> "OpenAI 兼容模型"
+                        AiSettingField.DEEPSEEK_API_KEY -> "OpenAI 兼容 API Key"
+                        AiSettingField.REMOTE_WHISPER_BASE_URL -> "远程 Whisper 地址"
+                        AiSettingField.REMOTE_WHISPER_MODEL -> "远程 Whisper 模型"
+                        AiSettingField.REMOTE_WHISPER_TOKEN -> "远程 Whisper Token"
                     },
                     initialValue = when (field) {
                         AiSettingField.OLLAMA_BASE_URL -> aiSettings.ollamaBaseUrl
@@ -568,6 +579,9 @@ fun ASMRPlayerApp(
                         AiSettingField.DEEPSEEK_BASE_URL -> aiSettings.deepSeekBaseUrl
                         AiSettingField.DEEPSEEK_MODEL -> aiSettings.deepSeekModel
                         AiSettingField.DEEPSEEK_API_KEY -> aiSettings.deepSeekApiKey
+                        AiSettingField.REMOTE_WHISPER_BASE_URL -> aiSettings.remoteWhisperBaseUrl
+                        AiSettingField.REMOTE_WHISPER_MODEL -> aiSettings.activeRemoteWhisperModel
+                        AiSettingField.REMOTE_WHISPER_TOKEN -> aiSettings.remoteWhisperToken
                     },
                     confirmText = "保存",
                     onDismiss = { aiSettingField = null },
@@ -578,6 +592,9 @@ fun ASMRPlayerApp(
                             AiSettingField.DEEPSEEK_BASE_URL -> settingsViewModel.setAiDeepSeekBaseUrl(value)
                             AiSettingField.DEEPSEEK_MODEL -> settingsViewModel.setAiDeepSeekModel(value)
                             AiSettingField.DEEPSEEK_API_KEY -> settingsViewModel.setAiDeepSeekApiKey(value)
+                            AiSettingField.REMOTE_WHISPER_BASE_URL -> settingsViewModel.setAiRemoteWhisperBaseUrl(value)
+                            AiSettingField.REMOTE_WHISPER_MODEL -> settingsViewModel.setAiRemoteWhisperModel(value)
+                            AiSettingField.REMOTE_WHISPER_TOKEN -> settingsViewModel.setAiRemoteWhisperToken(value)
                         }
                         aiSettingField = null
                     },

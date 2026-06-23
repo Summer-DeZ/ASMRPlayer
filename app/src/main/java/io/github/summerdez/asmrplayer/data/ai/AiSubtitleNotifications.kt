@@ -33,16 +33,16 @@ object AiSubtitleNotifications {
         return NotificationCompat.Builder(context, CHANNEL_ID)
             .setSmallIcon(R.drawable.ic_subtitles)
             .setContentTitle("正在生成 AI 字幕")
-            .setContentText("${stageText(state.stage)} · ${state.target.trackTitle}")
+            .setContentText("${stageText(state)} · ${state.target.trackTitle}")
             .setOngoing(state.stage != AiSubtitleStage.COMPLETED && state.stage != AiSubtitleStage.FAILED)
             .setOnlyAlertOnce(true)
             .setProgress(100, progress, state.stage == AiSubtitleStage.TRANSCRIBING && progress == 0)
             .build()
     }
 
-    private fun stageText(stage: AiSubtitleStage): String {
-        return when (stage) {
-            AiSubtitleStage.TRANSCRIBING -> "本机转写"
+    private fun stageText(state: AiSubtitleTaskState): String {
+        return when (state.stage) {
+            AiSubtitleStage.TRANSCRIBING -> state.transcriptionTitle
             AiSubtitleStage.TRANSLATING -> "翻译"
             AiSubtitleStage.BINDING -> "绑定字幕"
             AiSubtitleStage.COMPLETED -> "已完成"

@@ -9,6 +9,7 @@ import android.os.SystemClock
 import io.github.summerdez.asmrplayer.di.AppGraph
 import io.github.summerdez.asmrplayer.domain.model.AiSubtitleSettings
 import io.github.summerdez.asmrplayer.domain.model.AiSubtitleStage
+import io.github.summerdez.asmrplayer.domain.model.AiTranscriptionBackend
 import io.github.summerdez.asmrplayer.domain.model.SubtitleGenerationTarget
 import io.github.summerdez.asmrplayer.domain.model.SubtitleLine
 import io.github.summerdez.asmrplayer.domain.model.WhisperModelSpec
@@ -82,13 +83,19 @@ class AiSubtitleGenerationService : Service() {
             val container = AppGraph.container(this)
             val settings = container.settingsRepository.aiSubtitleSettings()
             val modelSpec = WhisperModelSpec.byId(settings.whisperModelId)
+            val transcriptionCacheKey = settings.transcriptionCacheKey
             val segmentCache = AiSubtitleSegmentCache(this)
             val translationCache = AiSubtitleTranslationCache(this)
             val sceneContextBuilder = SceneContextBuilder(this, translator)
+            AiSubtitleTaskStateBus.publishTranscriptionDetails(
+                target = target,
+                title = transcriptionTitle(settings),
+                meta = transcriptionMeta(settings),
+            )
             if (forceRegenerate) {
                 clearAiSubtitleCaches(target.trackId, segmentCache, translationCache, sceneContextBuilder)
             }
-            val sourceLines = segmentCache.load(target, modelSpec.id)
+            val sourceLines = segmentCache.load(target, transcriptionCacheKey)
                 ?.also { cachedLines ->
                     AiSubtitleTaskStateBus.publishTranscribing(
                         target = target,
@@ -97,7 +104,7 @@ class AiSubtitleGenerationService : Service() {
                     )
                     updateNotification(target, force = true)
                 }
-                ?: transcribeAndCache(target, modelSpec, segmentCache)
+                ?: transcribeAndCache(target, settings, modelSpec, transcriptionCacheKey, segmentCache)
             val monoFile = writeSubtitleFile(target, suffix = "ja", body = AiSubtitleVtt.mono(sourceLines))
             withContext(Dispatchers.Main) {
                 container.libraryRepository.setTrackSubtitle(
@@ -110,7 +117,7 @@ class AiSubtitleGenerationService : Service() {
             val translatedLines = translate(
                 target = target,
                 settings = settings,
-                whisperModelId = modelSpec.id,
+                whisperModelId = transcriptionCacheKey,
                 sourceLines = sourceLines,
                 translationCache = translationCache,
                 sceneContextBuilder = sceneContextBuilder,
@@ -150,21 +157,52 @@ class AiSubtitleGenerationService : Service() {
 
     private suspend fun transcribeAndCache(
         target: SubtitleGenerationTarget,
+        settings: AiSubtitleSettings,
         modelSpec: WhisperModelSpec,
+        transcriptionCacheKey: String,
         segmentCache: AiSubtitleSegmentCache,
     ): List<SubtitleLine> {
-        val modelState = WhisperModelRepository(this).state(modelSpec)
-        val transcriber = WhisperRuntimeTranscriber()
-        val sourceLines = transcriber.transcribeJapanese(
-            context = this,
-            target = target,
-            modelState = modelState,
-        ) { progress, preview ->
-            AiSubtitleTaskStateBus.publishTranscribing(target, progress, preview)
-            updateNotification(target)
+        val sourceLines = when (settings.transcriptionBackend) {
+            AiTranscriptionBackend.LOCAL -> {
+                val modelState = WhisperModelRepository(this).state(modelSpec)
+                val transcriber = WhisperRuntimeTranscriber()
+                transcriber.transcribeJapanese(
+                    context = this,
+                    target = target,
+                    modelState = modelState,
+                ) { progress, preview ->
+                    AiSubtitleTaskStateBus.publishTranscribing(target, progress, preview)
+                    updateNotification(target)
+                }
+            }
+            AiTranscriptionBackend.REMOTE -> {
+                val transcriber = RemoteWhisperTranscriber()
+                transcriber.transcribeJapanese(
+                    context = this,
+                    target = target,
+                    settings = settings,
+                ) { progress, preview ->
+                    AiSubtitleTaskStateBus.publishTranscribing(target, progress, preview)
+                    updateNotification(target)
+                }
+            }
         }
-        segmentCache.save(target, modelSpec.id, sourceLines)
+        segmentCache.save(target, transcriptionCacheKey, sourceLines)
         return sourceLines
+    }
+
+    private fun transcriptionTitle(settings: AiSubtitleSettings): String {
+        return when (settings.transcriptionBackend) {
+            AiTranscriptionBackend.LOCAL -> "本机转写（Whisper）"
+            AiTranscriptionBackend.REMOTE -> "远程转写（Whisper）"
+        }
+    }
+
+    private fun transcriptionMeta(settings: AiSubtitleSettings): String {
+        return when (settings.transcriptionBackend) {
+            AiTranscriptionBackend.LOCAL -> "音频不上传"
+            AiTranscriptionBackend.REMOTE -> "整段音频会上传到你配置的服务器"
+        }
     }
 
     private suspend fun translate(
