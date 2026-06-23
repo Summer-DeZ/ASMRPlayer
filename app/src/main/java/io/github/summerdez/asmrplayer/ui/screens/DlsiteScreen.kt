@@ -71,7 +71,6 @@ import androidx.compose.material.icons.filled.Download
 import androidx.compose.material.icons.filled.Edit
 import androidx.compose.material.icons.filled.FolderOpen
 import androidx.compose.material.icons.filled.LibraryMusic
-import androidx.compose.material.icons.filled.LockOpen
 import androidx.compose.material.icons.filled.MoreVert
 import androidx.compose.material.icons.filled.MusicNote
 import androidx.compose.material.icons.filled.Notifications
@@ -81,6 +80,7 @@ import androidx.compose.material.icons.filled.Settings
 import androidx.compose.material.icons.filled.SkipNext
 import androidx.compose.material.icons.filled.SkipPrevious
 import androidx.compose.material.icons.filled.Subtitles
+import androidx.compose.material.icons.filled.Sync
 import androidx.compose.material.icons.filled.Timer
 import androidx.compose.material.icons.filled.UploadFile
 import androidx.compose.material3.Button
@@ -585,7 +585,7 @@ private fun DlsiteAccountCard(
                 .padding(16.dp),
             verticalAlignment = Alignment.CenterVertically,
         ) {
-            DlsiteIconBadge(if (loggedIn) Icons.Default.LockOpen else Icons.AutoMirrored.Filled.Login, size = 64.dp)
+            DlsiteLogoBadge(size = 64.dp)
             Spacer(Modifier.width(14.dp))
             Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(4.dp)) {
                 Text(if (loggedIn) "已登录" else "未登录", fontWeight = FontWeight.ExtraBold, fontSize = 22.sp, color = tokens.label)
@@ -606,7 +606,7 @@ private fun DlsiteAccountCard(
             }
             Spacer(Modifier.width(12.dp))
             DlsiteIconActionButton(
-                icon = if (loggedIn) Icons.Default.Download else Icons.AutoMirrored.Filled.Login,
+                icon = if (loggedIn) Icons.Default.Sync else Icons.AutoMirrored.Filled.Login,
                 contentDescription = if (loggedIn) "同步" else "登录",
                 onClick = if (loggedIn) onSync else onLogin,
                 enabled = if (loggedIn) !busy else !busy,
@@ -767,6 +767,36 @@ private fun DlsiteSectionCaption(text: String) {
         fontWeight = FontWeight.Bold,
         modifier = Modifier.padding(start = 2.dp, top = 4.dp),
     )
+}
+
+@Composable
+private fun DlsiteLogoBadge(size: androidx.compose.ui.unit.Dp) {
+    val tokens = LocalAmberTokens.current
+    Surface(
+        shape = RoundedCornerShape(18.dp),
+        color = tokens.accentSoft,
+        border = BorderStroke(0.5.dp, tokens.separator),
+        modifier = Modifier.size(size),
+    ) {
+        Box(contentAlignment = Alignment.Center) {
+            Column(horizontalAlignment = Alignment.CenterHorizontally) {
+                Text(
+                    "DL",
+                    color = tokens.accent,
+                    fontSize = (size.value * 0.30f).sp,
+                    lineHeight = (size.value * 0.30f).sp,
+                    fontWeight = FontWeight.ExtraBold,
+                )
+                Text(
+                    "site",
+                    color = tokens.accent,
+                    fontSize = (size.value * 0.15f).sp,
+                    lineHeight = (size.value * 0.15f).sp,
+                    fontWeight = FontWeight.Bold,
+                )
+            }
+        }
+    }
 }
 
 @Composable
