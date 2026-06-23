@@ -3,6 +3,7 @@ package io.github.summerdez.asmrplayer.data.download;
 import static org.junit.Assert.assertEquals;
 
 import io.github.summerdez.asmrplayer.domain.model.DlsiteDownloadOption;
+import io.github.summerdez.asmrplayer.data.remote.DlsiteJsonParser;
 
 import java.io.File;
 import java.util.Arrays;
@@ -14,6 +15,34 @@ import java.util.Map;
 import org.junit.Test;
 
 public class DlsiteDownloadTaskTest {
+    @Test
+    public void progressTrackerAggregatesMultipleFileProgress() {
+        DlsiteJsonParser.ContentFile first = contentFile("01.mp3", 100L);
+        DlsiteJsonParser.ContentFile second = contentFile("02.mp3", 300L);
+        DlsiteDownloadOption option = new DlsiteDownloadOption("main", "Main", Arrays.asList(first, second));
+        DlsiteDownloadTask.DownloadProgressTracker tracker = new DlsiteDownloadTask.DownloadProgressTracker(
+                Collections.singletonList(option));
+
+        tracker.onFileProgress(option, first, 100L, 100L);
+        DlsiteDownloadTask.TaskProgress progress = tracker.onFileProgress(option, second, 150L, 300L);
+
+        assertEquals(250L, progress.bytesDownloaded);
+        assertEquals(400L, progress.totalBytes);
+    }
+
+    @Test
+    public void progressTrackerDoesNotPublishPercentWhenLengthIsUnknown() {
+        DlsiteJsonParser.ContentFile unknown = contentFile("unknown.mp3", 0L);
+        DlsiteDownloadOption option = new DlsiteDownloadOption("main", "Main", Collections.singletonList(unknown));
+        DlsiteDownloadTask.DownloadProgressTracker tracker = new DlsiteDownloadTask.DownloadProgressTracker(
+                Collections.singletonList(option));
+
+        DlsiteDownloadTask.TaskProgress progress = tracker.onFileProgress(option, unknown, 150L, 300L);
+
+        assertEquals(150L, progress.bytesDownloaded);
+        assertEquals(-1L, progress.totalBytes);
+    }
+
     @Test
     public void contentResultsMapTrackIdsAfterSingleImport() {
         File root = new File("/tmp/dlsite-import-test");
@@ -48,5 +77,15 @@ public class DlsiteDownloadTaskTest {
         assertEquals("bonus", results.get(1).optionId);
         assertEquals(Collections.singletonList("track-bonus-1"), results.get(1).trackIds);
         assertEquals(1, results.get(1).trackCount);
+    }
+
+    private static DlsiteJsonParser.ContentFile contentFile(String name, long lengthBytes) {
+        return new DlsiteJsonParser.ContentFile(
+                name,
+                name,
+                "optimized/" + name,
+                "",
+                name + ".vtt",
+                lengthBytes);
     }
 }

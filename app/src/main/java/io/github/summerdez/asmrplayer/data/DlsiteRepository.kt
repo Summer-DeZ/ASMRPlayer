@@ -34,6 +34,15 @@ interface DlsiteApi {
     fun downloadCover(work: DlsiteWork, outputDir: File): File
     @Throws(IOException::class)
     fun downloadWorkFiles(work: DlsiteWork, workDir: File, downloadOptionId: String): List<File>
+    @Throws(IOException::class)
+    fun downloadWorkFiles(
+        work: DlsiteWork,
+        workDir: File,
+        downloadOptionId: String,
+        progressListener: DlsiteContentProgressListener?,
+    ): List<File> {
+        return downloadWorkFiles(work, workDir, downloadOptionId)
+    }
 }
 
 interface DlsiteRepository {
@@ -548,5 +557,14 @@ private class DlsiteClientApi(private val client: DlsiteClient) : DlsiteApi {
 
     override fun downloadWorkFiles(work: DlsiteWork, workDir: File, downloadOptionId: String): List<File> {
         return client.downloadWorkFiles(work, workDir, downloadOptionId)
+    }
+
+    override fun downloadWorkFiles(
+        work: DlsiteWork,
+        workDir: File,
+        downloadOptionId: String,
+        progressListener: DlsiteContentProgressListener?,
+    ): List<File> {
+        return client.downloadWorkFiles(work, workDir, downloadOptionId, progressListener)
     }
 }

@@ -53,4 +53,12 @@ public final class DlsiteClient {
     public List<File> downloadWorkFiles(DlsiteWork work, File workDir, String downloadOptionId) throws IOException {
         return contentRemote.downloadWorkFiles(work, workDir, downloadOptionId);
     }
+
+    public List<File> downloadWorkFiles(
+            DlsiteWork work,
+            File workDir,
+            String downloadOptionId,
+            DlsiteContentProgressListener progressListener) throws IOException {
+        return contentRemote.downloadWorkFiles(work, workDir, downloadOptionId, progressListener);
+    }
 }

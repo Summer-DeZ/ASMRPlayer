@@ -61,6 +61,11 @@
             android:foregroundServiceType="dataSync" />
 
         <service
+            android:name=".data.update.AppUpdateDownloadService"
+            android:exported="false"
+            android:foregroundServiceType="dataSync" />
+
+        <service
             android:name=".data.ai.AiSubtitleGenerationService"
             android:exported="false"
             android:foregroundServiceType="dataSync" />

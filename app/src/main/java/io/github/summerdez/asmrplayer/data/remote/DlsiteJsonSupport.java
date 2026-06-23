@@ -101,6 +101,20 @@ final class DlsiteJsonSupport {
         return fallback;
     }
 
+    static long asLong(Object value, long fallback) {
+        if (value instanceof Number) {
+            return ((Number) value).longValue();
+        }
+        if (value instanceof String) {
+            try {
+                return Long.parseLong(((String) value).trim());
+            } catch (NumberFormatException ignored) {
+                return fallback;
+            }
+        }
+        return fallback;
+    }
+
     static Boolean asBooleanOrNull(Object value) {
         if (value instanceof Boolean) {
             return (Boolean) value;

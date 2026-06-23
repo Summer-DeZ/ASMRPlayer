@@ -452,14 +452,22 @@ public class DlsiteDownloadService extends Service {
         @Override
         public void onContentStarted(DlsiteDownloadOption option, File contentDir) {
             dlsiteRepository.markContentDownloading(request.workId, option.id);
+        }
+
+        @Override
+        public void onContentProgress(
+                DlsiteDownloadOption option,
+                DlsiteJsonParser.ContentFile contentFile,
+                long bytesDownloaded,
+                long totalBytes) {
             DlsiteDownloadStateBus.publishTask(
                     request.workId,
                     initialWork.displayTitle(),
                     DlsiteDownloadTaskStatus.DOWNLOADING,
                     "下载中",
                     0,
-                    0L,
-                    -1L,
+                    bytesDownloaded,
+                    totalBytes,
                     0L,
                     option.id,
                     option.title);

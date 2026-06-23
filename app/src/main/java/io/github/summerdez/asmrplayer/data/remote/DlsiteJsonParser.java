@@ -100,6 +100,7 @@ public final class DlsiteJsonParser {
         public final String contentPath;
         public final String subtitleContentPath;
         public final String subtitleName;
+        public final long lengthBytes;
 
         public ContentFile(
                 String displayPath,
@@ -107,11 +108,22 @@ public final class DlsiteJsonParser {
                 String contentPath,
                 String subtitleContentPath,
                 String subtitleName) {
+            this(displayPath, displayName, contentPath, subtitleContentPath, subtitleName, 0L);
+        }
+
+        public ContentFile(
+                String displayPath,
+                String displayName,
+                String contentPath,
+                String subtitleContentPath,
+                String subtitleName,
+                long lengthBytes) {
             this.displayPath = displayPath == null ? "" : displayPath;
             this.displayName = displayName == null ? "" : displayName;
             this.contentPath = contentPath == null ? "" : contentPath;
             this.subtitleContentPath = subtitleContentPath == null ? "" : subtitleContentPath;
             this.subtitleName = subtitleName == null ? "" : subtitleName;
+            this.lengthBytes = Math.max(0L, lengthBytes);
         }
     }
 }

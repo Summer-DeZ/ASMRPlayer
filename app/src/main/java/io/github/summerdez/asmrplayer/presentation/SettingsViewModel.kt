@@ -14,6 +14,10 @@ import io.github.summerdez.asmrplayer.data.ai.WhisperModelRepository
 import io.github.summerdez.asmrplayer.data.ai.WhisperModelState
 import io.github.summerdez.asmrplayer.data.SettingsRepository
 import io.github.summerdez.asmrplayer.data.update.AppUpdateCheckResult
+import io.github.summerdez.asmrplayer.data.update.AppUpdateDownloadService
+import io.github.summerdez.asmrplayer.data.update.AppUpdateDownloadState
+import io.github.summerdez.asmrplayer.data.update.AppUpdateDownloadStateBus
+import io.github.summerdez.asmrplayer.data.update.AppUpdateDownloadStateStatus
 import io.github.summerdez.asmrplayer.data.update.AppUpdateRelease
 import io.github.summerdez.asmrplayer.data.update.AppUpdateRepository
 import io.github.summerdez.asmrplayer.domain.model.AiSubtitleSettings
@@ -75,6 +79,7 @@ sealed class AppUpdateDownloadStatus {
         val release: AppUpdateRelease,
         val bytesDownloaded: Long = 0L,
         val totalBytes: Long = release.apkSizeBytes,
+        val speedBytesPerSecond: Long = 0L,
     ) : AppUpdateDownloadStatus()
 
     data class Failed(
@@ -82,6 +87,7 @@ sealed class AppUpdateDownloadStatus {
         val message: String,
         val bytesDownloaded: Long,
         val totalBytes: Long,
+        val speedBytesPerSecond: Long = 0L,
     ) : AppUpdateDownloadStatus()
 
     data class Downloaded(
@@ -115,9 +121,9 @@ class SettingsViewModel(
     val state: StateFlow<SettingsUiState> = _state.asStateFlow()
     private val _events = MutableSharedFlow<SettingsEvent>()
     val events: SharedFlow<SettingsEvent> = _events.asSharedFlow()
-    private var updateDownloadJob: Job? = null
     private var whisperModelDownloadJob: Job? = null
     private val remoteWhisperTranscriber = RemoteWhisperTranscriber()
+    private var promptedInstallApkPath: String = ""
 
     init {
         playbackCommands.connect()
@@ -134,6 +140,11 @@ class SettingsViewModel(
                         whisperModelState = whisperModelRepository.state(WhisperModelSpec.byId(settings.whisperModelId)),
                     )
                 }
+            }
+        }
+        viewModelScope.launch {
+            AppUpdateDownloadStateBus.state.collect { downloadState ->
+                applyUpdateDownloadState(downloadState)
             }
         }
     }
@@ -232,61 +243,42 @@ class SettingsViewModel(
             ?: (_state.value.updateStatus as? AppUpdateStatus.Available)?.release
             ?: (_state.value.updateDownloadStatus as? AppUpdateDownloadStatus.Failed)?.release
             ?: return
-        updateDownloadJob?.cancel()
-        updateDownloadJob = viewModelScope.launch {
-            _state.update {
-                it.copy(
-                    updateDialogRelease = null,
-                    updateDownloadStatus = AppUpdateDownloadStatus.Downloading(release),
-                )
-            }
-            try {
-                val apkFile = updateRepository.downloadReleaseApk(release) { bytesDownloaded, totalBytes ->
-                    _state.update {
-                        it.copy(
-                            updateDownloadStatus = AppUpdateDownloadStatus.Downloading(
-                                release = release,
-                                bytesDownloaded = bytesDownloaded,
-                                totalBytes = totalBytes,
-                            ),
-                        )
-                    }
-                }
-                val totalBytes = apkFile.length().takeIf { it > 0L } ?: release.apkSizeBytes
-                _state.update {
-                    it.copy(
-                        updateDownloadStatus = AppUpdateDownloadStatus.Downloaded(
-                            release = release,
-                            apkPath = apkFile.absolutePath,
-                            totalBytes = totalBytes,
-                        ),
-                        installPromptRelease = release,
-                    )
-                }
-            } catch (error: Throwable) {
-                if (error is CancellationException) {
-                    _state.update { it.copy(updateDownloadStatus = AppUpdateDownloadStatus.Idle) }
-                    return@launch
-                }
-                val currentDownload = _state.value.updateDownloadStatus as? AppUpdateDownloadStatus.Downloading
-                _state.update {
-                    it.copy(
-                        updateDownloadStatus = AppUpdateDownloadStatus.Failed(
-                            release = release,
-                            message = error.message ?: "下载更新失败",
-                            bytesDownloaded = currentDownload?.bytesDownloaded ?: 0L,
-                            totalBytes = currentDownload?.totalBytes ?: release.apkSizeBytes,
-                        ),
-                    )
-                }
-            }
+        if (_state.value.updateDownloadStatus is AppUpdateDownloadStatus.Downloading) {
+            return
+        }
+        val context = getApplication<Application>()
+        _state.update {
+            it.copy(
+                updateDialogRelease = null,
+                updateDownloadStatus = AppUpdateDownloadStatus.Downloading(release),
+            )
+        }
+        AppUpdateDownloadStateBus.publishDownloading(
+            release = release,
+            bytesDownloaded = 0L,
+            totalBytes = release.apkSizeBytes,
+        )
+        try {
+            ContextCompat.startForegroundService(
+                context,
+                AppUpdateDownloadService.downloadIntent(context, release),
+            )
+        } catch (error: Throwable) {
+            AppUpdateDownloadStateBus.publishFailed(
+                release = release,
+                message = error.message ?: "启动更新下载失败",
+            )
         }
     }
 
     fun cancelUpdateDownload() {
-        updateDownloadJob?.cancel()
-        updateDownloadJob = null
-        _state.update { it.copy(updateDownloadStatus = AppUpdateDownloadStatus.Idle) }
+        val context = getApplication<Application>()
+        try {
+            context.startService(AppUpdateDownloadService.cancelIntent(context))
+        } catch (_: Throwable) {
+            AppUpdateDownloadStateBus.publishCanceled()
+            _state.update { it.copy(updateDownloadStatus = AppUpdateDownloadStatus.Idle) }
+        }
     }
 
     fun retryUpdateDownload() {
@@ -393,6 +385,28 @@ class SettingsViewModel(
         _state.update { it.copy(remoteWhisperTestStatus = RemoteWhisperTestStatus.Idle) }
     }
 
+    private fun applyUpdateDownloadState(downloadState: AppUpdateDownloadState) {
+        val uiStatus = appUpdateDownloadUiStatus(downloadState)
+        _state.update { current ->
+            val installPromptRelease = when {
+                uiStatus is AppUpdateDownloadStatus.Downloaded &&
+                    uiStatus.apkPath != promptedInstallApkPath -> {
+                    promptedInstallApkPath = uiStatus.apkPath
+                    uiStatus.release
+                }
+                uiStatus is AppUpdateDownloadStatus.Downloading -> {
+                    promptedInstallApkPath = ""
+                    current.installPromptRelease
+                }
+                else -> current.installPromptRelease
+            }
+            current.copy(
+                updateDownloadStatus = uiStatus,
+                installPromptRelease = installPromptRelease,
+            )
+        }
+    }
+
     fun setAiAdultContentTranslationAllowed(value: Boolean) {
         settingsRepository.setAiAdultContentTranslationAllowed(value)
     }
@@ -440,6 +454,39 @@ class SettingsViewModel(
         val spec = WhisperModelSpec.byId(_state.value.aiSubtitleSettings.whisperModelId)
         whisperModelRepository.delete(spec)
         _state.update { it.copy(whisperModelState = whisperModelRepository.state(spec)) }
+    }
+}
+
+internal fun appUpdateDownloadUiStatus(downloadState: AppUpdateDownloadState): AppUpdateDownloadStatus {
+    val release = downloadState.release ?: return AppUpdateDownloadStatus.Idle
+    return when (downloadState.status) {
+        AppUpdateDownloadStateStatus.DOWNLOADING -> AppUpdateDownloadStatus.Downloading(
+            release = release,
+            bytesDownloaded = downloadState.bytesDownloaded,
+            totalBytes = downloadState.totalBytes,
+            speedBytesPerSecond = downloadState.speedBytesPerSecond,
+        )
+        AppUpdateDownloadStateStatus.DOWNLOADED -> {
+            if (downloadState.apkPath.isBlank()) {
+                AppUpdateDownloadStatus.Idle
+            } else {
+                AppUpdateDownloadStatus.Downloaded(
+                    release = release,
+                    apkPath = downloadState.apkPath,
+                    totalBytes = downloadState.totalBytes,
+                )
+            }
+        }
+        AppUpdateDownloadStateStatus.FAILED -> AppUpdateDownloadStatus.Failed(
+            release = release,
+            message = downloadState.error.ifBlank { "下载更新失败" },
+            bytesDownloaded = downloadState.bytesDownloaded,
+            totalBytes = downloadState.totalBytes,
+            speedBytesPerSecond = downloadState.speedBytesPerSecond,
+        )
+        AppUpdateDownloadStateStatus.IDLE,
+        AppUpdateDownloadStateStatus.CANCELED,
+        -> AppUpdateDownloadStatus.Idle
     }
 }
 

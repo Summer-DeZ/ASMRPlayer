@@ -113,6 +113,7 @@ final class DlsiteDownloadJsonParser {
             if (optimizedName.isEmpty()) {
                 continue;
             }
+            long lengthBytes = optimized == null ? 0L : DlsiteJsonSupport.asLong(optimized.get("length"), 0L);
             String displayName = name.isEmpty() ? optimizedName : name;
             String subtitleContentPath = "";
             String subtitleHash = audio == null ? "" : DlsiteJsonSupport.asString(audio.get("vtt")).trim();
@@ -124,7 +125,8 @@ final class DlsiteDownloadJsonParser {
                     displayName,
                     "optimized/" + optimizedName,
                     subtitleContentPath,
-                    displayName + ".vtt"));
+                    displayName + ".vtt",
+                    lengthBytes));
         }
     }
 

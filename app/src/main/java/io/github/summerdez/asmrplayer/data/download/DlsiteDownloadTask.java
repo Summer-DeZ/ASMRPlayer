@@ -88,6 +88,7 @@ public final class DlsiteDownloadTask {
         if (selectedOptions.isEmpty()) {
             throw new IOException("没有找到可下载的内容");
         }
+        DownloadProgressTracker progressTracker = new DownloadProgressTracker(selectedOptions);
 
         List<File> importedAudioFiles = new ArrayList<>();
         List<DownloadedContent> downloadedContents = new ArrayList<>();
@@ -98,17 +99,46 @@ public final class DlsiteDownloadTask {
             List<File> audioFiles;
             if (listener != null) {
                 listener.onContentStarted(option, contentDir);
+                TaskProgress progress = progressTracker.snapshot();
+                listener.onContentProgress(option, null, progress.bytesDownloaded, progress.totalBytes);
             }
             if (marker.isFile()) {
                 audioFiles = audioFilesIn(contentDir);
+                progressTracker.markOptionComplete(option, audioFiles);
+                if (listener != null) {
+                    TaskProgress progress = progressTracker.snapshot();
+                    listener.onContentProgress(option, null, progress.bytesDownloaded, progress.totalBytes);
+                }
             } else {
                 deleteRecursively(contentDir);
                 if (!contentDir.mkdirs() && !contentDir.isDirectory()) {
                     throw new IOException("无法创建内容目录");
                 }
-                audioFiles = dlsiteApi.downloadWorkFiles(importWork, contentDir, option.id);
+                audioFiles = dlsiteApi.downloadWorkFiles(
+                        importWork,
+                        contentDir,
+                        option.id,
+                        (contentFile, fileBytesDownloaded, fileTotalBytes) -> {
+                            TaskProgress progress = progressTracker.onFileProgress(
+                                    option,
+                                    contentFile,
+                                    fileBytesDownloaded,
+                                    fileTotalBytes);
+                            if (listener != null) {
+                                listener.onContentProgress(
+                                        option,
+                                        contentFile,
+                                        progress.bytesDownloaded,
+                                        progress.totalBytes);
+                            }
+                        });
                 if (audioFiles.isEmpty()) {
                     throw new IOException("没有找到可导入的音频");
+                }
+                progressTracker.markOptionComplete(option, audioFiles);
+                if (listener != null) {
+                    TaskProgress progress = progressTracker.snapshot();
+                    listener.onContentProgress(option, null, progress.bytesDownloaded, progress.totalBytes);
                 }
                 if (!marker.createNewFile() && !marker.isFile()) {
                     throw new IOException("无法写入内容下载标记");
@@ -484,7 +514,156 @@ public final class DlsiteDownloadTask {
     interface ContentListener {
         void onContentStarted(DlsiteDownloadOption option, File contentDir);
 
+        void onContentProgress(
+                DlsiteDownloadOption option,
+                DlsiteJsonParser.ContentFile contentFile,
+                long bytesDownloaded,
+                long totalBytes);
+
         void onContentFinished(DlsiteDownloadOption option, ContentResult result);
+    }
+
+    static final class TaskProgress {
+        final long bytesDownloaded;
+        final long totalBytes;
+
+        TaskProgress(long bytesDownloaded, long totalBytes) {
+            this.bytesDownloaded = Math.max(0L, bytesDownloaded);
+            this.totalBytes = totalBytes;
+        }
+    }
+
+    static final class DownloadProgressTracker {
+        private final List<ProgressEntry> entries = new ArrayList<>();
+        private final long totalBytes;
+
+        DownloadProgressTracker(List<DlsiteDownloadOption> options) {
+            long total = 0L;
+            boolean hasFiles = false;
+            boolean hasUnknownLength = false;
+            if (options != null) {
+                for (DlsiteDownloadOption option : options) {
+                    if (option == null) {
+                        continue;
+                    }
+                    for (DlsiteJsonParser.ContentFile file : option.audioFiles) {
+                        if (file == null) {
+                            continue;
+                        }
+                        hasFiles = true;
+                        long lengthBytes = file.lengthBytes;
+                        if (lengthBytes <= 0L) {
+                            hasUnknownLength = true;
+                        } else {
+                            total += lengthBytes;
+                        }
+                        entries.add(new ProgressEntry(option.id, file, lengthBytes));
+                    }
+                }
+            }
+            totalBytes = hasFiles && !hasUnknownLength && total > 0L ? total : -1L;
+        }
+
+        TaskProgress snapshot() {
+            return new TaskProgress(bytesDownloaded(), totalBytes);
+        }
+
+        TaskProgress onFileProgress(
+                DlsiteDownloadOption option,
+                DlsiteJsonParser.ContentFile contentFile,
+                long fileBytesDownloaded,
+                long fileTotalBytes) {
+            int index = indexOf(option, contentFile);
+            if (index >= 0) {
+                ProgressEntry entry = entries.get(index);
+                entry.bytesDownloaded = Math.max(entry.bytesDownloaded, Math.max(0L, fileBytesDownloaded));
+                entry.responseTotalBytes = Math.max(entry.responseTotalBytes, fileTotalBytes);
+            }
+            return snapshot();
+        }
+
+        void markOptionComplete(DlsiteDownloadOption option, List<File> audioFiles) {
+            if (option == null) {
+                return;
+            }
+            for (ProgressEntry entry : entries) {
+                if (!entry.optionId.equals(option.id)) {
+                    continue;
+                }
+                long completedBytes = entry.lengthBytes;
+                if (completedBytes <= 0L) {
+                    completedBytes = entry.responseTotalBytes;
+                }
+                if (completedBytes <= 0L && audioFiles != null) {
+                    completedBytes = matchingLocalLength(entry.contentFile, audioFiles);
+                }
+                if (completedBytes > 0L) {
+                    entry.bytesDownloaded = Math.max(entry.bytesDownloaded, completedBytes);
+                }
+            }
+        }
+
+        private long bytesDownloaded() {
+            long downloaded = 0L;
+            for (ProgressEntry entry : entries) {
+                long bytes = Math.max(0L, entry.bytesDownloaded);
+                if (totalBytes > 0L && entry.lengthBytes > 0L) {
+                    bytes = Math.min(bytes, entry.lengthBytes);
+                }
+                downloaded += bytes;
+            }
+            return totalBytes > 0L ? Math.min(downloaded, totalBytes) : downloaded;
+        }
+
+        private int indexOf(DlsiteDownloadOption option, DlsiteJsonParser.ContentFile contentFile) {
+            if (option == null || contentFile == null) {
+                return -1;
+            }
+            for (int i = 0; i < entries.size(); i++) {
+                ProgressEntry entry = entries.get(i);
+                if (entry.optionId.equals(option.id) && sameContentFile(entry.contentFile, contentFile)) {
+                    return i;
+                }
+            }
+            return -1;
+        }
+
+        private static boolean sameContentFile(
+                DlsiteJsonParser.ContentFile left,
+                DlsiteJsonParser.ContentFile right) {
+            return left != null
+                    && right != null
+                    && left.contentPath.equals(right.contentPath)
+                    && left.displayPath.equals(right.displayPath);
+        }
+
+        private static long matchingLocalLength(DlsiteJsonParser.ContentFile contentFile, List<File> audioFiles) {
+            if (contentFile == null || audioFiles == null) {
+                return 0L;
+            }
+            for (File audioFile : audioFiles) {
+                if (audioFile != null
+                        && audioFile.isFile()
+                        && audioFile.getName().equals(safeFileName(contentFile.displayName))) {
+                    return audioFile.length();
+                }
+            }
+            return 0L;
+        }
+    }
+
+    private static final class ProgressEntry {
+        final String optionId;
+        final DlsiteJsonParser.ContentFile contentFile;
+        final long lengthBytes;
+        long bytesDownloaded;
+        long responseTotalBytes = -1L;
+
+        ProgressEntry(String optionId, DlsiteJsonParser.ContentFile contentFile, long lengthBytes) {
+            this.optionId = optionId == null ? "" : optionId;
+            this.contentFile = contentFile;
+            this.lengthBytes = Math.max(0L, lengthBytes);
+        }
     }
 
     static final class ContentResult {

@@ -188,6 +188,7 @@ class DlsiteJsonParserTest {
         assertEquals(1, ziptree.audioFiles.size)
         assertEquals("本編/01 track.mp3", ziptree.audioFiles[0].displayPath)
         assertEquals("optimized/audio_optimized.mp3", ziptree.audioFiles[0].contentPath)
+        assertEquals(1234L, ziptree.audioFiles[0].lengthBytes)
         assertEquals("optimized/subtitle_optimized.vtt", ziptree.audioFiles[0].subtitleContentPath)
         assertEquals("01 track.mp3.vtt", ziptree.audioFiles[0].subtitleName)
     }

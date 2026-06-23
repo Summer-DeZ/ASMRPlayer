@@ -515,6 +515,11 @@ private fun UpdateDownloadCard(
         is AppUpdateDownloadStatus.Failed -> status.totalBytes
         AppUpdateDownloadStatus.Idle, is AppUpdateDownloadStatus.Downloaded -> 0L
     }
+    val speedBytesPerSecond = when (status) {
+        is AppUpdateDownloadStatus.Downloading -> status.speedBytesPerSecond
+        is AppUpdateDownloadStatus.Failed -> status.speedBytesPerSecond
+        AppUpdateDownloadStatus.Idle, is AppUpdateDownloadStatus.Downloaded -> 0L
+    }
     val progress = if (totalBytes > 0L) {
         (bytesDownloaded.toFloat() / totalBytes.toFloat()).coerceIn(0f, 1f)
     } else {
@@ -568,7 +573,8 @@ private fun UpdateDownloadCard(
             ) {
                 Text(
                     text = failureMessage ?: run {
-                        "${formatUpdateBytes(bytesDownloaded)} / ${formatUpdateBytes(totalBytes)}"
+                        "${formatUpdateBytes(speedBytesPerSecond)}/s · " +
+                            "${formatUpdateBytes(bytesDownloaded)} / ${formatUpdateBytes(totalBytes)}"
                     },
                     color = tokens.label2,
                     fontSize = 13.sp,

@@ -2,7 +2,9 @@ package io.github.summerdez.asmrplayer.data.update
 
 import java.io.File
 import java.io.IOException
+import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.Job
 import kotlinx.coroutines.currentCoroutineContext
 import kotlinx.coroutines.ensureActive
 import kotlinx.coroutines.withContext
@@ -18,6 +20,12 @@ data class AppUpdateRelease(
     val apkName: String,
     val apkDownloadUrl: String,
     val apkSizeBytes: Long,
+)
+
+data class AppUpdateDownloadProgress(
+    val bytesDownloaded: Long,
+    val totalBytes: Long,
+    val speedBytesPerSecond: Long,
 )
 
 data class GitHubReleasePayload(
@@ -42,7 +50,7 @@ interface AppUpdateRepository {
 
     suspend fun downloadReleaseApk(
         release: AppUpdateRelease,
-        onProgress: (bytesDownloaded: Long, totalBytes: Long) -> Unit,
+        onProgress: (AppUpdateDownloadProgress) -> Unit,
     ): File
 }
 
@@ -73,7 +81,7 @@ class GitHubAppUpdateRepository(
 
     override suspend fun downloadReleaseApk(
         release: AppUpdateRelease,
-        onProgress: (bytesDownloaded: Long, totalBytes: Long) -> Unit,
+        onProgress: (AppUpdateDownloadProgress) -> Unit,
     ): File = withContext(Dispatchers.IO) {
         val updatesDir = File(cacheDir, "updates").apply { mkdirs() }
         val target = File(updatesDir, "ASMRPlayer-${release.versionName}.apk")
@@ -86,40 +94,76 @@ class GitHubAppUpdateRepository(
             .url(release.apkDownloadUrl)
             .header("User-Agent", USER_AGENT)
             .build()
-        client.newCall(request).execute().use { response ->
-            if (!response.isSuccessful) {
-                throw IOException("下载更新失败：HTTP ${response.code}")
+        val call = client.newCall(request)
+        val coroutineContext = currentCoroutineContext()
+        val job = coroutineContext[Job]
+        val cancellationHandle = job?.invokeOnCompletion { cause ->
+            if (cause is CancellationException) {
+                call.cancel()
             }
-            val responseBody = response.body ?: throw IOException("下载更新失败：响应为空")
-            val totalBytes = responseBody.contentLength()
-                .takeIf { it > 0L }
-                ?: release.apkSizeBytes.takeIf { it > 0L }
-                ?: 0L
-            var bytesDownloaded = 0L
-            responseBody.byteStream().use { input ->
-                partial.outputStream().use { output ->
-                    val buffer = ByteArray(DEFAULT_BUFFER_SIZE)
-                    while (true) {
-                        currentCoroutineContext().ensureActive()
-                        val read = input.read(buffer)
-                        if (read == -1) {
-                            break
+        }
+        var canceled = false
+        try {
+            call.execute().use { response ->
+                if (!response.isSuccessful) {
+                    throw IOException("下载更新失败：HTTP ${response.code}")
+                }
+                val responseBody = response.body ?: throw IOException("下载更新失败：响应为空")
+                val totalBytes = responseBody.contentLength()
+                    .takeIf { it > 0L }
+                    ?: release.apkSizeBytes.takeIf { it > 0L }
+                    ?: 0L
+                var bytesDownloaded = 0L
+                val startedAtMs = System.currentTimeMillis()
+                responseBody.byteStream().use { input ->
+                    partial.outputStream().use { output ->
+                        val buffer = ByteArray(DEFAULT_BUFFER_SIZE)
+                        while (true) {
+                            coroutineContext.ensureActive()
+                            val read = input.read(buffer)
+                            if (read == -1) {
+                                break
+                            }
+                            output.write(buffer, 0, read)
+                            bytesDownloaded += read
+                            onProgress(
+                                AppUpdateDownloadProgress(
+                                    bytesDownloaded = bytesDownloaded,
+                                    totalBytes = totalBytes,
+                                    speedBytesPerSecond = averageSpeedBytesPerSecond(bytesDownloaded, startedAtMs),
+                                ),
+                            )
                         }
-                        output.write(buffer, 0, read)
-                        bytesDownloaded += read
-                        onProgress(bytesDownloaded, totalBytes)
                     }
                 }
+                coroutineContext.ensureActive()
+                if (target.exists()) {
+                    target.delete()
+                }
+                if (!partial.renameTo(target)) {
+                    partial.copyTo(target, overwrite = true)
+                    partial.delete()
+                }
+                onProgress(
+                    AppUpdateDownloadProgress(
+                        bytesDownloaded = bytesDownloaded,
+                        totalBytes = totalBytes,
+                        speedBytesPerSecond = averageSpeedBytesPerSecond(bytesDownloaded, startedAtMs),
+                    ),
+                )
+                target
             }
-            if (target.exists()) {
-                target.delete()
+        } catch (error: IOException) {
+            if (job?.isCancelled == true || call.isCanceled()) {
+                canceled = true
+                throw CancellationException("下载已取消").also { it.initCause(error) }
             }
-            if (!partial.renameTo(target)) {
-                partial.copyTo(target, overwrite = true)
+            throw error
+        } finally {
+            cancellationHandle?.dispose()
+            if (canceled || job?.isCancelled == true || call.isCanceled()) {
                 partial.delete()
             }
-            onProgress(bytesDownloaded, totalBytes)
-            target
         }
     }
 
@@ -127,6 +171,11 @@ class GitHubAppUpdateRepository(
         private const val LATEST_RELEASE_URL = "https://api.github.com/repos/Summer-DeZ/ASMRPlayer/releases/latest"
         private const val USER_AGENT = "ASMRPlayer-Android"
     }
+}
+
+private fun averageSpeedBytesPerSecond(bytesDownloaded: Long, startedAtMs: Long): Long {
+    val elapsedMs = (System.currentTimeMillis() - startedAtMs).coerceAtLeast(1L)
+    return ((bytesDownloaded.coerceAtLeast(0L) * 1000L) / elapsedMs).coerceAtLeast(0L)
 }
 
 object GitHubReleaseParser {

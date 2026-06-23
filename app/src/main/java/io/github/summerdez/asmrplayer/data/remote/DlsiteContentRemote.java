@@ -2,7 +2,6 @@ package io.github.summerdez.asmrplayer.data.remote;
 
 import android.text.TextUtils;
 
-import io.github.summerdez.asmrplayer.data.DlsiteDownloadStateBus;
 import io.github.summerdez.asmrplayer.domain.DlsiteDownloadPlanner;
 import io.github.summerdez.asmrplayer.domain.model.DlsiteDownloadOption;
 import io.github.summerdez.asmrplayer.domain.model.DlsiteWork;
@@ -63,8 +62,6 @@ final class DlsiteContentRemote {
             if (responseBody == null) {
                 throw new IOException("下载失败: 响应为空");
             }
-            long totalBytes = responseBody.contentLength();
-            long bytesDownloaded = 0L;
             try (InputStream input = new BufferedInputStream(responseBody.byteStream());
                  FileOutputStream output = new FileOutputStream(targetFile)) {
                 byte[] buffer = new byte[64 * 1024];
@@ -72,8 +69,6 @@ final class DlsiteContentRemote {
                 while ((count = input.read(buffer)) != -1) {
                     DlsiteRemoteFiles.throwIfInterrupted();
                     output.write(buffer, 0, count);
-                    bytesDownloaded += count;
-                    publishDownloadProgress(work, "下载中", bytesDownloaded, totalBytes);
                 }
             }
         }
@@ -89,6 +84,14 @@ final class DlsiteContentRemote {
     }
 
     List<File> downloadWorkFiles(DlsiteWork work, File workDir, String downloadOptionId) throws IOException {
+        return downloadWorkFiles(work, workDir, downloadOptionId, null);
+    }
+
+    List<File> downloadWorkFiles(
+            DlsiteWork work,
+            File workDir,
+            String downloadOptionId,
+            DlsiteContentProgressListener progressListener) throws IOException {
         String workId = work == null ? "" : work.workId;
         if (TextUtils.isEmpty(workId)) {
             throw new IOException("作品编号为空");
@@ -115,10 +118,11 @@ final class DlsiteContentRemote {
             DlsiteRemoteFiles.throwIfInterrupted();
             File audioFile = DlsiteRemoteFiles.uniqueTarget(DlsiteRemoteFiles.localFileFor(workDir, contentFile.displayPath), usedTargets);
             downloadSignedContentFile(
-                    work,
                     signedContentUrl(workId, contentFile.contentPath, revision, signParams),
                     audioFile,
-                    "application/octet-stream,audio/*,*/*");
+                    "application/octet-stream,audio/*,*/*",
+                    contentFile,
+                    progressListener);
             audioFiles.add(audioFile);
 
             if (!TextUtils.isEmpty(contentFile.subtitleContentPath)) {
@@ -229,7 +233,12 @@ final class DlsiteContentRemote {
         return "doujin";
     }
 
-    private void downloadSignedContentFile(DlsiteWork work, String url, File targetFile, String accept) throws IOException {
+    private void downloadSignedContentFile(
+            String url,
+            File targetFile,
+            String accept,
+            DlsiteJsonParser.ContentFile contentFile,
+            DlsiteContentProgressListener progressListener) throws IOException {
         File parent = targetFile.getParentFile();
         if (parent != null && !parent.exists() && !parent.mkdirs()) {
             throw new IOException("无法创建下载目录");
@@ -269,7 +278,9 @@ final class DlsiteContentRemote {
                     DlsiteRemoteFiles.throwIfInterrupted();
                     output.write(buffer, 0, count);
                     bytesDownloaded += count;
-                    publishDownloadProgress(work, "下载中", bytesDownloaded, totalBytes);
+                    if (progressListener != null) {
+                        progressListener.onProgress(contentFile, bytesDownloaded, totalBytes);
+                    }
                 }
             }
         }
@@ -362,18 +373,6 @@ final class DlsiteContentRemote {
                 null,
                 DlsiteRemoteConstants.CONNECT_TIMEOUT_MS,
                 DlsiteRemoteConstants.READ_TIMEOUT_MS);
-    }
-
-    private void publishDownloadProgress(DlsiteWork work, String status, long bytesDownloaded, long totalBytes) {
-        if (work == null || TextUtils.isEmpty(work.workId)) {
-            return;
-        }
-        DlsiteDownloadStateBus.publishProgress(
-                work.workId,
-                work.displayTitle(),
-                status,
-                bytesDownloaded,
-                totalBytes);
     }
 
 }
