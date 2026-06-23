@@ -166,19 +166,30 @@ fun LibraryTab(
     onMoveTrack: (Playlist, TrackItem) -> Unit,
     subtitleTasks: Map<String, AiSubtitleTaskState> = emptyMap(),
 ) {
-    val tokens = LocalAmberTokens.current
+    val listeningPlaylist = state.playlists.firstOrNull { it.id == playbackState.playlistId }
+    val listeningIndex = playbackState.playlistIndex
+    val listeningTrack = listeningPlaylist?.tracks?.getOrNull(listeningIndex)
     LazyColumn(
         modifier = Modifier.fillMaxSize(),
-        contentPadding = PaddingValues(start = 16.dp, end = 16.dp, top = 8.dp, bottom = 24.dp),
+        contentPadding = PaddingValues(start = 16.dp, end = 16.dp, top = 4.dp, bottom = 28.dp),
         verticalArrangement = Arrangement.spacedBy(0.dp),
     ) {
-        item {
-            Text(
-                "播放列表",
-                fontSize = 22.sp,
-                fontWeight = FontWeight.Bold,
-                color = tokens.label,
-                modifier = Modifier.padding(bottom = 8.dp),
+        if (listeningPlaylist != null && listeningTrack != null) {
+            item(key = "continue-listening") {
+                ContinueListeningCard(
+                    playlist = listeningPlaylist,
+                    track = listeningTrack,
+                    trackIndex = listeningIndex,
+                    playbackState = playbackState,
+                    onClick = { onTrackClicked(listeningPlaylist, listeningIndex) },
+                    modifier = Modifier.padding(bottom = 26.dp),
+                )
+            }
+        }
+        item(key = "playlist-section") {
+            SectionTitle(
+                text = "播放列表",
+                modifier = Modifier.padding(bottom = 10.dp),
             )
         }
         items(state.playlists, key = { it.id }) { playlist ->
@@ -207,6 +218,98 @@ fun LibraryTab(
 }
 
 @Composable
+private fun SectionTitle(text: String, modifier: Modifier = Modifier) {
+    val tokens = LocalAmberTokens.current
+    Text(
+        text = text,
+        fontSize = 22.sp,
+        fontWeight = FontWeight.Bold,
+        color = tokens.label2,
+        modifier = modifier,
+    )
+}
+
+@Composable
+private fun ContinueListeningCard(
+    playlist: Playlist,
+    track: TrackItem,
+    trackIndex: Int,
+    playbackState: PlaybackUiState,
+    onClick: () -> Unit,
+    modifier: Modifier = Modifier,
+) {
+    val tokens = LocalAmberTokens.current
+    val shape = RoundedCornerShape(24.dp)
+    Surface(
+        modifier = modifier
+            .fillMaxWidth()
+            .height(154.dp)
+            .clickable(onClick = onClick),
+        shape = shape,
+        color = Color.Transparent,
+        border = BorderStroke(1.dp, tokens.separator),
+        shadowElevation = 6.dp,
+    ) {
+        Box(
+            modifier = Modifier
+                .clip(shape)
+                .background(Brush.linearGradient(listOf(tokens.cardTop, tokens.cardBottom)))
+                .padding(18.dp),
+        ) {
+            Row(verticalAlignment = Alignment.CenterVertically, modifier = Modifier.fillMaxSize()) {
+                CoverBox(playlist.coverUri, Modifier.size(98.dp))
+                Spacer(Modifier.width(18.dp))
+                Column(Modifier.weight(1f), verticalArrangement = Arrangement.Center) {
+                    Text(
+                        "继续收听",
+                        color = tokens.accent,
+                        fontSize = 15.sp,
+                        fontWeight = FontWeight.Bold,
+                    )
+                    Text(
+                        playlist.name,
+                        color = tokens.label,
+                        fontSize = 22.sp,
+                        lineHeight = 28.sp,
+                        fontWeight = FontWeight.ExtraBold,
+                        maxLines = 2,
+                        overflow = TextOverflow.Ellipsis,
+                        modifier = Modifier.padding(top = 6.dp),
+                    )
+                    Row(verticalAlignment = Alignment.CenterVertically, modifier = Modifier.padding(top = 9.dp)) {
+                        EqualizerIcon(Modifier.size(width = 24.dp, height = 18.dp))
+                        Spacer(Modifier.width(8.dp))
+                        Text(
+                            "第 ${trackIndex + 1} 首 · ${formatDuration(track.durationMs)}",
+                            color = tokens.label2,
+                            fontSize = 15.sp,
+                            maxLines = 1,
+                            overflow = TextOverflow.Ellipsis,
+                        )
+                    }
+                }
+                Spacer(Modifier.width(12.dp))
+                Surface(
+                    modifier = Modifier.size(70.dp),
+                    shape = CircleShape,
+                    color = tokens.accent,
+                    shadowElevation = 8.dp,
+                ) {
+                    Box(contentAlignment = Alignment.Center) {
+                        Icon(
+                            if (playbackState.isPlaying) Icons.Default.Pause else Icons.Default.PlayArrow,
+                            contentDescription = "继续播放",
+                            tint = tokens.bg,
+                            modifier = Modifier.size(36.dp),
+                        )
+                    }
+                }
+            }
+        }
+    }
+}
+
+@Composable
 fun PlaylistRow(
     playlist: Playlist,
     selected: Boolean,
@@ -227,24 +330,34 @@ fun PlaylistRow(
 ) {
     var menuExpanded by remember { mutableStateOf(false) }
     val tokens = LocalAmberTokens.current
+    val shape = RoundedCornerShape(22.dp)
     Surface(
+        modifier = Modifier.padding(bottom = 12.dp),
         color = Color.Transparent,
+        shape = shape,
+        border = BorderStroke(1.dp, tokens.separator),
+        shadowElevation = if (selected) 4.dp else 1.dp,
     ) {
-        Column {
+        Column(
+            Modifier
+                .clip(shape)
+                .background(Brush.linearGradient(listOf(tokens.cardTop, tokens.cardBottom)))
+        ) {
             Row(
                 modifier = Modifier
                     .fillMaxWidth()
                     .clickable(onClick = onPlaylistClicked)
-                    .padding(vertical = 10.dp),
+                    .padding(start = 16.dp, end = 8.dp, top = 14.dp, bottom = 14.dp),
                 verticalAlignment = Alignment.CenterVertically,
             ) {
-                CoverBox(playlist.coverUri, Modifier.size(54.dp).clickable(onClick = onCoverClicked))
-                Spacer(Modifier.width(14.dp))
+                CoverBox(playlist.coverUri, Modifier.size(70.dp).clickable(onClick = onCoverClicked))
+                Spacer(Modifier.width(16.dp))
                 Column(Modifier.weight(1f)) {
                     Text(
                         playlist.name,
-                        fontSize = 17.sp,
-                        fontWeight = FontWeight.Medium,
+                        fontSize = 19.sp,
+                        lineHeight = 24.sp,
+                        fontWeight = FontWeight.Bold,
                         color = animateColorAsState(
                             targetValue = if (selected && expanded) tokens.accent else tokens.label,
                             animationSpec = tween(220),
@@ -254,9 +367,10 @@ fun PlaylistRow(
                         overflow = TextOverflow.Ellipsis,
                     )
                     Text(
-                        "播放列表 · ${playlist.tracks.size} 首",
+                        "${playlist.tracks.size} 首" + if (selected && playbackState.playlistId == playlist.id) " · 正在播放" else "",
                         color = tokens.label2,
-                        fontSize = 13.sp,
+                        fontSize = 15.sp,
+                        modifier = Modifier.padding(top = 4.dp),
                     )
                 }
                 Box {
@@ -291,18 +405,18 @@ fun PlaylistRow(
                     }
                 }
             }
-            HorizontalDivider(color = tokens.separator, modifier = Modifier.padding(start = 68.dp))
             AnimatedVisibility(
                 visible = expanded,
                 enter = expandVertically(animationSpec = tween(260)) + fadeIn(animationSpec = tween(200)),
                 exit = shrinkVertically(animationSpec = tween(220)) + fadeOut(animationSpec = tween(150)),
             ) {
                 Column {
+                    HorizontalDivider(color = tokens.separator, modifier = Modifier.padding(start = 102.dp))
                     if (playlist.tracks.isEmpty()) {
                         Text(
                             "这个播放列表还没有音频",
                             color = tokens.label2,
-                            modifier = Modifier.padding(start = 14.dp, top = 16.dp, bottom = 16.dp),
+                            modifier = Modifier.padding(start = 18.dp, top = 16.dp, bottom = 16.dp),
                         )
                     } else {
                         playlist.tracks.forEachIndexed { index, track ->
@@ -318,8 +432,10 @@ fun PlaylistRow(
                                 onDelete = { onDeleteTrack(track, index) },
                                 onMove = { onMoveTrack(track) },
                                 aiSubtitleTask = subtitleTasks[track.id],
+                                modifier = Modifier.padding(start = 6.dp, end = 4.dp),
                             )
                         }
+                        Spacer(Modifier.height(6.dp))
                     }
                 }
             }
@@ -340,104 +456,144 @@ fun TrackRow(
     onDelete: () -> Unit,
     onMove: () -> Unit = {},
     aiSubtitleTask: AiSubtitleTaskState? = null,
+    modifier: Modifier = Modifier,
+    showArtwork: Boolean = false,
+    showMenu: Boolean = true,
+    showDragHandle: Boolean = false,
+    elevated: Boolean = false,
 ) {
     var menuExpanded by remember { mutableStateOf(false) }
     val tokens = LocalAmberTokens.current
-    Row(
-        modifier = Modifier
+    val rowShape = RoundedCornerShape(18.dp)
+    Surface(
+        modifier = modifier
             .fillMaxWidth()
-            .clickable(onClick = onClick)
-            .padding(start = 14.dp, end = 4.dp, top = 9.dp, bottom = 9.dp),
-        verticalAlignment = Alignment.CenterVertically,
+            .padding(vertical = if (elevated) 6.dp else 2.dp),
+        color = if (active || elevated) tokens.accentSoft.copy(alpha = if (active) 0.62f else 0.28f) else Color.Transparent,
+        shape = rowShape,
+        border = if (active || elevated) BorderStroke(1.dp, tokens.separator) else null,
     ) {
-        Column(Modifier.weight(1f)) {
-            Text(
-                track.title,
-                maxLines = 1,
-                overflow = TextOverflow.Ellipsis,
-                fontSize = 17.sp,
-                fontWeight = FontWeight.Medium,
-                color = if (active) tokens.accent else tokens.label,
-            )
-            Text(
-                aiSubtitleTask?.let { aiSubtitleStatusText(it) }
-                    ?: subtitle
-                    ?: if (track.subtitleTitle.isEmpty()) "未绑定字幕" else track.subtitleTitle,
-                color = if (aiSubtitleTask?.stage == AiSubtitleStage.FAILED) tokens.accent2 else tokens.label2,
-                maxLines = 1,
-                overflow = TextOverflow.Ellipsis,
-                fontSize = 13.sp,
-            )
-            if (aiSubtitleTask != null && aiSubtitleTask.stage != AiSubtitleStage.COMPLETED) {
-                Box(
-                    modifier = Modifier
-                        .padding(top = 5.dp)
-                        .fillMaxWidth()
-                        .height(3.dp)
-                        .background(tokens.label3.copy(alpha = 0.22f), RoundedCornerShape(3.dp)),
-                ) {
+        Row(
+            modifier = Modifier
+                .fillMaxWidth()
+                .clickable(onClick = onClick)
+                .padding(start = if (showArtwork) 10.dp else 14.dp, end = 4.dp, top = 10.dp, bottom = 10.dp),
+            verticalAlignment = Alignment.CenterVertically,
+        ) {
+            if (showArtwork) {
+                CoverBox("", Modifier.size(if (active || elevated) 58.dp else 52.dp))
+                Spacer(Modifier.width(14.dp))
+            }
+            Column(Modifier.weight(1f)) {
+                Text(
+                    track.title,
+                    maxLines = 1,
+                    overflow = TextOverflow.Ellipsis,
+                    fontSize = if (showArtwork) 19.sp else 17.sp,
+                    lineHeight = if (showArtwork) 24.sp else 22.sp,
+                    fontWeight = if (active) FontWeight.Bold else FontWeight.Medium,
+                    color = if (active) tokens.accent else tokens.label,
+                )
+                Text(
+                    aiSubtitleTask?.let { aiSubtitleStatusText(it) }
+                        ?: subtitle
+                        ?: if (track.subtitleTitle.isEmpty()) "未绑定字幕" else track.subtitleTitle,
+                    color = if (aiSubtitleTask?.stage == AiSubtitleStage.FAILED) tokens.accent2 else tokens.label2,
+                    maxLines = 1,
+                    overflow = TextOverflow.Ellipsis,
+                    fontSize = if (showArtwork) 15.sp else 13.sp,
+                    modifier = Modifier.padding(top = 3.dp),
+                )
+                if (aiSubtitleTask != null && aiSubtitleTask.stage != AiSubtitleStage.COMPLETED) {
                     Box(
                         modifier = Modifier
-                            .fillMaxHeight()
-                            .fillMaxWidth(aiSubtitleTask.overallProgress)
-                            .background(
-                                if (aiSubtitleTask.stage == AiSubtitleStage.FAILED) tokens.accent2 else tokens.accent,
-                                RoundedCornerShape(3.dp),
-                            ),
-                    )
+                            .padding(top = 7.dp)
+                            .fillMaxWidth()
+                            .height(4.dp)
+                            .background(tokens.label3.copy(alpha = 0.22f), RoundedCornerShape(3.dp)),
+                    ) {
+                        Box(
+                            modifier = Modifier
+                                .fillMaxHeight()
+                                .fillMaxWidth(aiSubtitleTask.overallProgress.coerceIn(0f, 1f))
+                                .background(
+                                    if (aiSubtitleTask.stage == AiSubtitleStage.FAILED) tokens.accent2 else tokens.accent,
+                                    RoundedCornerShape(3.dp),
+                                ),
+                        )
+                    }
+                }
+            }
+            if (active) {
+                EqualizerIcon(Modifier.size(width = 24.dp, height = 18.dp))
+                Spacer(Modifier.width(8.dp))
+            }
+            IconButton(onClick = onSubtitle) {
+                Icon(Icons.Default.Subtitles, contentDescription = "字幕", tint = tokens.label3)
+            }
+            if (showDragHandle) {
+                DragHandleIcon(Modifier.padding(end = 10.dp).size(width = 28.dp, height = 22.dp))
+            }
+            if (showMenu) {
+                Box {
+                    IconButton(onClick = { menuExpanded = true }) {
+                        Icon(Icons.Default.MoreVert, contentDescription = "曲目操作", tint = tokens.label3)
+                    }
+                    DropdownMenu(expanded = menuExpanded, onDismissRequest = { menuExpanded = false }) {
+                        DropdownMenuItem(
+                            text = { Text(if (aiSubtitleTask == null) "自动生成字幕" else "查看生成进度") },
+                            leadingIcon = { Icon(Icons.Default.Subtitles, null) },
+                            onClick = {
+                                menuExpanded = false
+                                if (aiSubtitleTask == null) {
+                                    onGenerateSubtitle()
+                                } else {
+                                    onOpenSubtitleGeneration()
+                                }
+                            },
+                        )
+                        DropdownMenuItem(
+                            text = { Text("重命名") },
+                            leadingIcon = { Icon(Icons.Default.Edit, null) },
+                            onClick = {
+                                menuExpanded = false
+                                onRename()
+                            },
+                        )
+                        DropdownMenuItem(
+                            text = { Text("移动到...") },
+                            leadingIcon = { Icon(Icons.AutoMirrored.Filled.QueueMusic, null) },
+                            onClick = {
+                                menuExpanded = false
+                                onMove()
+                            },
+                        )
+                        DropdownMenuItem(
+                            text = { Text("删除") },
+                            leadingIcon = { Icon(Icons.Default.Delete, null) },
+                            onClick = {
+                                menuExpanded = false
+                                onDelete()
+                            },
+                        )
+                    }
                 }
             }
         }
-        if (active) {
-            EqualizerIcon(Modifier.size(width = 24.dp, height = 18.dp))
-            Spacer(Modifier.width(6.dp))
-        }
-        IconButton(onClick = onSubtitle) {
-            Icon(Icons.Default.Subtitles, contentDescription = "字幕", tint = tokens.label3)
-        }
-        Box {
-            IconButton(onClick = { menuExpanded = true }) {
-                Icon(Icons.Default.MoreVert, contentDescription = "曲目操作", tint = tokens.label3)
-            }
-            DropdownMenu(expanded = menuExpanded, onDismissRequest = { menuExpanded = false }) {
-                DropdownMenuItem(
-                    text = { Text(if (aiSubtitleTask == null) "自动生成字幕" else "查看生成进度") },
-                    leadingIcon = { Icon(Icons.Default.Subtitles, null) },
-                    onClick = {
-                        menuExpanded = false
-                        if (aiSubtitleTask == null) {
-                            onGenerateSubtitle()
-                        } else {
-                            onOpenSubtitleGeneration()
-                        }
-                    },
-                )
-                DropdownMenuItem(
-                    text = { Text("重命名") },
-                    leadingIcon = { Icon(Icons.Default.Edit, null) },
-                    onClick = {
-                        menuExpanded = false
-                        onRename()
-                    },
-                )
-                DropdownMenuItem(
-                    text = { Text("移动到...") },
-                    leadingIcon = { Icon(Icons.AutoMirrored.Filled.QueueMusic, null) },
-                    onClick = {
-                        menuExpanded = false
-                        onMove()
-                    },
-                )
-                DropdownMenuItem(
-                    text = { Text("删除") },
-                    leadingIcon = { Icon(Icons.Default.Delete, null) },
-                    onClick = {
-                        menuExpanded = false
-                        onDelete()
-                    },
-                )
-            }
-        }
+    }
+}
+
+@Composable
+private fun DragHandleIcon(modifier: Modifier = Modifier) {
+    val tokens = LocalAmberTokens.current
+    Canvas(modifier) {
+        val stroke = 2.4.dp.toPx()
+        val startX = size.width * 0.18f
+        val endX = size.width * 0.82f
+        val y1 = size.height * 0.36f
+        val y2 = size.height * 0.64f
+        drawLine(tokens.label3, Offset(startX, y1), Offset(endX, y1), stroke, StrokeCap.Round)
+        drawLine(tokens.label3, Offset(startX, y2), Offset(endX, y2), stroke, StrokeCap.Round)
     }
 }
 
@@ -452,22 +608,60 @@ fun AiSubtitleGenerationSheet(
     onDismiss: () -> Unit,
 ) {
     val tokens = LocalAmberTokens.current
-    Column(Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 14.dp)) {
-        Row(verticalAlignment = Alignment.CenterVertically) {
-            Column(Modifier.weight(1f)) {
-                Text("生成字幕", color = tokens.label, fontSize = 22.sp, fontWeight = FontWeight.Bold)
-                Text(task.target.trackTitle, color = tokens.label2, fontSize = 13.sp, maxLines = 1, overflow = TextOverflow.Ellipsis)
-            }
-            TextButton(onClick = onDismiss) {
-                Text("关闭", color = tokens.accent)
+    Column(
+        Modifier
+            .fillMaxWidth()
+            .navigationBarsPadding()
+            .padding(start = 16.dp, end = 16.dp, top = 8.dp, bottom = 18.dp),
+    ) {
+        Box(
+            Modifier
+                .padding(bottom = 18.dp)
+                .size(width = 44.dp, height = 5.dp)
+                .clip(RoundedCornerShape(3.dp))
+                .background(tokens.label3.copy(alpha = 0.55f))
+                .align(Alignment.CenterHorizontally),
+        )
+        Row(verticalAlignment = Alignment.Top) {
+            Text("生成字幕", color = tokens.label, fontSize = 30.sp, fontWeight = FontWeight.ExtraBold, modifier = Modifier.weight(1f))
+            Surface(
+                modifier = Modifier.size(48.dp).clickable(onClick = onDismiss),
+                shape = CircleShape,
+                color = tokens.label.copy(alpha = 0.08f),
+            ) {
+                Box(contentAlignment = Alignment.Center) {
+                    Icon(Icons.Default.Close, contentDescription = "关闭", tint = tokens.label2, modifier = Modifier.size(26.dp))
+                }
             }
         }
-        Spacer(Modifier.height(14.dp))
+        Row(verticalAlignment = Alignment.CenterVertically, modifier = Modifier.padding(top = 22.dp, bottom = 20.dp)) {
+            CoverBox("", Modifier.size(56.dp))
+            Spacer(Modifier.width(14.dp))
+            Column(Modifier.weight(1f)) {
+                Text(
+                    task.target.trackTitle,
+                    color = tokens.label,
+                    fontSize = 21.sp,
+                    fontWeight = FontWeight.Bold,
+                    maxLines = 2,
+                    overflow = TextOverflow.Ellipsis,
+                )
+                Text(
+                    task.target.contextTitle.ifBlank { "当前曲目" },
+                    color = tokens.label2,
+                    fontSize = 15.sp,
+                    maxLines = 1,
+                    overflow = TextOverflow.Ellipsis,
+                    modifier = Modifier.padding(top = 4.dp),
+                )
+            }
+        }
         AiSubtitleStageCard(
             index = 1,
             title = task.transcriptionTitle,
             active = task.stage == AiSubtitleStage.TRANSCRIBING,
             done = task.transcribeProgress >= 1f,
+            failed = task.stage == AiSubtitleStage.FAILED && task.transcribeProgress < 1f,
             progress = task.transcribeProgress,
             meta = task.transcriptionMeta,
         )
@@ -477,17 +671,28 @@ fun AiSubtitleGenerationSheet(
             title = "上下文翻译",
             active = task.stage == AiSubtitleStage.TRANSLATING,
             done = task.translateProgress >= 1f,
+            failed = task.stage == AiSubtitleStage.FAILED && task.transcribeProgress >= 1f,
             progress = task.translateProgress,
             meta = "逐句 JSON 对齐生成中文字幕",
         )
         if (task.error.isNotBlank()) {
             Spacer(Modifier.height(12.dp))
-            Text(task.error, color = tokens.accent2, fontSize = 13.sp)
+            Surface(color = tokens.accent2Soft, shape = RoundedCornerShape(16.dp), modifier = Modifier.fillMaxWidth()) {
+                Text(
+                    task.error,
+                    color = tokens.accent2,
+                    fontSize = 15.sp,
+                    fontWeight = FontWeight.Medium,
+                    modifier = Modifier.padding(14.dp),
+                )
+            }
         }
         if (task.previewLines.isNotEmpty()) {
             Spacer(Modifier.height(14.dp))
             Surface(color = tokens.card, shape = RoundedCornerShape(16.dp), modifier = Modifier.fillMaxWidth()) {
                 Column(Modifier.padding(16.dp)) {
+                    Icon(Icons.Default.Subtitles, contentDescription = null, tint = tokens.accent, modifier = Modifier.size(22.dp))
+                    Spacer(Modifier.height(10.dp))
                     task.previewLines.takeLast(2).forEach { line ->
                         Text(
                             line.translatedText.ifBlank { line.sourceText },
@@ -500,32 +705,38 @@ fun AiSubtitleGenerationSheet(
                 }
             }
         }
-        Spacer(Modifier.height(16.dp))
-        Row(horizontalArrangement = Arrangement.spacedBy(10.dp), modifier = Modifier.fillMaxWidth()) {
+        Spacer(Modifier.height(18.dp))
+        Column(horizontalAlignment = Alignment.CenterHorizontally, modifier = Modifier.fillMaxWidth()) {
             when (task.stage) {
                 AiSubtitleStage.FAILED -> {
-                    TextButton(onClick = onRetry) {
-                        val label = if (task.transcribeProgress >= 1f) "重试翻译" else "重试生成"
-                        Text(label, color = tokens.accent)
-                    }
-                    TextButton(onClick = onRegenerate) {
-                        Text("重新分片并翻译", color = tokens.accent)
-                    }
-                    TextButton(onClick = onCancel) {
-                        Text("取消", color = tokens.accent2)
+                    val label = if (task.transcribeProgress >= 1f) "重试翻译" else "重试生成"
+                    PrimarySheetAction(label, onRetry)
+                    Row(horizontalArrangement = Arrangement.spacedBy(46.dp), modifier = Modifier.padding(top = 16.dp)) {
+                        TextButton(onClick = onRegenerate) {
+                            Text("重新分片", color = tokens.label3)
+                        }
+                        TextButton(onClick = onCancel) {
+                            Text("取消", color = tokens.accent2)
+                        }
                     }
                 }
                 AiSubtitleStage.COMPLETED -> {
-                    TextButton(onClick = onRegenerate) {
-                        Text("重新分片并翻译", color = tokens.accent)
-                    }
-                    TextButton(onClick = onDismiss) {
-                        Text("完成", color = tokens.accent)
+                    PrimarySheetAction("完成", onDismiss)
+                    TextButton(onClick = onRegenerate, modifier = Modifier.padding(top = 10.dp)) {
+                        Text("重新分片", color = tokens.label3)
                     }
                 }
                 else -> {
                     TextButton(onClick = if (task.stage == AiSubtitleStage.PAUSED) onResume else onPause) {
-                        Text(if (task.stage == AiSubtitleStage.PAUSED) "继续生成" else "暂停生成", color = tokens.accent)
+                        Column(horizontalAlignment = Alignment.CenterHorizontally) {
+                            Icon(
+                                if (task.stage == AiSubtitleStage.PAUSED) Icons.Default.PlayArrow else Icons.Default.Pause,
+                                contentDescription = null,
+                                tint = tokens.accent2,
+                                modifier = Modifier.size(34.dp),
+                            )
+                            Text(if (task.stage == AiSubtitleStage.PAUSED) "继续" else "暂停", color = tokens.accent2, fontSize = 16.sp)
+                        }
                     }
                     TextButton(onClick = onCancel) {
                         Text("取消", color = tokens.accent2)
@@ -542,31 +753,63 @@ private fun AiSubtitleStageCard(
     title: String,
     active: Boolean,
     done: Boolean,
+    failed: Boolean,
     progress: Float,
     meta: String,
 ) {
     val tokens = LocalAmberTokens.current
     Surface(color = tokens.card, shape = RoundedCornerShape(16.dp), modifier = Modifier.fillMaxWidth()) {
-        Column(Modifier.padding(16.dp)) {
+        Column(Modifier.padding(18.dp)) {
             Row(verticalAlignment = Alignment.CenterVertically) {
                 Box(
                     modifier = Modifier
-                        .size(26.dp)
+                        .size(52.dp)
                         .background(
-                            if (done) tokens.accent else tokens.label3.copy(alpha = 0.22f),
+                            when {
+                                failed -> tokens.accent2Soft
+                                done -> tokens.accent
+                                active -> tokens.accentSoft
+                                else -> tokens.label3.copy(alpha = 0.12f)
+                            },
                             CircleShape,
                         ),
                     contentAlignment = Alignment.Center,
                 ) {
-                    Text(if (done) "✓" else index.toString(), color = if (done) tokens.bg else tokens.accent, fontSize = 13.sp, fontWeight = FontWeight.Bold)
+                    Text(
+                        when {
+                            done -> "✓"
+                            failed -> "!"
+                            else -> index.toString()
+                        },
+                        color = when {
+                            done -> tokens.bg
+                            failed -> tokens.accent2
+                            else -> tokens.accent
+                        },
+                        fontSize = 20.sp,
+                        fontWeight = FontWeight.Bold,
+                    )
                 }
-                Spacer(Modifier.width(11.dp))
-                Text(title, color = tokens.label, fontSize = 17.sp, fontWeight = FontWeight.SemiBold, modifier = Modifier.weight(1f))
-                Text(if (active || done) "${(progress * 100).toInt()}%" else "等待", color = if (active || done) tokens.accent else tokens.label3, fontSize = 13.sp)
+                Spacer(Modifier.width(16.dp))
+                Text(title, color = tokens.label, fontSize = 22.sp, fontWeight = FontWeight.Bold, modifier = Modifier.weight(1f))
+                Text(
+                    when {
+                        failed -> "失败"
+                        active || done -> "${(progress * 100).toInt()}%"
+                        else -> "等待"
+                    },
+                    color = when {
+                        failed -> tokens.accent2
+                        active || done -> tokens.accent
+                        else -> tokens.label3
+                    },
+                    fontSize = 18.sp,
+                    fontWeight = FontWeight.Bold,
+                )
             }
             Box(
                 modifier = Modifier
-                    .padding(top = 11.dp)
+                    .padding(top = 18.dp)
                     .fillMaxWidth()
                     .height(5.dp)
                     .background(tokens.label3.copy(alpha = 0.22f), RoundedCornerShape(3.dp)),
@@ -575,10 +818,27 @@ private fun AiSubtitleStageCard(
                     modifier = Modifier
                         .fillMaxHeight()
                         .fillMaxWidth(progress.coerceIn(0f, 1f))
-                        .background(tokens.accent, RoundedCornerShape(3.dp)),
+                        .background(if (failed) tokens.accent2 else tokens.accent, RoundedCornerShape(3.dp)),
                 )
             }
-            Text(meta, color = tokens.label2, fontSize = 13.sp, modifier = Modifier.padding(top = 9.dp))
+            Text(meta, color = tokens.label2, fontSize = 14.sp, modifier = Modifier.padding(top = 10.dp))
+        }
+    }
+}
+
+@Composable
+private fun PrimarySheetAction(text: String, onClick: () -> Unit) {
+    val tokens = LocalAmberTokens.current
+    Surface(
+        modifier = Modifier
+            .fillMaxWidth()
+            .height(58.dp)
+            .clickable(onClick = onClick),
+        shape = RoundedCornerShape(18.dp),
+        color = tokens.accent,
+    ) {
+        Box(contentAlignment = Alignment.Center) {
+            Text(text, color = tokens.bg, fontSize = 20.sp, fontWeight = FontWeight.Bold)
         }
     }
 }

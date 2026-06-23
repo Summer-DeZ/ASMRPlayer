@@ -156,42 +156,92 @@ fun QueueContent(
     onTrackClicked: (Playlist, Int) -> Unit,
 ) {
     val tokens = LocalAmberTokens.current
-    Column(Modifier.fillMaxWidth().padding(start = 16.dp, end = 16.dp, bottom = 24.dp)) {
+    Column(
+        Modifier
+            .fillMaxWidth()
+            .navigationBarsPadding()
+            .padding(start = 16.dp, end = 16.dp, bottom = 24.dp),
+    ) {
         Box(
             Modifier
-                .padding(top = 2.dp, bottom = 14.dp)
-                .size(width = 38.dp, height = 5.dp)
+                .padding(top = 2.dp, bottom = 22.dp)
+                .size(width = 44.dp, height = 5.dp)
                 .clip(RoundedCornerShape(3.dp))
-                .background(tokens.label3)
+                .background(tokens.label3.copy(alpha = 0.55f))
                 .align(Alignment.CenterHorizontally),
         )
         Text(
             "播放队列",
-            fontSize = 22.sp,
-            fontWeight = FontWeight.Bold,
+            fontSize = 30.sp,
+            fontWeight = FontWeight.ExtraBold,
             color = tokens.label,
         )
         Text(
             "${playlist?.name ?: "未选择播放列表"} · 顺序播放",
             color = tokens.label2,
-            fontSize = 13.sp,
-            modifier = Modifier.padding(top = 2.dp, bottom = 14.dp),
+            fontSize = 15.sp,
+            modifier = Modifier.padding(top = 6.dp, bottom = 20.dp),
         )
         if (playlist == null || playlist.tracks.isEmpty()) {
             Text("队列为空", color = tokens.label2, modifier = Modifier.padding(vertical = 20.dp))
             return
         }
-        playlist.tracks.forEachIndexed { index, track ->
+        val currentIndex = if (playbackState.playlistId == playlist.id) {
+            playbackState.playlistIndex.takeIf { it in playlist.tracks.indices } ?: -1
+        } else {
+            -1
+        }
+        if (currentIndex >= 0) {
+            QueueSectionLabel("正在播放")
+            TrackRow(
+                track = playlist.tracks[currentIndex],
+                subtitle = playlist.name,
+                active = true,
+                onClick = { onTrackClicked(playlist, currentIndex) },
+                onSubtitle = {},
+                onRename = {},
+                onDelete = {},
+                onMove = {},
+                showArtwork = true,
+                showMenu = false,
+                elevated = true,
+                modifier = Modifier.padding(bottom = 20.dp),
+            )
+        }
+        QueueSectionLabel("接下来")
+        val nextIndices = if (currentIndex >= 0) {
+            (currentIndex + 1 until playlist.tracks.size).toList() + (0 until currentIndex).toList()
+        } else {
+            playlist.tracks.indices.toList()
+        }
+        nextIndices.forEach { index ->
+            val track = playlist.tracks[index]
             TrackRow(
                 track = track,
                 subtitle = formatDuration(track.durationMs),
-                active = playbackState.playlistId == playlist.id && playbackState.playlistIndex == index,
+                active = false,
                 onClick = { onTrackClicked(playlist, index) },
                 onSubtitle = {},
                 onRename = {},
                 onDelete = {},
                 onMove = {},
+                showArtwork = true,
+                showMenu = false,
+                showDragHandle = true,
+                modifier = Modifier.padding(vertical = 4.dp),
             )
         }
     }
+}
+
+@Composable
+private fun QueueSectionLabel(text: String) {
+    val tokens = LocalAmberTokens.current
+    Text(
+        text,
+        color = tokens.label2,
+        fontSize = 18.sp,
+        fontWeight = FontWeight.Bold,
+        modifier = Modifier.padding(start = 2.dp, bottom = 12.dp),
+    )
 }

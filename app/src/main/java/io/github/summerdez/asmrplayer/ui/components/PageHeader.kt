@@ -160,50 +160,63 @@ fun PageHeader(
     onImportAudio: () -> Unit,
     onImportFolder: () -> Unit,
 ) {
+    val tokens = LocalAmberTokens.current
     Row(
         modifier = Modifier
             .fillMaxWidth()
             .statusBarsPadding()
-            .padding(start = 16.dp, top = 14.dp, end = 8.dp, bottom = 8.dp),
+            .padding(start = 16.dp, top = 14.dp, end = 12.dp, bottom = 8.dp),
         verticalAlignment = Alignment.CenterVertically,
     ) {
         Text(
             text = title,
-            color = MaterialTheme.colorScheme.onBackground,
+            color = tokens.label,
             fontSize = 34.sp,
-            fontWeight = FontWeight.Bold,
+            fontWeight = FontWeight.ExtraBold,
             maxLines = 1,
             overflow = TextOverflow.Ellipsis,
             modifier = Modifier.weight(1f),
         )
         if (showMenu) {
             Box {
-                IconButton(onClick = { onMenuExpandedChange(true) }) {
-                    Icon(Icons.Default.MoreVert, contentDescription = "菜单", tint = MaterialTheme.colorScheme.primary)
+                Surface(
+                    modifier = Modifier
+                        .size(40.dp)
+                        .noRippleClickable { onMenuExpandedChange(true) },
+                    shape = CircleShape,
+                    color = tokens.glass,
+                    border = BorderStroke(0.5.dp, tokens.separator),
+                    tonalElevation = 0.dp,
+                    shadowElevation = 4.dp,
+                ) {
+                    Box(contentAlignment = Alignment.Center) {
+                        Icon(Icons.Default.MoreVert, contentDescription = "菜单", tint = tokens.label, modifier = Modifier.size(22.dp))
+                    }
                 }
                 DropdownMenu(
                     expanded = menuExpanded,
                     onDismissRequest = { onMenuExpandedChange(false) },
+                    modifier = Modifier.background(tokens.card),
                 ) {
                     DropdownMenuItem(
-                        text = { Text("新建播放列表") },
-                        leadingIcon = { Icon(Icons.Default.Add, null) },
+                        text = { Text("新建播放列表", color = tokens.label) },
+                        leadingIcon = { Icon(Icons.Default.Add, null, tint = tokens.accent) },
                         onClick = {
                             onMenuExpandedChange(false)
                             onCreatePlaylist()
                         },
                     )
                     DropdownMenuItem(
-                        text = { Text("导入媒体") },
-                        leadingIcon = { Icon(Icons.Default.UploadFile, null) },
+                        text = { Text("导入媒体", color = tokens.label) },
+                        leadingIcon = { Icon(Icons.Default.UploadFile, null, tint = tokens.accent) },
                         onClick = {
                             onMenuExpandedChange(false)
                             onImportAudio()
                         },
                     )
                     DropdownMenuItem(
-                        text = { Text("从文件夹导入") },
-                        leadingIcon = { Icon(Icons.Default.FolderOpen, null) },
+                        text = { Text("从文件夹导入", color = tokens.label) },
+                        leadingIcon = { Icon(Icons.Default.FolderOpen, null, tint = tokens.accent) },
                         onClick = {
                             onMenuExpandedChange(false)
                             onImportFolder()
@@ -212,8 +225,7 @@ fun PageHeader(
                 }
             }
         } else {
-            Spacer(Modifier.width(48.dp))
+            Spacer(Modifier.width(40.dp))
         }
     }
 }
-

@@ -1,6 +1,7 @@
 package io.github.summerdez.asmrplayer
 
 import io.github.summerdez.asmrplayer.data.update.AppVersionComparator
+import io.github.summerdez.asmrplayer.data.update.AppUpdateCacheCleaner
 import io.github.summerdez.asmrplayer.data.update.GitHubReleaseAssetPayload
 import io.github.summerdez.asmrplayer.data.update.GitHubReleaseParser
 import io.github.summerdez.asmrplayer.data.update.GitHubReleasePayload
@@ -44,5 +45,71 @@ class AppUpdateRepositoryTest {
         assertTrue(AppVersionComparator.isNewer("1.1.0+3", "1.0.9"))
         assertFalse(AppVersionComparator.isNewer("1.0.1", "1.0.1"))
         assertFalse(AppVersionComparator.isNewer("1.0.0", "1.0.1"))
+    }
+
+    @Test
+    fun downloadCacheCleanupKeepsTargetVersionAndDeletesOldApks() {
+        val deleteFiles = AppUpdateCacheCleaner.filesToDeleteBeforeDownload(
+            fileNames = listOf(
+                "ASMRPlayer-1.3.2.apk",
+                "ASMRPlayer-1.3.3.apk",
+                "notes.txt",
+            ),
+            targetVersionName = "1.3.3",
+        )
+
+        assertTrue(deleteFiles.contains("ASMRPlayer-1.3.2.apk"))
+        assertFalse(deleteFiles.contains("ASMRPlayer-1.3.3.apk"))
+        assertFalse(deleteFiles.contains("notes.txt"))
+    }
+
+    @Test
+    fun downloadCacheCleanupDeletesPartialFiles() {
+        val deleteFiles = AppUpdateCacheCleaner.filesToDeleteBeforeDownload(
+            fileNames = listOf(
+                "ASMRPlayer-1.3.3.apk.part",
+                "ASMRPlayer-1.3.2.apk.part",
+                "download.tmp",
+                "other.part",
+            ),
+            targetVersionName = "1.3.3",
+        )
+
+        assertTrue(deleteFiles.contains("ASMRPlayer-1.3.3.apk.part"))
+        assertTrue(deleteFiles.contains("ASMRPlayer-1.3.2.apk.part"))
+        assertTrue(deleteFiles.contains("other.part"))
+        assertFalse(deleteFiles.contains("download.tmp"))
+    }
+
+    @Test
+    fun installedVersionCleanupDeletesCurrentAndOlderApksButKeepsNewerApk() {
+        val deleteFiles = AppUpdateCacheCleaner.filesToDeleteForInstalledVersion(
+            fileNames = listOf(
+                "ASMRPlayer-1.3.2.apk",
+                "ASMRPlayer-1.3.3.apk",
+                "ASMRPlayer-1.3.4.apk",
+            ),
+            installedVersionName = "1.3.3",
+        )
+
+        assertTrue(deleteFiles.contains("ASMRPlayer-1.3.2.apk"))
+        assertTrue(deleteFiles.contains("ASMRPlayer-1.3.3.apk"))
+        assertFalse(deleteFiles.contains("ASMRPlayer-1.3.4.apk"))
+    }
+
+    @Test
+    fun installedVersionCleanupDeletesAllPartialFiles() {
+        val deleteFiles = AppUpdateCacheCleaner.filesToDeleteForInstalledVersion(
+            fileNames = listOf(
+                "ASMRPlayer-1.3.4.apk.part",
+                "ASMRPlayer-1.3.3.apk.part",
+                "ASMRPlayer-1.3.4.apk",
+            ),
+            installedVersionName = "1.3.3",
+        )
+
+        assertTrue(deleteFiles.contains("ASMRPlayer-1.3.4.apk.part"))
+        assertTrue(deleteFiles.contains("ASMRPlayer-1.3.3.apk.part"))
+        assertFalse(deleteFiles.contains("ASMRPlayer-1.3.4.apk"))
     }
 }

@@ -152,9 +152,13 @@ import kotlin.math.max
 
 @Composable
 fun GroupedCard(content: @Composable ColumnScope.() -> Unit) {
+    val tokens = LocalAmberTokens.current
     Surface(
         shape = RoundedCornerShape(16.dp),
-        color = LocalAmberTokens.current.card,
+        color = tokens.cardTop,
+        border = BorderStroke(0.5.dp, tokens.separator),
+        tonalElevation = 0.dp,
+        shadowElevation = 2.dp,
         modifier = Modifier.fillMaxWidth(),
     ) {
         Column(content = content)
@@ -166,7 +170,8 @@ fun GroupFooter(text: String) {
     Text(
         text = text,
         color = LocalAmberTokens.current.label2,
-        fontSize = 13.sp,
+        fontSize = 12.sp,
+        lineHeight = 17.sp,
         modifier = Modifier.padding(start = 16.dp, end = 16.dp, top = 8.dp),
     )
 }
@@ -177,18 +182,29 @@ fun SettingsSwitchRow(title: String, checked: Boolean, onClick: () -> Unit) {
     Row(
         modifier = Modifier
             .fillMaxWidth()
-            .height(52.dp)
+            .height(64.dp)
             .clickable(onClick = onClick)
-            .padding(start = 16.dp, end = 14.dp),
+            .padding(start = 15.dp, end = 14.dp),
         verticalAlignment = Alignment.CenterVertically,
     ) {
-        Text(title, fontSize = 17.sp, color = tokens.label, modifier = Modifier.weight(1f))
+        SettingLeadingIcon(icon = settingIconFor(title), alt = title.contains("成人"))
+        Spacer(Modifier.width(13.dp))
+        Text(
+            title,
+            fontSize = 16.sp,
+            color = tokens.label,
+            maxLines = 1,
+            overflow = TextOverflow.Ellipsis,
+            modifier = Modifier.weight(1f),
+        )
         Switch(
             checked = checked,
             onCheckedChange = { onClick() },
             colors = SwitchDefaults.colors(
                 checkedTrackColor = tokens.switchOn,
                 uncheckedTrackColor = tokens.switchOff,
+                checkedThumbColor = Color.White,
+                uncheckedThumbColor = Color.White,
                 uncheckedBorderColor = Color.Transparent,
                 checkedBorderColor = Color.Transparent,
             ),
@@ -207,13 +223,28 @@ fun SettingsPermissionRow(
     Row(
         modifier = Modifier
             .fillMaxWidth()
-            .height(52.dp)
+            .height(64.dp)
             .clickable(onClick = onClick)
-            .padding(start = 16.dp, end = 14.dp),
+            .padding(start = 15.dp, end = 14.dp),
         verticalAlignment = Alignment.CenterVertically,
     ) {
-        Text(title, fontSize = 17.sp, color = tokens.label, modifier = Modifier.weight(1f))
-        Text(value, fontSize = 17.sp, color = if (valueAccent) tokens.accent else tokens.label2)
+        SettingLeadingIcon(icon = settingIconFor(title))
+        Spacer(Modifier.width(13.dp))
+        Text(
+            title,
+            fontSize = 16.sp,
+            color = tokens.label,
+            maxLines = 1,
+            overflow = TextOverflow.Ellipsis,
+            modifier = Modifier.weight(1f),
+        )
+        Text(
+            value,
+            fontSize = 15.sp,
+            color = if (valueAccent) tokens.accent else tokens.accent,
+            maxLines = 1,
+            overflow = TextOverflow.Ellipsis,
+        )
         Spacer(Modifier.width(8.dp))
         Icon(Icons.AutoMirrored.Filled.OpenInNew, contentDescription = null, tint = tokens.label3, modifier = Modifier.size(18.dp))
     }
@@ -226,24 +257,56 @@ fun ThemeChip(text: String, selected: Boolean, onClick: () -> Unit) {
         modifier = Modifier
             .height(44.dp)
             .noRippleClickable(onClick = onClick),
-        shape = RoundedCornerShape(16.dp),
-        color = if (selected) tokens.accentSoft else Color.Transparent,
-        border = BorderStroke(1.dp, if (selected) tokens.accent else tokens.label3),
+        shape = RoundedCornerShape(13.dp),
+        color = if (selected) tokens.cardTop else Color.Transparent,
+        border = BorderStroke(0.5.dp, if (selected) tokens.separator else tokens.separator.copy(alpha = 0.75f)),
+        tonalElevation = 0.dp,
+        shadowElevation = if (selected) 2.dp else 0.dp,
     ) {
         Box(
             modifier = Modifier
                 .fillMaxHeight()
-                .padding(horizontal = 18.dp),
+                .padding(horizontal = 16.dp),
             contentAlignment = Alignment.Center,
         ) {
             Text(
                 text,
                 color = if (selected) tokens.accent else tokens.label2,
-                fontSize = 15.sp,
+                fontSize = 14.sp,
                 fontWeight = if (selected) FontWeight.SemiBold else FontWeight.Medium,
                 maxLines = 1,
+                overflow = TextOverflow.Ellipsis,
             )
         }
     }
 }
 
+@Composable
+private fun SettingLeadingIcon(icon: ImageVector, alt: Boolean = false) {
+    val tokens = LocalAmberTokens.current
+    Surface(
+        modifier = Modifier.size(32.dp),
+        shape = RoundedCornerShape(9.dp),
+        color = if (alt) tokens.accent2Soft else tokens.accentSoft,
+    ) {
+        Box(contentAlignment = Alignment.Center) {
+            Icon(
+                icon,
+                contentDescription = null,
+                tint = if (alt) tokens.accent2 else tokens.accent,
+                modifier = Modifier.size(18.dp),
+            )
+        }
+    }
+}
+
+private fun settingIconFor(title: String): ImageVector {
+    return when {
+        title.contains("锁定") -> Icons.Default.LockOpen
+        title.contains("通知") -> Icons.Default.Notifications
+        title.contains("权限") -> Icons.AutoMirrored.Filled.OpenInNew
+        title.contains("字幕") -> Icons.Default.Subtitles
+        title.contains("成人") -> Icons.Default.LockOpen
+        else -> Icons.Default.Settings
+    }
+}

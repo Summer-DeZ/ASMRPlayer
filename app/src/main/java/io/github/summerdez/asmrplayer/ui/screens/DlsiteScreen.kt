@@ -166,37 +166,18 @@ fun DlsiteTab(
     val tokens = LocalAmberTokens.current
     LazyColumn(
         modifier = Modifier.fillMaxSize(),
-        contentPadding = PaddingValues(16.dp),
-        verticalArrangement = Arrangement.spacedBy(10.dp),
+        contentPadding = PaddingValues(start = 16.dp, top = 4.dp, end = 16.dp, bottom = 16.dp),
+        verticalArrangement = Arrangement.spacedBy(12.dp),
     ) {
         item {
-            Surface(shape = RoundedCornerShape(16.dp), color = tokens.card) {
-                Column(Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(10.dp)) {
-                    Text(if (state.loggedIn) "DLsite 已登录" else "DLsite 未登录", fontWeight = FontWeight.SemiBold, color = tokens.label)
-                    Text(
-                        "上次同步：${formatSyncTime(state.lastSyncMs)}",
-                        color = tokens.label2,
-                        fontSize = 12.sp,
-                    )
-                    Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                        Button(onClick = onLogin, enabled = !state.busy) {
-                            Icon(Icons.AutoMirrored.Filled.Login, null)
-                            Spacer(Modifier.width(6.dp))
-                            Text("登录")
-                        }
-                        Button(onClick = onSync, enabled = state.loggedIn && !state.busy) {
-                            Icon(Icons.Default.Download, null)
-                            Spacer(Modifier.width(6.dp))
-                            Text(if (state.busy) "处理中" else "同步")
-                        }
-                        TextButton(onClick = onLogout, enabled = state.loggedIn && !state.busy) {
-                            Icon(Icons.AutoMirrored.Filled.Logout, null)
-                            Spacer(Modifier.width(6.dp))
-                            Text("退出")
-                        }
-                    }
-                }
-            }
+            DlsiteAccountCard(
+                loggedIn = state.loggedIn,
+                busy = state.busy,
+                lastSyncMs = state.lastSyncMs,
+                onLogin = onLogin,
+                onLogout = onLogout,
+                onSync = onSync,
+            )
         }
         if (state.downloadState.summary.visible) {
             item {
@@ -208,26 +189,38 @@ fun DlsiteTab(
                 )
             }
         }
+        item {
+            DlsiteSectionCaption("作品")
+        }
         if (state.works.isEmpty()) {
             item {
-                Text(
-                    "同步后会在这里显示已购买作品",
-                    color = tokens.label2,
-                    modifier = Modifier.padding(12.dp),
+                Surface(
+                    shape = RoundedCornerShape(18.dp),
+                    color = tokens.card,
+                    border = BorderStroke(0.5.dp, tokens.separator),
+                    modifier = Modifier.fillMaxWidth(),
+                ) {
+                    Text(
+                        "同步后会在这里显示已购买作品",
+                        color = tokens.label2,
+                        fontSize = 15.sp,
+                        modifier = Modifier.padding(16.dp),
+                    )
+                }
+            }
+        } else {
+            items(state.works, key = { it.workId }) { work ->
+                DlsiteWorkRow(
+                    work = work,
+                    busy = state.busy,
+                    taskState = state.downloadState.tasks[work.workId],
+                    contents = state.contentsByWork[work.workId].orEmpty(),
+                    onDownload = { onDownload(work) },
+                    onPause = { onPause(work) },
+                    onResume = { onResume(work) },
+                    onDelete = { onDelete(work) },
                 )
             }
-        }
-        items(state.works, key = { it.workId }) { work ->
-            DlsiteWorkRow(
-                work = work,
-                busy = state.busy,
-                taskState = state.downloadState.tasks[work.workId],
-                contents = state.contentsByWork[work.workId].orEmpty(),
-                onDownload = { onDownload(work) },
-                onPause = { onPause(work) },
-                onResume = { onResume(work) },
-                onDelete = { onDelete(work) },
-            )
         }
     }
 }
@@ -244,72 +237,58 @@ fun DlsiteWorkRow(
     onDelete: () -> Unit,
 ) {
     val tokens = LocalAmberTokens.current
-    Surface(shape = RoundedCornerShape(16.dp), color = tokens.card) {
-        Row(Modifier.fillMaxWidth().padding(12.dp), verticalAlignment = Alignment.CenterVertically) {
-            CoverBox(work.coverUri, Modifier.size(54.dp))
-            Spacer(Modifier.width(14.dp))
-            Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(3.dp)) {
-                Text(work.displayTitle(), fontSize = 17.sp, fontWeight = FontWeight.Medium, color = tokens.label, maxLines = 2, overflow = TextOverflow.Ellipsis)
-                val statusLabel = taskState?.statusText ?: contentAwareStatusLabel(work, contents)
-                Text("${work.workId} · $statusLabel", color = tokens.label2, fontSize = 13.sp, maxLines = 1, overflow = TextOverflow.Ellipsis)
-                if (taskState?.progressPercent != null || work.isFailed()) {
-                    val progress = (taskState?.progressPercent ?: 100).coerceIn(0, 100) / 100f
-                    Box(
-                        Modifier
-                            .fillMaxWidth()
-                            .height(3.dp)
-                            .background(tokens.label3.copy(alpha = 0.28f), RoundedCornerShape(3.dp)),
-                    ) {
-                        Box(
-                            Modifier
-                                .fillMaxHeight()
-                                .fillMaxWidth(progress)
-                                .background(if (work.isFailed()) tokens.accent2 else tokens.accent, RoundedCornerShape(3.dp)),
-                        )
-                    }
+    val statusLabel = taskState?.statusText ?: contentAwareStatusLabel(work, contents)
+    val progress = dlsiteProgressFraction(work, taskState)
+    val failed = taskState?.status == DlsiteDownloadTaskStatus.FAILED || work.isFailed()
+    Surface(
+        shape = RoundedCornerShape(20.dp),
+        color = Color.Transparent,
+        border = BorderStroke(0.5.dp, tokens.separator),
+        shadowElevation = 4.dp,
+        modifier = Modifier.fillMaxWidth(),
+    ) {
+        Column(
+            modifier = Modifier
+                .background(Brush.verticalGradient(listOf(tokens.cardTop, tokens.cardBottom)))
+                .padding(horizontal = 14.dp, vertical = 13.dp),
+            verticalArrangement = Arrangement.spacedBy(10.dp),
+        ) {
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                CoverBox(work.coverUri, Modifier.size(58.dp))
+                Spacer(Modifier.width(14.dp))
+                Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(5.dp)) {
+                    Text(
+                        work.displayTitle(),
+                        fontSize = 17.sp,
+                        fontWeight = FontWeight.SemiBold,
+                        color = tokens.label,
+                        maxLines = 1,
+                        overflow = TextOverflow.Ellipsis,
+                    )
+                    DlsiteStatusLine(
+                        workId = work.workId,
+                        status = statusLabel,
+                        failed = failed,
+                        badged = dlsiteShouldBadgeStatus(work, taskState, statusLabel),
+                    )
                 }
+                Spacer(Modifier.width(10.dp))
+                DlsiteWorkActions(
+                    work = work,
+                    busy = busy,
+                    taskState = taskState,
+                    onDownload = onDownload,
+                    onPause = onPause,
+                    onResume = onResume,
+                    onDelete = onDelete,
+                )
             }
-            Spacer(Modifier.width(8.dp))
-            when {
-                taskState?.status == DlsiteDownloadTaskStatus.QUEUED -> {
-                    TextButton(onClick = onDelete) { Text("取消", color = tokens.accent2) }
-                }
-                taskState?.status == DlsiteDownloadTaskStatus.DOWNLOADING || work.isDownloading() -> {
-                    TextButton(onClick = onPause) { Text("暂停", color = tokens.accent) }
-                }
-                work.isPaused() -> {
-                    Column(horizontalAlignment = Alignment.End) {
-                        TextButton(onClick = onResume, enabled = !busy) { Text("继续") }
-                        TextButton(onClick = onDelete, enabled = !busy) { Text("删除", color = tokens.accent2) }
-                    }
-                }
-                work.isFailed() -> {
-                    Column(horizontalAlignment = Alignment.End) {
-                        TextButton(onClick = onResume, enabled = !busy) { Text("重试") }
-                        TextButton(onClick = onDelete, enabled = !busy) { Text("删除", color = tokens.accent2) }
-                    }
-                }
-                work.isDownloaded() -> {
-                    Column(horizontalAlignment = Alignment.End) {
-                        TextButton(onClick = onDownload, enabled = !busy) {
-                            Icon(Icons.Default.Download, null, tint = tokens.accent)
-                            Spacer(Modifier.width(4.dp))
-                            Text("选内容", color = tokens.accent)
-                        }
-                        TextButton(onClick = onDelete, enabled = !busy) {
-                            Icon(Icons.Default.Delete, null, tint = tokens.accent2)
-                            Spacer(Modifier.width(4.dp))
-                            Text("删除", color = tokens.accent2)
-                        }
-                    }
-                }
-                else -> {
-                    TextButton(onClick = onDownload, enabled = !busy) {
-                        Icon(Icons.Default.Download, null, tint = tokens.accent)
-                        Spacer(Modifier.width(4.dp))
-                        Text("下载", color = tokens.accent)
-                    }
-                }
+            if (progress != null) {
+                DlsiteProgressLine(
+                    progress = progress,
+                    failed = failed,
+                    modifier = Modifier.fillMaxWidth(),
+                )
             }
         }
     }
@@ -325,21 +304,40 @@ private fun DlsiteTotalDownloadCard(
     val tokens = LocalAmberTokens.current
     val summary = state.summary
     Surface(
-        shape = RoundedCornerShape(16.dp),
-        color = tokens.card,
+        shape = RoundedCornerShape(20.dp),
+        color = Color.Transparent,
+        border = BorderStroke(0.5.dp, tokens.separator),
+        shadowElevation = 5.dp,
         modifier = Modifier
             .fillMaxWidth()
             .clickable(onClick = onOpen),
     ) {
-        Column(Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(10.dp)) {
+        Column(
+            modifier = Modifier
+                .background(Brush.verticalGradient(listOf(tokens.cardTop, tokens.cardBottom)))
+                .padding(16.dp),
+            verticalArrangement = Arrangement.spacedBy(11.dp),
+        ) {
             Row(verticalAlignment = Alignment.CenterVertically) {
-                Text(
-                    "正在下载 ${summary.runningCount} / ${summary.totalCount} 项",
-                    color = tokens.label,
-                    fontSize = 17.sp,
-                    fontWeight = FontWeight.SemiBold,
-                    modifier = Modifier.weight(1f),
-                )
+                DlsiteIconBadge(Icons.AutoMirrored.Filled.QueueMusic)
+                Spacer(Modifier.width(12.dp))
+                Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(3.dp)) {
+                    Text(
+                        "正在下载 ${summary.runningCount} / ${summary.totalCount} 项",
+                        color = tokens.label,
+                        fontSize = 17.sp,
+                        fontWeight = FontWeight.SemiBold,
+                        maxLines = 1,
+                        overflow = TextOverflow.Ellipsis,
+                    )
+                    Text(
+                        "${formatBytes(summary.speedBytesPerSecond)}/s · ${formatBytes(summary.bytesDownloaded)} / ${formatBytes(summary.totalBytes)}",
+                        color = tokens.label2,
+                        fontSize = 12.sp,
+                        maxLines = 1,
+                        overflow = TextOverflow.Ellipsis,
+                    )
+                }
                 Text(
                     summary.progressPercent?.let { "$it%" } ?: "--",
                     color = tokens.accent,
@@ -347,29 +345,21 @@ private fun DlsiteTotalDownloadCard(
                     fontWeight = FontWeight.Bold,
                 )
             }
-            Box(
-                Modifier
-                    .fillMaxWidth()
-                    .height(5.dp)
-                    .background(tokens.label3.copy(alpha = 0.28f), RoundedCornerShape(3.dp)),
-            ) {
-                Box(
-                    Modifier
-                        .fillMaxHeight()
-                        .fillMaxWidth((summary.progressPercent ?: 0) / 100f)
-                        .background(tokens.accent, RoundedCornerShape(3.dp)),
-                )
-            }
+            DlsiteProgressLine(
+                progress = ((summary.progressPercent ?: 0) / 100f).coerceIn(0f, 1f),
+                failed = false,
+                modifier = Modifier.fillMaxWidth(),
+            )
             Row(verticalAlignment = Alignment.CenterVertically) {
-                Text(
-                    "${formatBytes(summary.speedBytesPerSecond)}/s · ${formatBytes(summary.bytesDownloaded)} / ${formatBytes(summary.totalBytes)}",
-                    color = tokens.label2,
-                    fontSize = 13.sp,
-                    modifier = Modifier.weight(1f),
-                    maxLines = 1,
-                    overflow = TextOverflow.Ellipsis,
-                )
+                Text("点按查看全部任务", color = tokens.label2, fontSize = 13.sp, modifier = Modifier.weight(1f))
                 TextButton(onClick = if (summary.runningCount > 0) onPauseAll else onResumeAll) {
+                    Icon(
+                        if (summary.runningCount > 0) Icons.Default.Pause else Icons.Default.PlayArrow,
+                        contentDescription = null,
+                        tint = tokens.accent,
+                        modifier = Modifier.size(18.dp),
+                    )
+                    Spacer(Modifier.width(5.dp))
                     Text(if (summary.runningCount > 0) "全部暂停" else "全部继续", color = tokens.accent)
                 }
             }
@@ -391,44 +381,63 @@ fun DownloadManagerSheet(
     val tasks = state.downloadState.tasks.values.sortedWith(
         compareBy<DlsiteDownloadTaskState> { it.status.ordinal }.thenBy { it.updatedAt },
     )
-    Column(Modifier.padding(horizontal = 18.dp, vertical = 10.dp)) {
-        Box(
-            Modifier
-                .width(38.dp)
-                .height(5.dp)
-                .background(tokens.label3, RoundedCornerShape(3.dp))
-                .align(Alignment.CenterHorizontally),
-        )
-        Spacer(Modifier.height(12.dp))
+    Column(
+        Modifier
+            .fillMaxWidth()
+            .navigationBarsPadding()
+            .verticalScroll(rememberScrollState())
+            .padding(horizontal = 18.dp, vertical = 10.dp),
+    ) {
+        DlsiteSheetGrabber()
+        Spacer(Modifier.height(18.dp))
         Row(verticalAlignment = Alignment.CenterVertically) {
-            Text("下载管理", color = tokens.label, fontSize = 22.sp, fontWeight = FontWeight.Bold, modifier = Modifier.weight(1f))
+            Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(6.dp)) {
+                Text("下载管理", color = tokens.label, fontSize = 28.sp, fontWeight = FontWeight.ExtraBold)
+                Text(downloadManagerCaption(tasks, state.downloadState.summary), color = tokens.label2, fontSize = 15.sp, fontWeight = FontWeight.SemiBold)
+            }
             TextButton(onClick = if (state.downloadState.summary.runningCount > 0) onPauseAll else onResumeAll) {
-                Text(if (state.downloadState.summary.runningCount > 0) "全部暂停" else "全部继续", color = tokens.accent)
+                Icon(
+                    if (state.downloadState.summary.runningCount > 0) Icons.Default.Pause else Icons.Default.PlayArrow,
+                    contentDescription = null,
+                    tint = tokens.accent,
+                    modifier = Modifier.size(20.dp),
+                )
+                Spacer(Modifier.width(6.dp))
+                Text(if (state.downloadState.summary.runningCount > 0) "全部暂停" else "全部继续", color = tokens.accent, fontWeight = FontWeight.SemiBold)
             }
         }
-        DlsiteTotalDownloadCard(state.downloadState, onOpen = {}, onPauseAll = onPauseAll, onResumeAll = onResumeAll)
-        Spacer(Modifier.height(10.dp))
+        Spacer(Modifier.height(18.dp))
         if (tasks.isEmpty()) {
-            Text("没有下载任务", color = tokens.label2, modifier = Modifier.padding(vertical = 24.dp))
+            Surface(
+                shape = RoundedCornerShape(18.dp),
+                color = tokens.card,
+                border = BorderStroke(0.5.dp, tokens.separator),
+                modifier = Modifier.fillMaxWidth(),
+            ) {
+                Text("没有下载任务", color = tokens.label2, modifier = Modifier.padding(18.dp))
+            }
         } else {
-            tasks.forEach { task ->
-                val work = state.works.firstOrNull { it.workId == task.workId }
-                if (work != null) {
-                    DlsiteWorkRow(
-                        work = work,
-                        busy = state.busy,
-                        taskState = task,
-                        contents = state.contentsByWork[work.workId].orEmpty(),
-                        onDownload = {},
-                        onPause = { onPause(work) },
-                        onResume = { onResume(work) },
-                        onDelete = { onCancel(work) },
-                    )
-                    Spacer(Modifier.height(10.dp))
+            Column(verticalArrangement = Arrangement.spacedBy(16.dp)) {
+                tasks.forEach { task ->
+                    val work = state.works.firstOrNull { it.workId == task.workId }
+                    if (work != null) {
+                        DlsiteDownloadTaskRow(
+                            work = work,
+                            busy = state.busy,
+                            taskState = task,
+                            contents = state.contentsByWork[work.workId].orEmpty(),
+                            onPause = { onPause(work) },
+                            onResume = { onResume(work) },
+                            onCancel = { onCancel(work) },
+                        )
+                    }
                 }
             }
         }
+        Spacer(Modifier.height(8.dp))
         TextButton(onClick = onClearCompleted, modifier = Modifier.align(Alignment.End)) {
+            Icon(Icons.Default.Delete, contentDescription = null, tint = tokens.label2, modifier = Modifier.size(18.dp))
+            Spacer(Modifier.width(5.dp))
             Text("清除已完成", color = tokens.label2)
         }
     }
@@ -453,27 +462,32 @@ fun DownloadContentsSheet(
             contentsById[it.id]?.isDownloading() != true &&
             contentsById[it.id]?.isQueued() != true
     }
-    Column(Modifier.padding(horizontal = 18.dp, vertical = 10.dp)) {
-        Box(
-            Modifier
-                .width(38.dp)
-                .height(5.dp)
-                .background(tokens.label3, RoundedCornerShape(3.dp))
-                .align(Alignment.CenterHorizontally),
-        )
-        Spacer(Modifier.height(12.dp))
+    Column(
+        Modifier
+            .fillMaxWidth()
+            .navigationBarsPadding()
+            .verticalScroll(rememberScrollState())
+            .padding(horizontal = 18.dp, vertical = 10.dp),
+    ) {
+        DlsiteSheetGrabber()
+        Spacer(Modifier.height(18.dp))
         Row(verticalAlignment = Alignment.CenterVertically) {
-            Column(Modifier.weight(1f)) {
-                Text("选择下载内容", color = tokens.label, fontSize = 22.sp, fontWeight = FontWeight.Bold)
+            Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(4.dp)) {
+                Text("选择下载内容", color = tokens.label, fontSize = 26.sp, fontWeight = FontWeight.ExtraBold)
                 Text(work.displayTitle(), color = tokens.label2, fontSize = 13.sp, maxLines = 1, overflow = TextOverflow.Ellipsis)
                 Text("已解析文件目录树，共 ${options.size} 项", color = tokens.label2, fontSize = 12.sp)
             }
-            IconButton(onClick = onDismiss) {
-                Icon(Icons.Default.Close, contentDescription = null, tint = tokens.label2)
-            }
+            DlsiteIconActionButton(
+                icon = Icons.Default.Close,
+                contentDescription = "关闭",
+                onClick = onDismiss,
+                destructive = false,
+                filled = false,
+                size = 44.dp,
+            )
         }
-        Row(Modifier.fillMaxWidth().padding(top = 8.dp), verticalAlignment = Alignment.CenterVertically) {
-            Text("勾选要下载的文件夹或根目录音频", color = tokens.label2, fontSize = 13.sp, modifier = Modifier.weight(1f))
+        Row(Modifier.fillMaxWidth().padding(top = 12.dp), verticalAlignment = Alignment.CenterVertically) {
+            Text("勾选文件夹或根目录音频", color = tokens.label2, fontSize = 13.sp, modifier = Modifier.weight(1f))
             TextButton(
                 onClick = { selectedIds = selectableOptions.map { it.id }.toSet() },
                 enabled = selectableOptions.isNotEmpty(),
@@ -487,51 +501,53 @@ fun DownloadContentsSheet(
                 Text("清空", color = tokens.accent2)
             }
         }
-        options.forEach { option ->
-            val content = contentsById[option.id]
-            val downloaded = content?.isDownloaded() == true
-            val active = content?.isDownloading() == true || content?.isQueued() == true
-            Row(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .clickable(enabled = !downloaded && !active) {
-                        selectedIds = if (selectedIds.contains(option.id)) {
-                            selectedIds - option.id
-                        } else {
-                            selectedIds + option.id
+        Spacer(Modifier.height(6.dp))
+        Surface(
+            shape = RoundedCornerShape(20.dp),
+            color = tokens.card,
+            border = BorderStroke(0.5.dp, tokens.separator),
+            modifier = Modifier.fillMaxWidth(),
+        ) {
+            Column(Modifier.padding(horizontal = 14.dp, vertical = 4.dp)) {
+                options.forEachIndexed { index, option ->
+                    val content = contentsById[option.id]
+                    val downloaded = content?.isDownloaded() == true
+                    val active = content?.isDownloading() == true || content?.isQueued() == true
+                    Row(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .clickable(enabled = !downloaded && !active) {
+                                selectedIds = if (selectedIds.contains(option.id)) {
+                                    selectedIds - option.id
+                                } else {
+                                    selectedIds + option.id
+                                }
+                            }
+                            .padding(vertical = 13.dp),
+                        verticalAlignment = Alignment.CenterVertically,
+                    ) {
+                        DlsiteContentCheckBox(
+                            checked = selectedIds.contains(option.id) || downloaded,
+                            disabled = active,
+                        )
+                        Spacer(Modifier.width(13.dp))
+                        Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(4.dp)) {
+                            Text(option.title, color = tokens.label, fontSize = 16.sp, fontWeight = FontWeight.SemiBold, maxLines = 1, overflow = TextOverflow.Ellipsis)
+                            Text("${option.audioFiles.size} 首 · ${contentStatusText(content)}", color = tokens.label2, fontSize = 12.sp, maxLines = 1, overflow = TextOverflow.Ellipsis)
+                        }
+                        when {
+                            downloaded -> TextButton(onClick = { onDeleteContent(content) }) {
+                                Text("删除", color = tokens.accent2)
+                            }
+                            active -> DlsiteStatusPill("下载中", failed = false)
+                            content?.isFailed() == true -> DlsiteStatusPill("失败", failed = true)
                         }
                     }
-                    .padding(vertical = 13.dp),
-                verticalAlignment = Alignment.CenterVertically,
-            ) {
-                Box(
-                    Modifier
-                        .size(22.dp)
-                        .background(
-                            if (selectedIds.contains(option.id) || downloaded) tokens.accent else Color.Transparent,
-                            RoundedCornerShape(6.dp),
-                        )
-                        .padding(2.dp),
-                    contentAlignment = Alignment.Center,
-                ) {
-                    if (selectedIds.contains(option.id) || downloaded) {
-                        Text("✓", color = tokens.bg, fontSize = 13.sp, fontWeight = FontWeight.Bold)
+                    if (index != options.lastIndex) {
+                        HorizontalDivider(color = tokens.separator)
                     }
-                }
-                Spacer(Modifier.width(13.dp))
-                Column(Modifier.weight(1f)) {
-                    Text(option.title, color = tokens.label, fontSize = 17.sp, maxLines = 1, overflow = TextOverflow.Ellipsis)
-                    Text("${option.audioFiles.size} 首 · ${contentStatusText(content)}", color = tokens.label2, fontSize = 12.sp)
-                }
-                when {
-                    downloaded -> TextButton(onClick = { onDeleteContent(content) }) {
-                        Text("删除", color = tokens.accent2)
-                    }
-                    active -> Text("下载中", color = tokens.accent, fontSize = 13.sp, fontWeight = FontWeight.SemiBold)
-                    content?.isFailed() == true -> Text("失败", color = tokens.accent2, fontSize = 13.sp, fontWeight = FontWeight.SemiBold)
                 }
             }
-            HorizontalDivider(color = tokens.separator)
         }
         Row(Modifier.fillMaxWidth().padding(top = 14.dp), verticalAlignment = Alignment.CenterVertically) {
             Text("已选择 ${selectedIds.size} 项", color = tokens.label2, fontSize = 13.sp, modifier = Modifier.weight(1f))
@@ -539,9 +555,345 @@ fun DownloadContentsSheet(
                 onClick = { onStart(options.filter { selectedIds.contains(it.id) }) },
                 enabled = selectedIds.isNotEmpty(),
             ) {
+                Icon(Icons.Default.Download, contentDescription = null, modifier = Modifier.size(18.dp))
+                Spacer(Modifier.width(6.dp))
                 Text("加入下载")
             }
         }
+    }
+}
+
+@Composable
+private fun DlsiteAccountCard(
+    loggedIn: Boolean,
+    busy: Boolean,
+    lastSyncMs: Long,
+    onLogin: () -> Unit,
+    onLogout: () -> Unit,
+    onSync: () -> Unit,
+) {
+    val tokens = LocalAmberTokens.current
+    Surface(
+        shape = RoundedCornerShape(22.dp),
+        color = Color.Transparent,
+        border = BorderStroke(0.5.dp, tokens.separator),
+        shadowElevation = 6.dp,
+        modifier = Modifier.fillMaxWidth(),
+    ) {
+        Row(
+            modifier = Modifier
+                .background(Brush.verticalGradient(listOf(tokens.cardTop, tokens.cardBottom)))
+                .padding(16.dp),
+            verticalAlignment = Alignment.CenterVertically,
+        ) {
+            DlsiteIconBadge(if (loggedIn) Icons.Default.LockOpen else Icons.AutoMirrored.Filled.Login, size = 64.dp)
+            Spacer(Modifier.width(14.dp))
+            Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(4.dp)) {
+                Text(if (loggedIn) "已登录" else "未登录", fontWeight = FontWeight.ExtraBold, fontSize = 22.sp, color = tokens.label)
+                Text(
+                    if (busy) "DLsite 正在处理请求" else "上次同步 ${formatSyncTime(lastSyncMs)}",
+                    color = tokens.label2,
+                    fontSize = 14.sp,
+                    maxLines = 1,
+                    overflow = TextOverflow.Ellipsis,
+                )
+                if (loggedIn) {
+                    TextButton(onClick = onLogout, enabled = !busy, contentPadding = PaddingValues(horizontal = 0.dp, vertical = 0.dp)) {
+                        Icon(Icons.AutoMirrored.Filled.Logout, contentDescription = null, tint = tokens.label2, modifier = Modifier.size(16.dp))
+                        Spacer(Modifier.width(4.dp))
+                        Text("退出登录", color = tokens.label2, fontSize = 13.sp)
+                    }
+                }
+            }
+            Spacer(Modifier.width(12.dp))
+            DlsiteIconActionButton(
+                icon = if (loggedIn) Icons.Default.Download else Icons.AutoMirrored.Filled.Login,
+                contentDescription = if (loggedIn) "同步" else "登录",
+                onClick = if (loggedIn) onSync else onLogin,
+                enabled = if (loggedIn) !busy else !busy,
+                filled = true,
+                size = 56.dp,
+            )
+        }
+    }
+}
+
+@Composable
+private fun DlsiteWorkActions(
+    work: DlsiteWork,
+    busy: Boolean,
+    taskState: DlsiteDownloadTaskState?,
+    onDownload: () -> Unit,
+    onPause: () -> Unit,
+    onResume: () -> Unit,
+    onDelete: () -> Unit,
+) {
+    val status = taskState?.status
+    Row(horizontalArrangement = Arrangement.spacedBy(8.dp), verticalAlignment = Alignment.CenterVertically) {
+        when {
+            status == DlsiteDownloadTaskStatus.QUEUED || work.isQueued() -> {
+                DlsiteIconActionButton(Icons.Default.Close, "取消", onDelete, enabled = !busy, destructive = true)
+            }
+            status == DlsiteDownloadTaskStatus.DOWNLOADING || work.isDownloading() -> {
+                DlsiteIconActionButton(Icons.Default.Pause, "暂停", onPause, enabled = !busy)
+            }
+            status == DlsiteDownloadTaskStatus.PAUSED || work.isPaused() -> {
+                DlsiteIconActionButton(Icons.Default.PlayArrow, "继续", onResume, enabled = !busy)
+                DlsiteIconActionButton(Icons.Default.Delete, "删除", onDelete, enabled = !busy, destructive = true, size = 44.dp)
+            }
+            status == DlsiteDownloadTaskStatus.FAILED || work.isFailed() -> {
+                DlsiteIconActionButton(Icons.Default.Download, "重试", onResume, enabled = !busy)
+                DlsiteIconActionButton(Icons.Default.Delete, "删除", onDelete, enabled = !busy, destructive = true, size = 44.dp)
+            }
+            work.isDownloaded() -> {
+                DlsiteIconActionButton(Icons.Default.FolderOpen, "选择内容", onDownload, enabled = !busy, size = 44.dp)
+                DlsiteIconActionButton(Icons.Default.Delete, "删除缓存", onDelete, enabled = !busy, destructive = true, size = 44.dp)
+            }
+            else -> {
+                DlsiteIconActionButton(Icons.Default.Download, "下载", onDownload, enabled = !busy)
+            }
+        }
+    }
+}
+
+@Composable
+private fun DlsiteDownloadTaskRow(
+    work: DlsiteWork,
+    busy: Boolean,
+    taskState: DlsiteDownloadTaskState,
+    contents: List<DlsiteContent>,
+    onPause: () -> Unit,
+    onResume: () -> Unit,
+    onCancel: () -> Unit,
+) {
+    val tokens = LocalAmberTokens.current
+    val statusLabel = taskState.statusText.ifEmpty { contentAwareStatusLabel(work, contents) }
+    val progress = dlsiteProgressFraction(work, taskState)
+    val failed = taskState.status == DlsiteDownloadTaskStatus.FAILED || work.isFailed()
+    Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+        Row(verticalAlignment = Alignment.CenterVertically) {
+            CoverBox(work.coverUri, Modifier.size(56.dp))
+            Spacer(Modifier.width(13.dp))
+            Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(5.dp)) {
+                Text(work.displayTitle(), color = tokens.label, fontSize = 17.sp, fontWeight = FontWeight.SemiBold, maxLines = 1, overflow = TextOverflow.Ellipsis)
+                DlsiteStatusLine(
+                    workId = work.workId,
+                    status = statusLabel,
+                    failed = failed,
+                    badged = dlsiteShouldBadgeStatus(work, taskState, statusLabel),
+                )
+            }
+            Spacer(Modifier.width(10.dp))
+            when (taskState.status) {
+                DlsiteDownloadTaskStatus.QUEUED -> DlsiteIconActionButton(Icons.Default.Close, "取消", onCancel, enabled = !busy, destructive = true)
+                DlsiteDownloadTaskStatus.DOWNLOADING -> DlsiteIconActionButton(Icons.Default.Pause, "暂停", onPause, enabled = !busy)
+                DlsiteDownloadTaskStatus.PAUSED -> DlsiteIconActionButton(Icons.Default.PlayArrow, "继续", onResume, enabled = !busy)
+                DlsiteDownloadTaskStatus.FAILED -> DlsiteIconActionButton(Icons.Default.Download, "重试", onResume, enabled = !busy)
+                DlsiteDownloadTaskStatus.COMPLETED -> DlsiteIconActionButton(Icons.Default.Delete, "清除", onCancel, enabled = !busy, destructive = true)
+            }
+        }
+        if (progress != null) {
+            DlsiteProgressLine(progress, failed, Modifier.fillMaxWidth())
+        }
+    }
+}
+
+@Composable
+private fun DlsiteStatusLine(
+    workId: String,
+    status: String,
+    failed: Boolean,
+    badged: Boolean,
+) {
+    val tokens = LocalAmberTokens.current
+    Row(verticalAlignment = Alignment.CenterVertically) {
+        Text(workId, color = tokens.label2, fontSize = 13.sp, maxLines = 1, overflow = TextOverflow.Ellipsis)
+        Text(" · ", color = tokens.label2, fontSize = 13.sp)
+        if (badged) {
+            DlsiteStatusPill(status, failed)
+        } else {
+            Text(
+                status,
+                color = if (failed) tokens.accent2 else tokens.label2,
+                fontSize = 13.sp,
+                maxLines = 1,
+                overflow = TextOverflow.Ellipsis,
+            )
+        }
+    }
+}
+
+@Composable
+private fun DlsiteStatusPill(text: String, failed: Boolean) {
+    val tokens = LocalAmberTokens.current
+    Surface(
+        shape = RoundedCornerShape(12.dp),
+        color = if (failed) tokens.accent2Soft else tokens.accentSoft,
+    ) {
+        Text(
+            text,
+            color = if (failed) tokens.accent2 else tokens.accent,
+            fontSize = 13.sp,
+            fontWeight = FontWeight.SemiBold,
+            maxLines = 1,
+            overflow = TextOverflow.Ellipsis,
+            modifier = Modifier.padding(horizontal = 9.dp, vertical = 3.dp),
+        )
+    }
+}
+
+@Composable
+private fun DlsiteSectionCaption(text: String) {
+    val tokens = LocalAmberTokens.current
+    Text(
+        text,
+        color = tokens.label2,
+        fontSize = 15.sp,
+        fontWeight = FontWeight.Bold,
+        modifier = Modifier.padding(start = 2.dp, top = 4.dp),
+    )
+}
+
+@Composable
+private fun DlsiteIconBadge(icon: ImageVector, size: androidx.compose.ui.unit.Dp = 48.dp) {
+    val tokens = LocalAmberTokens.current
+    Surface(
+        shape = RoundedCornerShape(16.dp),
+        color = tokens.accentSoft,
+        border = BorderStroke(0.5.dp, tokens.separator),
+        modifier = Modifier.size(size),
+    ) {
+        Box(contentAlignment = Alignment.Center) {
+            Icon(icon, contentDescription = null, tint = tokens.accent, modifier = Modifier.size(size * 0.42f))
+        }
+    }
+}
+
+@Composable
+private fun DlsiteIconActionButton(
+    icon: ImageVector,
+    contentDescription: String,
+    onClick: () -> Unit,
+    enabled: Boolean = true,
+    destructive: Boolean = false,
+    filled: Boolean = false,
+    size: androidx.compose.ui.unit.Dp = 56.dp,
+) {
+    val tokens = LocalAmberTokens.current
+    val background = when {
+        !enabled -> tokens.gray5
+        filled -> tokens.accent
+        destructive -> tokens.accent2Soft
+        else -> tokens.accentSoft
+    }
+    val tint = when {
+        !enabled -> tokens.label3
+        filled -> tokens.bg
+        destructive -> tokens.accent2
+        else -> tokens.accent
+    }
+    Surface(
+        shape = RoundedCornerShape(if (size >= 52.dp) 18.dp else 14.dp),
+        color = background,
+        border = if (filled) null else BorderStroke(0.5.dp, tokens.separator),
+        modifier = Modifier
+            .size(size)
+            .clickable(enabled = enabled, onClick = onClick),
+    ) {
+        Box(contentAlignment = Alignment.Center) {
+            Icon(icon, contentDescription = contentDescription, tint = tint, modifier = Modifier.size(if (size >= 52.dp) 25.dp else 21.dp))
+        }
+    }
+}
+
+@Composable
+private fun DlsiteProgressLine(
+    progress: Float,
+    failed: Boolean,
+    modifier: Modifier = Modifier,
+) {
+    val tokens = LocalAmberTokens.current
+    Box(
+        modifier
+            .height(5.dp)
+            .background(tokens.label3.copy(alpha = 0.28f), RoundedCornerShape(3.dp)),
+    ) {
+        Box(
+            Modifier
+                .fillMaxHeight()
+                .fillMaxWidth(progress.coerceIn(0f, 1f))
+                .background(if (failed) tokens.accent2 else tokens.accent, RoundedCornerShape(3.dp)),
+        )
+    }
+}
+
+@Composable
+private fun DlsiteSheetGrabber() {
+    val tokens = LocalAmberTokens.current
+    Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.Center) {
+        Box(
+            Modifier
+                .width(42.dp)
+                .height(5.dp)
+                .background(tokens.label3, RoundedCornerShape(3.dp)),
+            contentAlignment = Alignment.Center,
+        ) {}
+    }
+}
+
+@Composable
+private fun DlsiteContentCheckBox(checked: Boolean, disabled: Boolean) {
+    val tokens = LocalAmberTokens.current
+    Surface(
+        shape = RoundedCornerShape(7.dp),
+        color = when {
+            checked -> tokens.accent
+            disabled -> tokens.gray5
+            else -> Color.Transparent
+        },
+        border = BorderStroke(1.dp, if (checked) tokens.accent else tokens.separator),
+        modifier = Modifier.size(24.dp),
+    ) {
+        Box(contentAlignment = Alignment.Center) {
+            if (checked) {
+                Text("✓", color = tokens.bg, fontSize = 14.sp, fontWeight = FontWeight.Bold)
+            }
+        }
+    }
+}
+
+private fun dlsiteProgressFraction(work: DlsiteWork, taskState: DlsiteDownloadTaskState?): Float? {
+    val progress = taskState?.progressPercent
+    return when {
+        progress != null -> (progress.coerceIn(0, 100) / 100f)
+        taskState?.status == DlsiteDownloadTaskStatus.FAILED || work.isFailed() -> 1f
+        else -> null
+    }
+}
+
+private fun dlsiteShouldBadgeStatus(
+    work: DlsiteWork,
+    taskState: DlsiteDownloadTaskState?,
+    statusLabel: String,
+): Boolean {
+    return when {
+        taskState?.status == DlsiteDownloadTaskStatus.QUEUED -> true
+        taskState?.status == DlsiteDownloadTaskStatus.FAILED -> true
+        taskState?.status == DlsiteDownloadTaskStatus.COMPLETED -> true
+        work.isDownloaded() || work.isQueued() || work.isFailed() -> true
+        statusLabel.startsWith("已下载") -> true
+        else -> false
+    }
+}
+
+private fun downloadManagerCaption(
+    tasks: List<DlsiteDownloadTaskState>,
+    summary: DlsiteDownloadSummary,
+): String {
+    return when {
+        summary.totalCount > 0 -> "${summary.totalCount} 个任务进行中"
+        tasks.isNotEmpty() -> "${tasks.size} 个任务"
+        else -> "没有下载任务"
     }
 }
 

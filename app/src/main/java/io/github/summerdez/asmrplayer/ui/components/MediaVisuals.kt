@@ -25,6 +25,7 @@ import androidx.activity.compose.BackHandler
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.BorderStroke
+import androidx.compose.foundation.border
 import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
@@ -153,10 +154,12 @@ import kotlin.math.max
 @Composable
 fun CoverBox(uri: String, modifier: Modifier) {
     val tokens = LocalAmberTokens.current
+    val shape = RoundedCornerShape(10.dp)
     Box(
         modifier = modifier
-            .clip(RoundedCornerShape(10.dp))
-            .background(tokens.gray5),
+            .clip(shape)
+            .background(Brush.linearGradient(listOf(tokens.coverTop, tokens.coverBottom)))
+            .border(BorderStroke(0.5.dp, tokens.separator), shape),
         contentAlignment = Alignment.Center,
     ) {
         if (uri.isNotEmpty()) {
@@ -176,7 +179,12 @@ fun CoverBox(uri: String, modifier: Modifier) {
                 modifier = Modifier.fillMaxSize(),
             )
         } else {
-            Icon(Icons.Default.MusicNote, contentDescription = null, tint = tokens.label3)
+            Icon(
+                Icons.Default.MusicNote,
+                contentDescription = null,
+                tint = tokens.label3,
+                modifier = Modifier.fillMaxSize(0.42f),
+            )
         }
     }
 }
@@ -201,4 +209,3 @@ fun EqualizerIcon(modifier: Modifier = Modifier) {
         }
     }
 }
-

@@ -61,9 +61,9 @@ public final class AppUi {
     public static final int TEXT_FOOTNOTE = 13;
     public static final int TEXT_CAPTION = 12;
 
-    public static final int R_THUMB = 8;
-    public static final int R_CARD = 12;
-    public static final int R_BAR = 16;
+    public static final int R_THUMB = 10;
+    public static final int R_CARD = 16;
+    public static final int R_BAR = 18;
 
     private static AppThemeMode themeMode = AppThemeMode.DARK;
     private static AppThemePalette palette = AppThemePalette.dark();
@@ -222,18 +222,13 @@ public final class AppUi {
         view.setTextSize(24f);
         view.setGravity(Gravity.CENTER);
         view.setTypeface(view.getTypeface(), android.graphics.Typeface.BOLD);
-        view.setBackground(cardBackground(context, GRAY5, GRAY5, 0, R_THUMB));
+        view.setBackground(coverBackground(context, false));
         return view;
     }
 
     public static FrameLayout coverView(Context context, String coverUri, int sizeDp, boolean selected) {
         FrameLayout cover = new FrameLayout(context);
-        cover.setBackground(cardBackground(
-                context,
-                GRAY5,
-                selected ? ACCENT : GRAY5,
-                selected ? 1 : 0,
-                R_THUMB));
+        cover.setBackground(coverBackground(context, selected));
         cover.setClipToOutline(true);
 
         if (!TextUtils.isEmpty(coverUri)) {
@@ -272,7 +267,7 @@ public final class AppUi {
         button.setAllCaps(false);
         button.setTextSize(22f);
         button.setTypeface(button.getTypeface(), android.graphics.Typeface.BOLD);
-        button.setTextColor(Color.WHITE);
+        button.setTextColor(LABEL);
         button.setPadding(0, 0, 0, 0);
         button.setBackgroundColor(Color.TRANSPARENT);
         return button;
@@ -285,7 +280,7 @@ public final class AppUi {
         button.setTextSize(15f);
         button.setTextColor(LABEL);
         button.setMinHeight(dp(context, 42));
-        button.setBackground(cardBackground(context, GRAY6, GRAY6, 0, R_CARD));
+        button.setBackground(cardBackground(context, GRAY6, SEPARATOR, 1, R_CARD));
         return button;
     }
 
@@ -311,7 +306,7 @@ public final class AppUi {
     }
 
     public static GradientDrawable materialBackground(Context context, int fillColor, int radiusDp) {
-        return cardBackground(context, fillColor, 0x10FFFFFF, 1, radiusDp);
+        return cardBackground(context, fillColor, SEPARATOR, 1, radiusDp);
     }
 
     public static GradientDrawable topRoundedBackground(Context context, int fillColor, int radiusDp) {
@@ -338,6 +333,15 @@ public final class AppUi {
         if (strokeDp > 0) {
             drawable.setStroke(dp(context, strokeDp), strokeColor);
         }
+        return drawable;
+    }
+
+    private static GradientDrawable coverBackground(Context context, boolean selected) {
+        GradientDrawable drawable = new GradientDrawable(
+                GradientDrawable.Orientation.TL_BR,
+                new int[]{GRAY5, GRAY4});
+        drawable.setCornerRadius(dp(context, R_THUMB));
+        drawable.setStroke(dp(context, 1), selected ? ACCENT : SEPARATOR);
         return drawable;
     }
 

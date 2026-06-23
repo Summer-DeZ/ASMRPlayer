@@ -21,31 +21,41 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.KeyboardArrowRight
+import androidx.compose.material.icons.automirrored.filled.OpenInNew
+import androidx.compose.material.icons.filled.Close
+import androidx.compose.material.icons.filled.Download
+import androidx.compose.material.icons.filled.LockOpen
+import androidx.compose.material.icons.filled.MusicNote
+import androidx.compose.material.icons.filled.Notifications
+import androidx.compose.material.icons.filled.Settings
+import androidx.compose.material.icons.filled.Subtitles
+import androidx.compose.material.icons.filled.UploadFile
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
 import androidx.compose.material3.Surface
+import androidx.compose.material3.Switch
+import androidx.compose.material3.SwitchDefaults
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import io.github.summerdez.asmrplayer.domain.model.AiTranscriptionBackend
+import io.github.summerdez.asmrplayer.domain.model.AiTranslationEngine
+import io.github.summerdez.asmrplayer.domain.model.WhisperModelSpec
 import io.github.summerdez.asmrplayer.presentation.AppUpdateDownloadStatus
 import io.github.summerdez.asmrplayer.presentation.AppUpdateStatus
 import io.github.summerdez.asmrplayer.presentation.RemoteWhisperTestStatus
 import io.github.summerdez.asmrplayer.presentation.SettingsUiState
-import io.github.summerdez.asmrplayer.domain.model.AiTranscriptionBackend
-import io.github.summerdez.asmrplayer.domain.model.AiTranslationEngine
-import io.github.summerdez.asmrplayer.domain.model.WhisperModelSpec
 import io.github.summerdez.asmrplayer.ui.components.GroupFooter
 import io.github.summerdez.asmrplayer.ui.components.GroupedCard
-import io.github.summerdez.asmrplayer.ui.components.SettingsPermissionRow
-import io.github.summerdez.asmrplayer.ui.components.SettingsSwitchRow
-import io.github.summerdez.asmrplayer.ui.components.ThemeChip
 import io.github.summerdez.asmrplayer.ui.theme.AppThemeMode
 import io.github.summerdez.asmrplayer.ui.theme.LocalAmberTokens
 
@@ -78,130 +88,159 @@ fun SettingsTab(
     onCancelWhisperModelDownload: () -> Unit,
     onDeleteWhisperModel: () -> Unit,
 ) {
-    val tokens = LocalAmberTokens.current
+    val settings = state.aiSubtitleSettings
     Column(
         Modifier
             .fillMaxSize()
             .verticalScroll(rememberScrollState())
-            .padding(horizontal = 16.dp, vertical = 8.dp),
+            .padding(horizontal = 16.dp, vertical = 6.dp),
         verticalArrangement = Arrangement.spacedBy(0.dp),
     ) {
+        SectionLabel("字幕")
         GroupedCard {
-            SettingsSwitchRow("悬浮字幕", state.overlayRequested, onToggleOverlay)
-            HorizontalDivider(color = tokens.separator, modifier = Modifier.padding(start = 16.dp))
-            SettingsSwitchRow("悬浮字幕锁定", state.overlayLocked, onUnlockOverlay)
+            SettingsSwitchIconRow(Icons.Default.Subtitles, "悬浮字幕", state.overlayRequested, onToggleOverlay)
+            SettingsDivider()
+            SettingsSwitchIconRow(Icons.Default.LockOpen, "悬浮字幕锁定", state.overlayLocked, onUnlockOverlay)
         }
-        GroupFooter("开启后字幕会以悬浮窗显示在其它应用之上，锁定可防止误触移动。")
+
         Spacer(Modifier.height(18.dp))
+        SectionLabel("权限")
         GroupedCard {
-            SettingsPermissionRow(
+            SettingsActionRow(
+                icon = Icons.AutoMirrored.Filled.OpenInNew,
                 title = "悬浮窗权限",
                 value = if (state.overlayPermissionGranted) "已授权" else "去授权",
-                valueAccent = !state.overlayPermissionGranted,
+                valueAccent = true,
+                trailing = RowTrailing.External,
                 onClick = onOpenOverlaySettings,
             )
-            HorizontalDivider(color = tokens.separator, modifier = Modifier.padding(start = 16.dp))
-            SettingsPermissionRow(
+            SettingsDivider()
+            SettingsActionRow(
+                icon = Icons.Default.Notifications,
                 title = "通知权限",
                 value = if (state.notificationGranted) "已授权" else "去授权",
-                valueAccent = !state.notificationGranted,
+                valueAccent = true,
+                trailing = RowTrailing.External,
                 onClick = onRequestNotificationPermission,
             )
         }
-        GroupFooter("通知权限用于在后台显示播放控制。")
+
         Spacer(Modifier.height(18.dp))
-        GroupedCard {
-            Column(Modifier.padding(16.dp)) {
-                Text("外观", fontSize = 17.sp, fontWeight = FontWeight.SemiBold, color = tokens.label)
-                Spacer(Modifier.height(10.dp))
-                Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                    ThemeChip("深色", state.themeMode == AppThemeMode.DARK) { onThemeSelected(AppThemeMode.DARK) }
-                    ThemeChip("浅色", state.themeMode == AppThemeMode.LIGHT) { onThemeSelected(AppThemeMode.LIGHT) }
-                    ThemeChip("跟随系统", state.themeMode == AppThemeMode.SYSTEM) { onThemeSelected(AppThemeMode.SYSTEM) }
-                }
-            }
-        }
-        Spacer(Modifier.height(18.dp))
+        SectionLabel("外观")
+        SettingsSegmentedControl(
+            labels = listOf("深色", "浅色", "跟随系统"),
+            selectedIndex = when (state.themeMode) {
+                AppThemeMode.DARK -> 0
+                AppThemeMode.LIGHT -> 1
+                AppThemeMode.SYSTEM -> 2
+            },
+            onSelected = { index ->
+                onThemeSelected(
+                    when (index) {
+                        0 -> AppThemeMode.DARK
+                        1 -> AppThemeMode.LIGHT
+                        else -> AppThemeMode.SYSTEM
+                    },
+                )
+            },
+        )
+
+        Spacer(Modifier.height(22.dp))
         SectionLabel("AI 字幕")
+        InlineSectionTitle("翻译引擎")
+        SettingsSegmentedControl(
+            labels = listOf("本地 Ollama", "OpenAI 兼容"),
+            selectedIndex = if (settings.translationEngine == AiTranslationEngine.OLLAMA) 0 else 1,
+            onSelected = { index ->
+                onAiEngineSelected(
+                    if (index == 0) AiTranslationEngine.OLLAMA else AiTranslationEngine.DEEPSEEK,
+                )
+            },
+        )
+        Spacer(Modifier.height(9.dp))
         GroupedCard {
-            Column(Modifier.padding(16.dp)) {
-                Text("翻译引擎", fontSize = 17.sp, fontWeight = FontWeight.SemiBold, color = tokens.label)
-                Spacer(Modifier.height(10.dp))
-                Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                    ThemeChip("本地 Ollama", state.aiSubtitleSettings.translationEngine == AiTranslationEngine.OLLAMA) {
-                        onAiEngineSelected(AiTranslationEngine.OLLAMA)
-                    }
-                    ThemeChip("OpenAI 兼容", state.aiSubtitleSettings.translationEngine == AiTranslationEngine.DEEPSEEK) {
-                        onAiEngineSelected(AiTranslationEngine.DEEPSEEK)
-                    }
-                }
-            }
-            HorizontalDivider(color = tokens.separator, modifier = Modifier.padding(start = 16.dp))
-            when (state.aiSubtitleSettings.translationEngine) {
+            when (settings.translationEngine) {
                 AiTranslationEngine.OLLAMA -> {
-                    SettingsActionRow("接口地址", state.aiSubtitleSettings.ollamaBaseUrl, onEditAiOllamaBaseUrl)
-                    HorizontalDivider(color = tokens.separator, modifier = Modifier.padding(start = 16.dp))
-                    SettingsActionRow("模型", state.aiSubtitleSettings.ollamaModel, onEditAiOllamaModel)
-                    HorizontalDivider(color = tokens.separator, modifier = Modifier.padding(start = 16.dp))
-                    SettingsValueRow("API Key", "本地无需")
+                    SettingsActionRow(
+                        icon = Icons.Default.Settings,
+                        title = "接口地址",
+                        value = compactEndpoint(settings.ollamaBaseUrl),
+                        onClick = onEditAiOllamaBaseUrl,
+                    )
+                    SettingsDivider()
+                    SettingsActionRow(
+                        icon = Icons.Default.MusicNote,
+                        title = "模型",
+                        value = settings.ollamaModel,
+                        onClick = onEditAiOllamaModel,
+                    )
+                    SettingsDivider()
+                    SettingsValueRow(Icons.Default.LockOpen, "API Key", "本地无需")
                 }
                 AiTranslationEngine.DEEPSEEK -> {
-                    SettingsActionRow("接口地址", state.aiSubtitleSettings.deepSeekBaseUrl, onEditAiDeepSeekBaseUrl)
-                    HorizontalDivider(color = tokens.separator, modifier = Modifier.padding(start = 16.dp))
-                    SettingsActionRow("模型", state.aiSubtitleSettings.deepSeekModel, onEditAiDeepSeekModel)
-                    HorizontalDivider(color = tokens.separator, modifier = Modifier.padding(start = 16.dp))
                     SettingsActionRow(
-                        "API Key",
-                        if (state.aiSubtitleSettings.deepSeekApiKey.isBlank()) "未设置" else "已设置",
-                        onEditAiDeepSeekApiKey,
+                        icon = Icons.Default.Settings,
+                        title = "接口地址",
+                        value = compactEndpoint(settings.deepSeekBaseUrl),
+                        onClick = onEditAiDeepSeekBaseUrl,
+                    )
+                    SettingsDivider()
+                    SettingsActionRow(
+                        icon = Icons.Default.MusicNote,
+                        title = "模型",
+                        value = settings.deepSeekModel,
+                        onClick = onEditAiDeepSeekModel,
+                    )
+                    SettingsDivider()
+                    SettingsActionRow(
+                        icon = Icons.Default.LockOpen,
+                        title = "API Key",
+                        value = if (settings.deepSeekApiKey.isBlank()) "未设置" else "已设置",
+                        onClick = onEditAiDeepSeekApiKey,
                     )
                 }
             }
-            HorizontalDivider(color = tokens.separator, modifier = Modifier.padding(start = 16.dp))
-            SettingsSwitchRow(
-                "成人内容直译",
-                state.aiSubtitleSettings.allowAdultContentTranslation,
-            ) {
-                onAiAdultContentTranslationAllowedChange(!state.aiSubtitleSettings.allowAdultContentTranslation)
-            }
+            SettingsDivider()
+            SettingsSwitchIconRow(
+                icon = Icons.Default.LockOpen,
+                title = "成人内容直译",
+                checked = settings.allowAdultContentTranslation,
+                onClick = {
+                    onAiAdultContentTranslationAllowedChange(!settings.allowAdultContentTranslation)
+                },
+                alt = true,
+            )
         }
-        GroupFooter(
-            if (state.aiSubtitleSettings.transcriptionBackend == AiTranscriptionBackend.LOCAL) {
-                "当前为本机转写，音频不上传；翻译阶段只发送文本到所选 OpenAI 兼容接口。开启成人内容直译后，AI 会按原文翻译成人向敏感词，不再用模糊说法规避。"
-            } else {
-                "当前为远程转写，整段音频会上传到你配置的 Whisper 服务器；翻译阶段只发送文本到所选 OpenAI 兼容接口。开启成人内容直译后，AI 会按原文翻译成人向敏感词，不再用模糊说法规避。"
+        GroupFooter(translationFooterText(state))
+
+        Spacer(Modifier.height(16.dp))
+        InlineSectionTitle("转写后端")
+        SettingsSegmentedControl(
+            labels = listOf("本机", "远程服务器"),
+            selectedIndex = if (settings.transcriptionBackend == AiTranscriptionBackend.LOCAL) 0 else 1,
+            onSelected = { index ->
+                onAiTranscriptionBackendSelected(
+                    if (index == 0) AiTranscriptionBackend.LOCAL else AiTranscriptionBackend.REMOTE,
+                )
             },
         )
-        Spacer(Modifier.height(14.dp))
-        SectionLabel("转写后端")
+        Spacer(Modifier.height(9.dp))
         GroupedCard {
-            Column(Modifier.padding(16.dp)) {
-                Text("转写方式", fontSize = 17.sp, fontWeight = FontWeight.SemiBold, color = tokens.label)
-                Spacer(Modifier.height(10.dp))
-                Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                    ThemeChip("本机", state.aiSubtitleSettings.transcriptionBackend == AiTranscriptionBackend.LOCAL) {
-                        onAiTranscriptionBackendSelected(AiTranscriptionBackend.LOCAL)
-                    }
-                    ThemeChip("远程服务器", state.aiSubtitleSettings.transcriptionBackend == AiTranscriptionBackend.REMOTE) {
-                        onAiTranscriptionBackendSelected(AiTranscriptionBackend.REMOTE)
-                    }
-                }
-            }
-            HorizontalDivider(color = tokens.separator, modifier = Modifier.padding(start = 16.dp))
-            when (state.aiSubtitleSettings.transcriptionBackend) {
+            when (settings.transcriptionBackend) {
                 AiTranscriptionBackend.LOCAL -> {
                     WhisperModelSpec.ALL.forEachIndexed { index, spec ->
                         SettingsSelectableRow(
+                            icon = Icons.Default.MusicNote,
                             title = spec.label,
                             value = formatUpdateBytes(spec.sizeBytes),
-                            selected = state.aiSubtitleSettings.whisperModelId == spec.id,
+                            selected = settings.whisperModelId == spec.id,
                             onClick = { onAiWhisperModelSelected(spec.id) },
                         )
                         if (index != WhisperModelSpec.ALL.lastIndex) {
-                            HorizontalDivider(color = tokens.separator, modifier = Modifier.padding(start = 16.dp))
+                            SettingsDivider()
                         }
                     }
-                    HorizontalDivider(color = tokens.separator, modifier = Modifier.padding(start = 16.dp))
+                    SettingsDivider()
                     WhisperModelStatusRow(
                         state = state,
                         onDownload = onDownloadWhisperModel,
@@ -211,35 +250,37 @@ fun SettingsTab(
                 }
                 AiTranscriptionBackend.REMOTE -> {
                     SettingsActionRow(
-                        "服务器地址",
-                        state.aiSubtitleSettings.remoteWhisperBaseUrl.ifBlank { "未设置" },
-                        onEditRemoteWhisperBaseUrl,
+                        icon = Icons.Default.UploadFile,
+                        title = "服务器地址",
+                        value = compactEndpoint(settings.remoteWhisperBaseUrl.ifBlank { "未设置" }),
+                        onClick = onEditRemoteWhisperBaseUrl,
                     )
-                    HorizontalDivider(color = tokens.separator, modifier = Modifier.padding(start = 16.dp))
-                    SettingsActionRow("模型", state.aiSubtitleSettings.activeRemoteWhisperModel, onEditRemoteWhisperModel)
-                    HorizontalDivider(color = tokens.separator, modifier = Modifier.padding(start = 16.dp))
+                    SettingsDivider()
                     SettingsActionRow(
-                        "Bearer Token",
-                        if (state.aiSubtitleSettings.remoteWhisperToken.isBlank()) "未设置" else "已设置",
-                        onEditRemoteWhisperToken,
+                        icon = Icons.Default.MusicNote,
+                        title = "模型",
+                        value = settings.activeRemoteWhisperModel,
+                        onClick = onEditRemoteWhisperModel,
                     )
-                    HorizontalDivider(color = tokens.separator, modifier = Modifier.padding(start = 16.dp))
+                    SettingsDivider()
+                    SettingsActionRow(
+                        icon = Icons.Default.LockOpen,
+                        title = "Bearer Token",
+                        value = if (settings.remoteWhisperToken.isBlank()) "未设置" else "已设置",
+                        onClick = onEditRemoteWhisperToken,
+                    )
+                    SettingsDivider()
                     RemoteWhisperTestRow(state.remoteWhisperTestStatus, onTestRemoteWhisperConnection)
                 }
             }
         }
-        GroupFooter(
-            if (state.aiSubtitleSettings.transcriptionBackend == AiTranscriptionBackend.LOCAL) {
-                "首次生成前下载 Whisper 模型；模型文件保存在本机应用私有目录，转写使用 CPU 并发处理语音切片。"
-            } else {
-                "远程模式会把整段音频上传到你配置的 Whisper 服务器；服务器返回日文时间轴后，App 继续在翻译阶段只发送文本。"
-            },
-        )
+        GroupFooter(transcriptionFooterText(state))
+
         Spacer(Modifier.height(18.dp))
         SectionLabel("关于")
         GroupedCard {
-            SettingsValueRow("版本", state.currentVersionName)
-            HorizontalDivider(color = tokens.separator, modifier = Modifier.padding(start = 16.dp))
+            SettingsValueRow(Icons.Default.Settings, "版本", state.currentVersionName)
+            SettingsDivider()
             UpdateCheckRow(
                 status = state.updateStatus,
                 onClick = {
@@ -257,6 +298,7 @@ fun SettingsTab(
             onCancel = onCancelUpdateDownload,
             onRetry = onRetryUpdateDownload,
         )
+        Spacer(Modifier.height(24.dp))
     }
 }
 
@@ -267,56 +309,277 @@ private fun SectionLabel(text: String) {
         color = LocalAmberTokens.current.label2,
         fontSize = 13.sp,
         fontWeight = FontWeight.SemiBold,
-        modifier = Modifier.padding(start = 16.dp, bottom = 7.dp),
+        modifier = Modifier.padding(start = 16.dp, bottom = 8.dp),
     )
 }
 
 @Composable
-private fun SettingsValueRow(title: String, value: String) {
+private fun InlineSectionTitle(text: String) {
+    Text(
+        text = text,
+        color = LocalAmberTokens.current.label2,
+        fontSize = 15.sp,
+        fontWeight = FontWeight.SemiBold,
+        modifier = Modifier.padding(start = 16.dp, bottom = 8.dp),
+    )
+}
+
+@Composable
+private fun SettingsDivider() {
+    HorizontalDivider(
+        color = LocalAmberTokens.current.separator,
+        modifier = Modifier.padding(start = 64.dp),
+    )
+}
+
+@Composable
+private fun SettingsIcon(icon: ImageVector, alt: Boolean = false) {
     val tokens = LocalAmberTokens.current
-    Row(
-        modifier = Modifier
-            .fillMaxWidth()
-            .height(52.dp)
-            .padding(start = 16.dp, end = 14.dp),
-        verticalAlignment = Alignment.CenterVertically,
+    Surface(
+        modifier = Modifier.size(36.dp),
+        shape = RoundedCornerShape(10.dp),
+        color = if (alt) tokens.accent2Soft else tokens.accentSoft,
+        tonalElevation = 0.dp,
+        shadowElevation = 0.dp,
     ) {
-        Text(title, fontSize = 17.sp, color = tokens.label, modifier = Modifier.weight(1f))
-        Text(value, fontSize = 17.sp, color = tokens.label2, maxLines = 1, overflow = TextOverflow.Ellipsis)
+        Box(contentAlignment = Alignment.Center) {
+            Icon(
+                icon,
+                contentDescription = null,
+                tint = if (alt) tokens.accent2 else tokens.accent,
+                modifier = Modifier.size(20.dp),
+            )
+        }
     }
 }
 
 @Composable
-private fun SettingsActionRow(title: String, value: String, onClick: () -> Unit) {
+private fun SettingsValueRow(icon: ImageVector, title: String, value: String, valueAccent: Boolean = false) {
     val tokens = LocalAmberTokens.current
     Row(
         modifier = Modifier
             .fillMaxWidth()
-            .height(52.dp)
-            .clickable(onClick = onClick)
-            .padding(start = 16.dp, end = 14.dp),
+            .height(64.dp)
+            .padding(start = 15.dp, end = 14.dp),
         verticalAlignment = Alignment.CenterVertically,
     ) {
-        Text(title, fontSize = 17.sp, color = tokens.label, modifier = Modifier.weight(1f))
-        Text(value, fontSize = 17.sp, color = tokens.label2, maxLines = 1, overflow = TextOverflow.Ellipsis)
-        Spacer(Modifier.width(8.dp))
-        Icon(Icons.AutoMirrored.Filled.KeyboardArrowRight, contentDescription = null, tint = tokens.label3, modifier = Modifier.size(18.dp))
+        SettingsIcon(icon)
+        Spacer(Modifier.width(13.dp))
+        Text(
+            title,
+            fontSize = 16.sp,
+            color = tokens.label,
+            maxLines = 1,
+            overflow = TextOverflow.Ellipsis,
+            modifier = Modifier.weight(1f),
+        )
+        Text(
+            value,
+            fontSize = 16.sp,
+            color = if (valueAccent) tokens.accent else tokens.label2,
+            maxLines = 1,
+            overflow = TextOverflow.Ellipsis,
+        )
+    }
+}
+
+private enum class RowTrailing {
+    Chevron,
+    External,
+    None,
+}
+
+@Composable
+private fun SettingsActionRow(
+    icon: ImageVector,
+    title: String,
+    value: String,
+    onClick: () -> Unit,
+    valueAccent: Boolean = false,
+    showDot: Boolean = false,
+    trailing: RowTrailing = RowTrailing.Chevron,
+) {
+    val tokens = LocalAmberTokens.current
+    Row(
+        modifier = Modifier
+            .fillMaxWidth()
+            .height(64.dp)
+            .clickable(onClick = onClick)
+            .padding(start = 15.dp, end = 14.dp),
+        verticalAlignment = Alignment.CenterVertically,
+    ) {
+        SettingsIcon(icon)
+        Spacer(Modifier.width(13.dp))
+        Text(
+            title,
+            fontSize = 16.sp,
+            color = tokens.label,
+            maxLines = 1,
+            overflow = TextOverflow.Ellipsis,
+            modifier = Modifier.weight(1f),
+        )
+        if (showDot) {
+            Box(
+                Modifier
+                    .size(8.dp)
+                    .background(tokens.accent, CircleShape),
+            )
+            Spacer(Modifier.width(8.dp))
+        }
+        Text(
+            value,
+            fontSize = 16.sp,
+            color = if (valueAccent) tokens.accent else tokens.label2,
+            maxLines = 1,
+            overflow = TextOverflow.Ellipsis,
+        )
+        when (trailing) {
+            RowTrailing.Chevron -> {
+                Spacer(Modifier.width(8.dp))
+                Icon(
+                    Icons.AutoMirrored.Filled.KeyboardArrowRight,
+                    contentDescription = null,
+                    tint = tokens.label3,
+                    modifier = Modifier.size(19.dp),
+                )
+            }
+            RowTrailing.External -> {
+                Spacer(Modifier.width(8.dp))
+                Icon(
+                    Icons.AutoMirrored.Filled.OpenInNew,
+                    contentDescription = null,
+                    tint = tokens.label3,
+                    modifier = Modifier.size(18.dp),
+                )
+            }
+            RowTrailing.None -> Unit
+        }
     }
 }
 
 @Composable
-private fun SettingsSelectableRow(title: String, value: String, selected: Boolean, onClick: () -> Unit) {
+private fun SettingsSwitchIconRow(
+    icon: ImageVector,
+    title: String,
+    checked: Boolean,
+    onClick: () -> Unit,
+    alt: Boolean = false,
+) {
     val tokens = LocalAmberTokens.current
     Row(
         modifier = Modifier
             .fillMaxWidth()
-            .height(52.dp)
+            .height(64.dp)
             .clickable(onClick = onClick)
-            .padding(start = 16.dp, end = 14.dp),
+            .padding(start = 15.dp, end = 14.dp),
         verticalAlignment = Alignment.CenterVertically,
     ) {
-        Text(title, fontSize = 17.sp, color = tokens.label, modifier = Modifier.weight(1f))
-        Text(value, fontSize = 15.sp, color = tokens.label2, maxLines = 1, overflow = TextOverflow.Ellipsis)
+        SettingsIcon(icon, alt)
+        Spacer(Modifier.width(13.dp))
+        Text(
+            title,
+            fontSize = 16.sp,
+            color = tokens.label,
+            maxLines = 1,
+            overflow = TextOverflow.Ellipsis,
+            modifier = Modifier.weight(1f),
+        )
+        Switch(
+            checked = checked,
+            onCheckedChange = { onClick() },
+            colors = SwitchDefaults.colors(
+                checkedTrackColor = tokens.switchOn,
+                uncheckedTrackColor = tokens.switchOff,
+                checkedThumbColor = Color.White,
+                uncheckedThumbColor = Color.White,
+                uncheckedBorderColor = Color.Transparent,
+                checkedBorderColor = Color.Transparent,
+            ),
+        )
+    }
+}
+
+@Composable
+private fun SettingsSegmentedControl(
+    labels: List<String>,
+    selectedIndex: Int,
+    onSelected: (Int) -> Unit,
+) {
+    val tokens = LocalAmberTokens.current
+    Surface(
+        modifier = Modifier
+            .fillMaxWidth()
+            .height(58.dp),
+        shape = RoundedCornerShape(16.dp),
+        color = tokens.cardBottom,
+        border = BorderStroke(0.7.dp, tokens.separator),
+        tonalElevation = 0.dp,
+        shadowElevation = 0.dp,
+    ) {
+        Row(
+            modifier = Modifier
+                .fillMaxSize()
+                .padding(5.dp),
+            horizontalArrangement = Arrangement.spacedBy(4.dp),
+            verticalAlignment = Alignment.CenterVertically,
+        ) {
+            labels.forEachIndexed { index, label ->
+                val selected = selectedIndex == index
+                Surface(
+                    modifier = Modifier
+                        .weight(1f)
+                        .fillMaxHeight()
+                        .clickable { onSelected(index) },
+                    shape = RoundedCornerShape(13.dp),
+                    color = if (selected) tokens.cardTop else Color.Transparent,
+                    border = if (selected) BorderStroke(0.5.dp, tokens.separator) else null,
+                    tonalElevation = 0.dp,
+                    shadowElevation = if (selected) 2.dp else 0.dp,
+                ) {
+                    Box(contentAlignment = Alignment.Center) {
+                        Text(
+                            label,
+                            color = if (selected) tokens.accent else tokens.label2,
+                            fontSize = 15.sp,
+                            fontWeight = if (selected) FontWeight.SemiBold else FontWeight.Medium,
+                            maxLines = 1,
+                            overflow = TextOverflow.Ellipsis,
+                        )
+                    }
+                }
+            }
+        }
+    }
+}
+
+@Composable
+private fun SettingsSelectableRow(
+    icon: ImageVector,
+    title: String,
+    value: String,
+    selected: Boolean,
+    onClick: () -> Unit,
+) {
+    val tokens = LocalAmberTokens.current
+    Row(
+        modifier = Modifier
+            .fillMaxWidth()
+            .height(64.dp)
+            .clickable(onClick = onClick)
+            .padding(start = 15.dp, end = 14.dp),
+        verticalAlignment = Alignment.CenterVertically,
+    ) {
+        SettingsIcon(icon)
+        Spacer(Modifier.width(13.dp))
+        Text(
+            title,
+            fontSize = 16.sp,
+            color = tokens.label,
+            maxLines = 1,
+            overflow = TextOverflow.Ellipsis,
+            modifier = Modifier.weight(1f),
+        )
+        Text(value, fontSize = 14.sp, color = tokens.label2, maxLines = 1, overflow = TextOverflow.Ellipsis)
         Spacer(Modifier.width(10.dp))
         Text(if (selected) "✓" else "", fontSize = 17.sp, color = tokens.accent, fontWeight = FontWeight.Bold)
     }
@@ -331,37 +594,54 @@ private fun WhisperModelStatusRow(
 ) {
     val tokens = LocalAmberTokens.current
     val model = state.whisperModelState
-    Column(Modifier.fillMaxWidth().padding(start = 16.dp, end = 14.dp, top = 11.dp, bottom = 11.dp)) {
+    val statusText = when {
+        model.downloading -> "下载中 ${(model.progress * 100).toInt()}%"
+        model.downloaded -> "已下载"
+        model.error.isNotBlank() -> "下载失败"
+        else -> "未下载"
+    }
+    val action = when {
+        model.downloading -> "取消"
+        model.downloaded -> "删除"
+        else -> "下载"
+    }
+    Column(
+        Modifier
+            .fillMaxWidth()
+            .padding(start = 15.dp, end = 14.dp, top = 14.dp, bottom = 12.dp),
+    ) {
         Row(verticalAlignment = Alignment.CenterVertically) {
-            Text("模型状态", fontSize = 17.sp, color = tokens.label, modifier = Modifier.weight(1f))
+            SettingsIcon(Icons.Default.Download, alt = model.error.isNotBlank())
+            Spacer(Modifier.width(13.dp))
             Text(
-                when {
-                    model.downloading -> "下载中 ${(model.progress * 100).toInt()}%"
-                    model.downloaded -> "已下载"
-                    model.error.isNotBlank() -> "下载失败"
-                    else -> "未下载"
-                },
-                fontSize = 17.sp,
+                "模型状态",
+                fontSize = 16.sp,
+                color = tokens.label,
+                maxLines = 1,
+                overflow = TextOverflow.Ellipsis,
+                modifier = Modifier.weight(1f),
+            )
+            Text(
+                statusText,
+                fontSize = 15.sp,
                 color = if (model.error.isNotBlank()) tokens.accent2 else tokens.label2,
+                maxLines = 1,
+                overflow = TextOverflow.Ellipsis,
             )
         }
         if (model.downloading || model.error.isNotBlank()) {
-            Box(
-                modifier = Modifier
-                    .padding(top = 11.dp)
-                    .fillMaxWidth()
-                    .height(4.dp)
-                    .background(tokens.label3.copy(alpha = 0.28f), RoundedCornerShape(3.dp)),
-            ) {
-                Box(
-                    modifier = Modifier
-                        .fillMaxHeight()
-                        .fillMaxWidth(model.progress)
-                        .background(if (model.error.isNotBlank()) tokens.accent2 else tokens.accent, RoundedCornerShape(3.dp)),
-                )
-            }
+            ProgressLine(
+                progress = model.progress,
+                failed = model.error.isNotBlank(),
+                modifier = Modifier.padding(start = 49.dp, top = 13.dp),
+            )
         }
-        Row(Modifier.fillMaxWidth().padding(top = 6.dp), verticalAlignment = Alignment.CenterVertically) {
+        Row(
+            Modifier
+                .fillMaxWidth()
+                .padding(start = 49.dp, top = 8.dp),
+            verticalAlignment = Alignment.CenterVertically,
+        ) {
             Text(
                 text = model.error.ifBlank {
                     if (model.downloaded) formatUpdateBytes(model.bytesDownloaded) else formatUpdateBytes(model.totalBytes)
@@ -380,12 +660,8 @@ private fun WhisperModelStatusRow(
                 },
             ) {
                 Text(
-                    when {
-                        model.downloading -> "取消"
-                        model.downloaded -> "删除"
-                        else -> "下载"
-                    },
-                    color = if (model.downloaded || model.downloading) tokens.accent2 else tokens.accent,
+                    action,
+                    color = if (model.downloaded || model.downloading || model.error.isNotBlank()) tokens.accent2 else tokens.accent,
                     fontSize = 13.sp,
                     fontWeight = FontWeight.Medium,
                 )
@@ -401,17 +677,19 @@ private fun RemoteWhisperTestRow(status: RemoteWhisperTestStatus, onClick: () ->
     Row(
         modifier = Modifier
             .fillMaxWidth()
-            .height(52.dp)
+            .height(64.dp)
             .clickable(enabled = !checking, onClick = onClick)
-            .padding(start = 16.dp, end = 14.dp),
+            .padding(start = 15.dp, end = 14.dp),
         verticalAlignment = Alignment.CenterVertically,
     ) {
-        Text("测试连接", fontSize = 17.sp, color = tokens.label, modifier = Modifier.weight(1f))
+        SettingsIcon(Icons.Default.Settings)
+        Spacer(Modifier.width(13.dp))
+        Text("测试连接", fontSize = 16.sp, color = tokens.label, modifier = Modifier.weight(1f))
         when (status) {
             RemoteWhisperTestStatus.Idle -> {
-                Text("未测试", fontSize = 17.sp, color = tokens.label2)
+                Text("未测试", fontSize = 16.sp, color = tokens.label2)
                 Spacer(Modifier.width(8.dp))
-                Icon(Icons.AutoMirrored.Filled.KeyboardArrowRight, contentDescription = null, tint = tokens.label3, modifier = Modifier.size(18.dp))
+                Icon(Icons.AutoMirrored.Filled.KeyboardArrowRight, contentDescription = null, tint = tokens.label3, modifier = Modifier.size(19.dp))
             }
             RemoteWhisperTestStatus.Checking -> {
                 CircularProgressIndicator(
@@ -421,7 +699,7 @@ private fun RemoteWhisperTestRow(status: RemoteWhisperTestStatus, onClick: () ->
                     strokeWidth = 2.dp,
                 )
                 Spacer(Modifier.width(8.dp))
-                Text("测试中…", fontSize = 17.sp, color = tokens.label2)
+                Text("测试中…", fontSize = 16.sp, color = tokens.label2)
             }
             is RemoteWhisperTestStatus.Success -> {
                 Text(status.message, fontSize = 15.sp, color = tokens.accent, maxLines = 1, overflow = TextOverflow.Ellipsis)
@@ -440,12 +718,14 @@ private fun UpdateCheckRow(status: AppUpdateStatus, onClick: () -> Unit) {
     Row(
         modifier = Modifier
             .fillMaxWidth()
-            .height(52.dp)
+            .height(64.dp)
             .clickable(enabled = enabled, onClick = onClick)
-            .padding(start = 16.dp, end = 14.dp),
+            .padding(start = 15.dp, end = 14.dp),
         verticalAlignment = Alignment.CenterVertically,
     ) {
-        Text("检查更新", fontSize = 17.sp, color = tokens.label, modifier = Modifier.weight(1f))
+        SettingsIcon(Icons.Default.Download)
+        Spacer(Modifier.width(13.dp))
+        Text("检查更新", fontSize = 16.sp, color = tokens.label, modifier = Modifier.weight(1f))
         when (status) {
             AppUpdateStatus.Checking -> {
                 CircularProgressIndicator(
@@ -455,35 +735,35 @@ private fun UpdateCheckRow(status: AppUpdateStatus, onClick: () -> Unit) {
                     strokeWidth = 2.dp,
                 )
                 Spacer(Modifier.width(8.dp))
-                Text("正在检查…", fontSize = 17.sp, color = tokens.label2)
+                Text("正在检查…", fontSize = 16.sp, color = tokens.label2)
             }
             is AppUpdateStatus.Available -> {
                 Box(
                     Modifier
                         .size(9.dp)
-                        .background(tokens.accent2, CircleShape),
+                        .background(tokens.accent, CircleShape),
                 )
                 Spacer(Modifier.width(8.dp))
                 Text(
                     text = "有新版本 ${status.release.versionName}",
-                    fontSize = 17.sp,
+                    fontSize = 16.sp,
                     color = tokens.accent,
                     maxLines = 1,
                     overflow = TextOverflow.Ellipsis,
                 )
                 Spacer(Modifier.width(8.dp))
-                Icon(Icons.AutoMirrored.Filled.KeyboardArrowRight, contentDescription = null, tint = tokens.label3, modifier = Modifier.size(18.dp))
+                Icon(Icons.AutoMirrored.Filled.KeyboardArrowRight, contentDescription = null, tint = tokens.label3, modifier = Modifier.size(19.dp))
             }
-            AppUpdateStatus.UpToDate -> Text("已是最新", fontSize = 17.sp, color = tokens.label2)
+            AppUpdateStatus.UpToDate -> Text("已是最新", fontSize = 16.sp, color = tokens.label2)
             is AppUpdateStatus.Failed -> {
-                Text("检查失败", fontSize = 17.sp, color = tokens.accent2)
+                Text("检查失败", fontSize = 16.sp, color = tokens.accent2)
                 Spacer(Modifier.width(8.dp))
-                Icon(Icons.AutoMirrored.Filled.KeyboardArrowRight, contentDescription = null, tint = tokens.label3, modifier = Modifier.size(18.dp))
+                Icon(Icons.AutoMirrored.Filled.KeyboardArrowRight, contentDescription = null, tint = tokens.label3, modifier = Modifier.size(19.dp))
             }
             AppUpdateStatus.Idle -> {
-                Text("点击检查", fontSize = 17.sp, color = tokens.label2)
+                Text("点击检查", fontSize = 16.sp, color = tokens.label2)
                 Spacer(Modifier.width(8.dp))
-                Icon(Icons.AutoMirrored.Filled.KeyboardArrowRight, contentDescription = null, tint = tokens.label3, modifier = Modifier.size(18.dp))
+                Icon(Icons.AutoMirrored.Filled.KeyboardArrowRight, contentDescription = null, tint = tokens.label3, modifier = Modifier.size(19.dp))
             }
         }
     }
@@ -529,71 +809,132 @@ private fun UpdateDownloadCard(
     val failed = failureMessage != null
     Spacer(Modifier.height(14.dp))
     Surface(
-        color = tokens.card,
-        shape = RoundedCornerShape(16.dp),
+        color = tokens.cardTop,
+        shape = RoundedCornerShape(18.dp),
+        border = BorderStroke(0.5.dp, tokens.separator),
+        tonalElevation = 0.dp,
+        shadowElevation = 2.dp,
         modifier = Modifier.fillMaxWidth(),
     ) {
         Column(Modifier.padding(16.dp)) {
             Row(verticalAlignment = Alignment.CenterVertically) {
+                SettingsIcon(Icons.Default.Download, alt = failed)
+                Spacer(Modifier.width(13.dp))
                 Text(
-                    text = if (failed) "更新下载失败" else "正在下载更新 ${release.versionName}",
+                    text = if (failed) "更新下载失败" else "正在下载 v${release.versionName}",
                     color = tokens.label,
-                    fontSize = 17.sp,
-                    fontWeight = FontWeight.Medium,
+                    fontSize = 16.sp,
+                    fontWeight = FontWeight.SemiBold,
                     modifier = Modifier.weight(1f),
                     maxLines = 1,
                     overflow = TextOverflow.Ellipsis,
                 )
-                Text(
-                    text = if (totalBytes > 0L) "${(progress * 100).toInt()}%" else "--",
-                    color = if (failed) tokens.accent2 else tokens.accent,
-                    fontSize = 15.sp,
-                    fontWeight = FontWeight.SemiBold,
-                )
+                if (failed) {
+                    TextButton(onClick = onRetry) {
+                        Text("重试", color = tokens.accent2, fontSize = 14.sp, fontWeight = FontWeight.SemiBold)
+                    }
+                } else {
+                    Surface(
+                        modifier = Modifier
+                            .size(44.dp)
+                            .clickable(onClick = onCancel),
+                        shape = RoundedCornerShape(12.dp),
+                        color = tokens.accent2Soft,
+                    ) {
+                        Box(contentAlignment = Alignment.Center) {
+                            Icon(Icons.Default.Close, contentDescription = "取消", tint = tokens.accent2, modifier = Modifier.size(22.dp))
+                        }
+                    }
+                }
             }
-            Box(
-                modifier = Modifier
-                    .padding(top = 12.dp)
-                    .fillMaxWidth()
-                    .height(4.dp)
-                    .background(tokens.label3.copy(alpha = 0.28f), RoundedCornerShape(3.dp)),
-            ) {
-                Box(
-                    modifier = Modifier
-                        .fillMaxHeight()
-                        .fillMaxWidth(progress)
-                        .background(if (failed) tokens.accent2 else tokens.accent, RoundedCornerShape(3.dp)),
-                )
-            }
+            ProgressLine(
+                progress = progress,
+                failed = failed,
+                modifier = Modifier.padding(top = 16.dp),
+            )
             Row(
                 modifier = Modifier
                     .fillMaxWidth()
-                    .padding(top = 10.dp),
+                    .padding(top = 11.dp),
                 verticalAlignment = Alignment.CenterVertically,
             ) {
                 Text(
-                    text = failureMessage ?: run {
-                        "${formatUpdateBytes(speedBytesPerSecond)}/s · " +
-                            "${formatUpdateBytes(bytesDownloaded)} / ${formatUpdateBytes(totalBytes)}"
-                    },
-                    color = tokens.label2,
+                    text = failureMessage ?: formatUpdateBytes(speedBytesPerSecond) + "/s",
+                    color = if (failed) tokens.accent2 else tokens.label2,
                     fontSize = 13.sp,
                     modifier = Modifier.weight(1f),
                     maxLines = 1,
                     overflow = TextOverflow.Ellipsis,
                 )
-                TextButton(onClick = if (failed) onRetry else onCancel) {
-                    Text(if (failed) "重试" else "取消", color = tokens.accent2, fontSize = 13.sp, fontWeight = FontWeight.Medium)
-                }
+                Text(
+                    text = "${formatUpdateBytes(bytesDownloaded)} / ${formatUpdateBytes(totalBytes)}",
+                    color = tokens.label2,
+                    fontSize = 13.sp,
+                    maxLines = 1,
+                    overflow = TextOverflow.Ellipsis,
+                )
             }
         }
+    }
+}
+
+@Composable
+private fun ProgressLine(progress: Float, failed: Boolean, modifier: Modifier = Modifier) {
+    val tokens = LocalAmberTokens.current
+    Box(
+        modifier = modifier
+            .fillMaxWidth()
+            .height(4.dp)
+            .background(tokens.label3.copy(alpha = 0.24f), RoundedCornerShape(3.dp)),
+    ) {
+        Box(
+            modifier = Modifier
+                .fillMaxHeight()
+                .fillMaxWidth(progress.coerceIn(0f, 1f))
+                .background(if (failed) tokens.accent2 else tokens.accent, RoundedCornerShape(3.dp)),
+        )
+    }
+}
+
+private fun translationFooterText(state: SettingsUiState): String {
+    return if (state.aiSubtitleSettings.translationEngine == AiTranslationEngine.OLLAMA) {
+        "本地 Ollama 模式无需 API Key；翻译阶段只发送字幕文本。"
+    } else {
+        "OpenAI 兼容模式默认可使用 DeepSeek 预设，也可以保存任意兼容接口和模型名。"
+    }
+}
+
+private fun transcriptionFooterText(state: SettingsUiState): String {
+    return if (state.aiSubtitleSettings.transcriptionBackend == AiTranscriptionBackend.LOCAL) {
+        "本机转写使用 sherpa-onnx Whisper，音频不上传；首次生成前需要下载模型。"
+    } else {
+        "远程模式会把整段音频上传到你配置的 Whisper 服务器；App 不提供官方后端。"
     }
 }
 
 private fun updateFooterText(status: AppUpdateStatus): String {
     return when (status) {
         is AppUpdateStatus.Failed -> status.message
-        else -> "点击「检查更新」获取最新版本；发现新版本时显示更新点与版本号。"
+        is AppUpdateStatus.Available -> "发现新版本时点此查看详情，并由你确认后再下载或安装。"
+        AppUpdateStatus.Checking -> "正在获取最新版本信息。"
+        AppUpdateStatus.UpToDate -> "当前已是最新版本。"
+        AppUpdateStatus.Idle -> "点击检查更新获取最新版本信息。"
+    }
+}
+
+private fun compactEndpoint(value: String): String {
+    val cleaned = value
+        .trim()
+        .removePrefix("https://")
+        .removePrefix("http://")
+        .trimEnd('/')
+    if (cleaned.isBlank()) {
+        return "未设置"
+    }
+    return if (cleaned.length > 24) {
+        "…" + cleaned.takeLast(23)
+    } else {
+        cleaned
     }
 }
 

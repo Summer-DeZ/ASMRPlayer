@@ -1,19 +1,29 @@
 <?xml version="1.0" encoding="utf-8"?>
 <resources>
     <color name="accent">#C47A3E</color>
+    <color name="accent_dark">#A9632E</color>
     <color name="accent2">#C06B58</color>
+    <color name="accent_soft">#24C47A3E</color>
+    <color name="accent2_soft">#21C06B58</color>
+    <color name="glow">#33C47A3E</color>
     <color name="switch_on">#C47A3E</color>
     <color name="switch_off">#E2D8C8</color>
     <color name="bg">#FBF6EF</color>
     <color name="grouped">#F3EBE0</color>
     <color name="gray6">#FFFFFF</color>
-    <color name="gray5">#EBE0D0</color>
+    <color name="gray5">#EFE6D8</color>
     <color name="gray4">#E2D8C8</color>
     <color name="gray3">#D0C2B0</color>
+    <color name="card_top">#FFFFFF</color>
+    <color name="card_bottom">#FAF4EC</color>
+    <color name="cover_top">#ECE0CD</color>
+    <color name="cover_bottom">#DCC9AD</color>
     <color name="label">#2A2018</color>
     <color name="label2">#943C2D1E</color>
     <color name="label3">#523C2D1E</color>
     <color name="separator">#29785A3C</color>
+    <color name="glass">#B8FBF6EF</color>
     <color name="bar_material">#E6FBF6EF</color>
-    <color name="sheet_material">#F2FAF5ED</color>
+    <color name="solid_bar">#FBF6EF</color>
+    <color name="sheet_material">#F2FFFFFF</color>
 </resources>

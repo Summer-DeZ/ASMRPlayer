@@ -83,12 +83,9 @@ class GitHubAppUpdateRepository(
         release: AppUpdateRelease,
         onProgress: (AppUpdateDownloadProgress) -> Unit,
     ): File = withContext(Dispatchers.IO) {
-        val updatesDir = File(cacheDir, "updates").apply { mkdirs() }
-        val target = File(updatesDir, "ASMRPlayer-${release.versionName}.apk")
+        val updatesDir = AppUpdateCacheCleaner.prepareForDownload(cacheDir, release.versionName)
+        val target = AppUpdateCacheCleaner.apkFile(updatesDir, release.versionName)
         val partial = File(updatesDir, "${target.name}.part")
-        if (partial.exists()) {
-            partial.delete()
-        }
 
         val request = Request.Builder()
             .url(release.apkDownloadUrl)
@@ -102,7 +99,7 @@ class GitHubAppUpdateRepository(
                 call.cancel()
             }
         }
-        var canceled = false
+        var completed = false
         try {
             call.execute().use { response ->
                 if (!response.isSuccessful) {
@@ -144,6 +141,7 @@ class GitHubAppUpdateRepository(
                     partial.copyTo(target, overwrite = true)
                     partial.delete()
                 }
+                completed = true
                 onProgress(
                     AppUpdateDownloadProgress(
                         bytesDownloaded = bytesDownloaded,
@@ -155,13 +153,12 @@ class GitHubAppUpdateRepository(
             }
         } catch (error: IOException) {
             if (job?.isCancelled == true || call.isCanceled()) {
-                canceled = true
                 throw CancellationException("下载已取消").also { it.initCause(error) }
             }
             throw error
         } finally {
             cancellationHandle?.dispose()
-            if (canceled || job?.isCancelled == true || call.isCanceled()) {
+            if (!completed) {
                 partial.delete()
             }
         }

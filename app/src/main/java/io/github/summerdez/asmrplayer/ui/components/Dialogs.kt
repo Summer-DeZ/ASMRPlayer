@@ -1,6 +1,7 @@
 package io.github.summerdez.asmrplayer.ui.components
 
 import androidx.compose.foundation.background
+import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.ColumnScope
@@ -14,6 +15,7 @@ import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.OutlinedTextField
+import androidx.compose.material3.OutlinedTextFieldDefaults
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
@@ -60,6 +62,15 @@ fun TextInputDialog(
                 },
                 singleLine = true,
                 shape = RoundedCornerShape(10.dp),
+                colors = OutlinedTextFieldDefaults.colors(
+                    focusedTextColor = tokens.label,
+                    unfocusedTextColor = tokens.label,
+                    cursorColor = tokens.accent,
+                    focusedBorderColor = tokens.accent,
+                    unfocusedBorderColor = tokens.separator,
+                    focusedContainerColor = tokens.cardTop,
+                    unfocusedContainerColor = tokens.cardTop,
+                ),
                 modifier = Modifier.fillMaxWidth().padding(top = 14.dp),
             )
         }
@@ -220,11 +231,15 @@ fun InstallUpdateDialog(
 
 @Composable
 fun IosDialog(onDismiss: () -> Unit, content: @Composable ColumnScope.() -> Unit) {
+    val tokens = LocalAmberTokens.current
     Dialog(onDismissRequest = onDismiss) {
         Surface(
             shape = RoundedCornerShape(18.dp),
-            color = LocalAmberTokens.current.sheet,
-            modifier = Modifier.width(292.dp),
+            color = tokens.sheet,
+            border = BorderStroke(0.5.dp, tokens.separator),
+            tonalElevation = 0.dp,
+            shadowElevation = 12.dp,
+            modifier = Modifier.width(300.dp),
         ) {
             Column(content = content)
         }
@@ -243,7 +258,7 @@ fun DialogButtons(
 ) {
     val tokens = LocalAmberTokens.current
     HorizontalDivider(color = tokens.separator)
-    Row(Modifier.fillMaxWidth().height(46.dp)) {
+    Row(Modifier.fillMaxWidth().height(48.dp)) {
         TextButton(onClick = onCancel, modifier = Modifier.weight(1f).fillMaxHeight()) {
             Text(cancelText, color = tokens.label2, fontSize = 17.sp)
         }

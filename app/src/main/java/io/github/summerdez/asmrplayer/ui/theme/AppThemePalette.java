@@ -76,17 +76,17 @@ final class AppThemePalette {
                 0xFFE0A26B,
                 0xFF3A322A,
                 0xFF17120E,
-                0xFF221A14,
-                0xFF2C231B,
+                0xFF221A13,
+                0xFF2C2219,
                 0xFF3A322A,
                 0xFF4A3B2E,
                 0xFFF6F1EA,
                 0x8CF6F1EA,
                 0x4DF6F1EA,
                 0x29BEA078,
-                0xDB211A14,
-                0xFF1C1610,
-                0xF0261E16);
+                0xDB1E1710,
+                0xFF15100B,
+                0xF01D1610);
     }
 
     static AppThemePalette light() {
@@ -97,7 +97,7 @@ final class AppThemePalette {
                 0xFFE2D8C8,
                 0xFFFBF6EF,
                 0xFFFFFFFF,
-                0xFFEBE0D0,
+                0xFFEFE6D8,
                 0xFFE2D8C8,
                 0xFFD0C2B0,
                 0xFF2A2018,
@@ -105,7 +105,7 @@ final class AppThemePalette {
                 0x523C2D1E,
                 0x29785A3C,
                 0xE6FBF6EF,
-                0xFFF7F1E8,
-                0xF2FAF5ED);
+                0xFFFBF6EF,
+                0xF2FFFFFF);
     }
 }

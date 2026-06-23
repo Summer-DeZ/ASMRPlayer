@@ -163,20 +163,20 @@ fun BottomPlaybackArea(
     Column(
         modifier = Modifier
             .fillMaxWidth()
-            .background(tokens.bar)
+            .background(Brush.verticalGradient(listOf(tokens.glass, tokens.solidBar)))
             .navigationBarsPadding(),
     ) {
         Surface(
             modifier = Modifier
                 .fillMaxWidth()
-                .padding(start = 8.dp, end = 8.dp, top = 8.dp, bottom = 6.dp)
+                .padding(start = 12.dp, end = 12.dp, top = 8.dp, bottom = 7.dp)
                 .height(66.dp)
                 .noRippleClickable(onClick = onOpenPlayer),
-            shape = RoundedCornerShape(18.dp),
-            color = tokens.sheet,
+            shape = RoundedCornerShape(20.dp),
+            color = tokens.glass,
             border = BorderStroke(0.5.dp, tokens.separator),
             tonalElevation = 0.dp,
-            shadowElevation = 8.dp,
+            shadowElevation = 6.dp,
         ) {
             Row(
                 modifier = Modifier
@@ -184,10 +184,17 @@ fun BottomPlaybackArea(
                     .padding(start = 12.dp, end = 10.dp),
                 verticalAlignment = Alignment.CenterVertically,
             ) {
-                CoverBox(playbackState.coverUri, Modifier.size(48.dp))
+                CoverBox(playbackState.coverUri, Modifier.size(50.dp))
                 Spacer(Modifier.width(12.dp))
                 Column(Modifier.weight(1f)) {
-                    Text(playbackState.audioTitle, maxLines = 1, overflow = TextOverflow.Ellipsis, fontSize = 15.sp)
+                    Text(
+                        playbackState.audioTitle,
+                        maxLines = 1,
+                        overflow = TextOverflow.Ellipsis,
+                        fontSize = 15.sp,
+                        fontWeight = FontWeight.SemiBold,
+                        color = tokens.label,
+                    )
                     Text(
                         playbackState.contextTitle,
                         maxLines = 1,
@@ -197,7 +204,7 @@ fun BottomPlaybackArea(
                     )
                 }
                 Row(
-                    modifier = Modifier.width(104.dp),
+                    modifier = Modifier.width(96.dp),
                     horizontalArrangement = Arrangement.SpaceBetween,
                     verticalAlignment = Alignment.CenterVertically,
                 ) {
@@ -243,11 +250,11 @@ fun MiniPlayerIconButton(
 ) {
     Box(
         modifier = Modifier
-            .size(44.dp)
+            .size(42.dp)
             .noRippleClickable(enabled = enabled, onClick = onClick),
         contentAlignment = Alignment.Center,
     ) {
-        Icon(icon, contentDescription = contentDescription, tint = tint, modifier = Modifier.size(31.dp))
+        Icon(icon, contentDescription = contentDescription, tint = tint, modifier = Modifier.size(26.dp))
     }
 }
 
@@ -266,6 +273,7 @@ fun DockButton(tab: MainTab, icon: ImageVector, selectedTab: MainTab, onTabSelec
             icon,
             contentDescription = tab.title,
             tint = if (selected) tokens.accent else tokens.label3,
+            modifier = Modifier.size(26.dp),
         )
         Text(
             tab.title,
@@ -273,6 +281,7 @@ fun DockButton(tab: MainTab, icon: ImageVector, selectedTab: MainTab, onTabSelec
             color = if (selected) tokens.accent else tokens.label3,
             maxLines = 1,
             overflow = TextOverflow.Ellipsis,
+            fontWeight = if (selected) FontWeight.SemiBold else FontWeight.Medium,
         )
     }
 }

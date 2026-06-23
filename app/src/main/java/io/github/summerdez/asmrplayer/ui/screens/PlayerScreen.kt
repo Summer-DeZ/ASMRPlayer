@@ -43,6 +43,7 @@ import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.automirrored.filled.Login
 import androidx.compose.material.icons.automirrored.filled.Logout
 import androidx.compose.material.icons.automirrored.filled.OpenInNew
@@ -174,11 +175,25 @@ fun SubtitlePlayerScreen(
             Modifier
                 .fillMaxSize()
                 .statusBarsPadding()
-                .padding(start = 22.dp, end = 22.dp, top = 12.dp, bottom = 24.dp),
+                .padding(start = 22.dp, end = 22.dp, top = 18.dp, bottom = 24.dp),
         ) {
             Row(verticalAlignment = Alignment.CenterVertically, modifier = Modifier.fillMaxWidth()) {
-                CoverBox(playbackState.coverUri, Modifier.size(54.dp))
-                Spacer(Modifier.width(12.dp))
+                Surface(
+                    modifier = Modifier
+                        .size(52.dp)
+                        .clickable(onClick = onClose),
+                    shape = CircleShape,
+                    color = tokens.glass,
+                    border = BorderStroke(0.5.dp, tokens.separator),
+                    shadowElevation = 4.dp,
+                ) {
+                    Box(contentAlignment = Alignment.Center) {
+                        Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = "关闭", tint = tokens.label, modifier = Modifier.size(28.dp))
+                    }
+                }
+                Spacer(Modifier.width(18.dp))
+                CoverBox(playbackState.coverUri, Modifier.size(62.dp))
+                Spacer(Modifier.width(14.dp))
                 Column(Modifier.weight(1f)) {
                     Text(
                         playbackState.audioTitle,
@@ -195,12 +210,6 @@ fun SubtitlePlayerScreen(
                         overflow = TextOverflow.Ellipsis,
                         fontSize = 15.sp,
                     )
-                }
-                IconButton(
-                    onClick = onClose,
-                    modifier = Modifier.background(tokens.label.copy(alpha = 0.10f), CircleShape),
-                ) {
-                    Icon(Icons.Default.Close, contentDescription = "关闭", tint = tokens.label2)
                 }
             }
             // 整列字幕滚动：渲染完整字幕列表，按当前行号把整列平滑滚动到中间偏上。所有行排版一致，
@@ -263,17 +272,17 @@ fun SubtitlePlayerScreen(
                                 Text(
                                     parts.first,
                                     color = color,
-                                    fontSize = 28.sp,
-                                    fontWeight = FontWeight.Bold,
-                                    lineHeight = 36.sp,
+                                    fontSize = if (active) 32.sp else 26.sp,
+                                    fontWeight = FontWeight.ExtraBold,
+                                    lineHeight = if (active) 41.sp else 34.sp,
                                 )
                                 if (active && parts.second.isNotEmpty()) {
                                     Text(
                                         parts.second,
-                                        color = tokens.label2,
-                                        fontSize = 14.sp,
-                                        fontWeight = FontWeight.Medium,
-                                        lineHeight = 19.sp,
+                                        color = tokens.accent,
+                                        fontSize = 18.sp,
+                                        fontWeight = FontWeight.Bold,
+                                        lineHeight = 24.sp,
                                         modifier = Modifier.padding(top = 6.dp),
                                     )
                                 }
@@ -286,35 +295,71 @@ fun SubtitlePlayerScreen(
             Row(
                 Modifier
                     .fillMaxWidth()
-                    .padding(top = 14.dp),
+                    .padding(top = 18.dp),
                 horizontalArrangement = Arrangement.SpaceEvenly,
                 verticalAlignment = Alignment.CenterVertically,
             ) {
-                IconButton(onClick = onPrevious, modifier = Modifier.size(54.dp)) {
-                    Icon(Icons.Default.SkipPrevious, contentDescription = "上一首", modifier = Modifier.size(34.dp), tint = tokens.label)
+                IconButton(onClick = onPrevious, modifier = Modifier.size(64.dp)) {
+                    Icon(Icons.Default.SkipPrevious, contentDescription = "上一首", modifier = Modifier.size(40.dp), tint = tokens.label)
                 }
-                IconButton(onClick = onPlay, modifier = Modifier.size(68.dp)) {
+                IconButton(onClick = onPlay, modifier = Modifier.size(82.dp)) {
                     Icon(
                         if (playbackState.isPlaying) Icons.Default.Pause else Icons.Default.PlayArrow,
                         contentDescription = "播放",
                         tint = tokens.label,
-                        modifier = Modifier.size(44.dp),
+                        modifier = Modifier.size(56.dp),
                     )
                 }
-                IconButton(onClick = onNext, modifier = Modifier.size(54.dp)) {
-                    Icon(Icons.Default.SkipNext, contentDescription = "下一首", modifier = Modifier.size(34.dp), tint = tokens.label)
+                IconButton(onClick = onNext, modifier = Modifier.size(64.dp)) {
+                    Icon(Icons.Default.SkipNext, contentDescription = "下一首", modifier = Modifier.size(40.dp), tint = tokens.label)
                 }
             }
             Row(
                 Modifier
                     .fillMaxWidth()
-                    .padding(top = 4.dp),
+                    .padding(top = 8.dp),
                 horizontalArrangement = Arrangement.Center,
             ) {
-                TextButton(onClick = onOverlay) { Text(if (playbackState.overlayRequested) "悬浮字幕" else "悬浮字幕", color = if (playbackState.overlayRequested) tokens.accent else tokens.label3) }
-                Spacer(Modifier.width(26.dp))
-                TextButton(onClick = onQueue) { Text("播放队列", color = tokens.label3) }
+                PlayerActionButton(
+                    icon = Icons.Default.Subtitles,
+                    label = "悬浮字幕",
+                    selected = playbackState.overlayRequested,
+                    onClick = onOverlay,
+                )
+                Spacer(Modifier.width(52.dp))
+                PlayerActionButton(
+                    icon = Icons.AutoMirrored.Filled.QueueMusic,
+                    label = "播放队列",
+                    selected = false,
+                    onClick = onQueue,
+                )
             }
+        }
+    }
+}
+
+@Composable
+private fun PlayerActionButton(
+    icon: ImageVector,
+    label: String,
+    selected: Boolean,
+    onClick: () -> Unit,
+) {
+    val tokens = LocalAmberTokens.current
+    TextButton(onClick = onClick) {
+        Column(horizontalAlignment = Alignment.CenterHorizontally) {
+            Icon(
+                icon,
+                contentDescription = null,
+                tint = if (selected) tokens.accent else tokens.label3,
+                modifier = Modifier.size(30.dp),
+            )
+            Text(
+                label,
+                color = if (selected) tokens.accent else tokens.label3,
+                fontSize = 14.sp,
+                modifier = Modifier.padding(top = 6.dp),
+            )
         }
     }
 }
@@ -330,7 +375,7 @@ fun PlaybackProgressLine(playbackState: PlaybackUiState, onSeek: (Int) -> Unit) 
         Canvas(
             Modifier
                 .fillMaxWidth()
-                .height(28.dp)
+                .height(30.dp)
                 .pointerInput(duration, canSeek) {
                     if (!canSeek) {
                         return@pointerInput
@@ -354,7 +399,7 @@ fun PlaybackProgressLine(playbackState: PlaybackUiState, onSeek: (Int) -> Unit) 
                     )
                 },
         ) {
-            val trackHeight = 5.dp.toPx()
+            val trackHeight = 4.5.dp.toPx()
             val thumbRadius = 7.dp.toPx()
             val thumbRingRadius = 10.dp.toPx()
             val trackTop = center.y - trackHeight / 2f
@@ -377,7 +422,7 @@ fun PlaybackProgressLine(playbackState: PlaybackUiState, onSeek: (Int) -> Unit) 
                 )
             }
             drawCircle(color = tokens.playerBase, radius = thumbRingRadius, center = thumbCenter)
-            drawCircle(color = tokens.accent, radius = thumbRadius, center = thumbCenter)
+            drawCircle(color = tokens.label, radius = thumbRadius, center = thumbCenter)
         }
         Row(Modifier.fillMaxWidth().padding(top = 9.dp), horizontalArrangement = Arrangement.SpaceBetween) {
             Text(formatTime(position), color = tokens.label3, fontSize = 12.sp)
