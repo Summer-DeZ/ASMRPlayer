@@ -6,6 +6,8 @@ import android.content.Intent
 import android.net.Uri
 import android.os.IBinder
 import android.os.SystemClock
+import io.github.summerdez.asmrplayer.data.LibraryRepository
+import io.github.summerdez.asmrplayer.data.SettingsRepository
 import io.github.summerdez.asmrplayer.di.AppGraph
 import io.github.summerdez.asmrplayer.domain.model.AiSubtitleSettings
 import io.github.summerdez.asmrplayer.domain.model.AiSubtitleStage
@@ -27,7 +29,6 @@ import kotlinx.coroutines.Job
 import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.cancel
 import kotlinx.coroutines.launch
-import kotlinx.coroutines.withContext
 
 class AiSubtitleGenerationService : Service() {
     private val scope = CoroutineScope(SupervisorJob() + Dispatchers.IO)
@@ -37,6 +38,17 @@ class AiSubtitleGenerationService : Service() {
     private val lastNotificationProgressSecond = ConcurrentHashMap<String, Long>()
     private val lastNotificationStage = ConcurrentHashMap<String, AiSubtitleStage>()
     private val translator = OpenAiCompatibleTranslator()
+    private lateinit var settingsRepository: SettingsRepository
+    private lateinit var libraryRepository: LibraryRepository
+    private lateinit var aiSubtitleTaskStateStore: AiSubtitleTaskStateStore
+
+    override fun onCreate() {
+        super.onCreate()
+        val dependencies = AppGraph.container(this).aiSubtitleGenerationServiceDependencies
+        settingsRepository = dependencies.settingsRepository
+        libraryRepository = dependencies.libraryRepository
+        aiSubtitleTaskStateStore = dependencies.aiSubtitleTaskStateStore
+    }
 
     override fun onBind(intent: Intent?): IBinder? = null
 
@@ -70,10 +82,10 @@ class AiSubtitleGenerationService : Service() {
         if (jobs[target.trackId]?.isActive == true) {
             return
         }
-        AiSubtitleTaskStateBus.publish(target, AiSubtitleStage.TRANSCRIBING)
+        aiSubtitleTaskStateStore.publish(target, AiSubtitleStage.TRANSCRIBING)
         startForeground(
             AiSubtitleNotifications.NOTIFICATION_ID,
-            AiSubtitleNotifications.build(this, AiSubtitleTaskStateBus.taskFor(target.trackId)!!),
+            AiSubtitleNotifications.build(this, aiSubtitleTaskStateStore.taskFor(target.trackId)!!),
         )
         jobs[target.trackId] = scope.launch {
             runGeneration(target, forceRegenerate)
@@ -82,14 +94,13 @@ class AiSubtitleGenerationService : Service() {
 
     private suspend fun runGeneration(target: SubtitleGenerationTarget, forceRegenerate: Boolean) {
         try {
-            val container = AppGraph.container(this)
-            val settings = container.settingsRepository.aiSubtitleSettings()
+            val settings = settingsRepository.aiSubtitleSettings()
             val modelSpec = WhisperModelSpec.byId(settings.whisperModelId)
             val transcriptionCacheKey = settings.transcriptionCacheKey
             val segmentCache = AiSubtitleSegmentCache(this)
             val translationCache = AiSubtitleTranslationCache(this)
             val sceneContextBuilder = SceneContextBuilder(this, translator)
-            AiSubtitleTaskStateBus.publishTranscriptionDetails(
+            aiSubtitleTaskStateStore.publishTranscriptionDetails(
                 target = target,
                 title = transcriptionTitle(settings),
             )
@@ -98,7 +109,7 @@ class AiSubtitleGenerationService : Service() {
             }
             val sourceLines = segmentCache.load(target, transcriptionCacheKey)
                 ?.also { cachedLines ->
-                    AiSubtitleTaskStateBus.publishTranscribing(
+                    aiSubtitleTaskStateStore.publishTranscribing(
                         target = target,
                         progress = 1f,
                         preview = cachedLines.takeLast(TRANSLATION_PREVIEW_SIZE),
@@ -107,14 +118,12 @@ class AiSubtitleGenerationService : Service() {
                 }
                 ?: transcribeAndCache(target, settings, modelSpec, transcriptionCacheKey, segmentCache)
             val monoFile = writeSubtitleFile(target, suffix = "ja", body = AiSubtitleVtt.mono(sourceLines))
-            withContext(Dispatchers.Main) {
-                container.libraryRepository.setTrackSubtitle(
-                    target.playlistId,
-                    target.trackId,
-                    Uri.fromFile(monoFile).toString(),
-                    monoFile.name,
-                )
-            }
+            libraryRepository.setTrackSubtitle(
+                target.playlistId,
+                target.trackId,
+                Uri.fromFile(monoFile).toString(),
+                monoFile.name,
+            )
             val translatedLines = translate(
                 target = target,
                 settings = settings,
@@ -123,22 +132,20 @@ class AiSubtitleGenerationService : Service() {
                 translationCache = translationCache,
                 sceneContextBuilder = sceneContextBuilder,
             )
-            AiSubtitleTaskStateBus.publish(target, AiSubtitleStage.BINDING)
+            aiSubtitleTaskStateStore.publish(target, AiSubtitleStage.BINDING)
             updateNotification(target)
             val translatedFile = writeSubtitleFile(
                 target = target,
                 suffix = "zh",
                 body = AiSubtitleVtt.translated(translatedLines),
             )
-            withContext(Dispatchers.Main) {
-                container.libraryRepository.setTrackSubtitle(
-                    target.playlistId,
-                    target.trackId,
-                    Uri.fromFile(translatedFile).toString(),
-                    translatedFile.name,
-                )
-            }
-            AiSubtitleTaskStateBus.publishCompleted(
+            libraryRepository.setTrackSubtitle(
+                target.playlistId,
+                target.trackId,
+                Uri.fromFile(translatedFile).toString(),
+                translatedFile.name,
+            )
+            aiSubtitleTaskStateStore.publishCompleted(
                 target = target,
                 subtitlePath = translatedFile.absolutePath,
                 preview = translatedLines,
@@ -149,7 +156,7 @@ class AiSubtitleGenerationService : Service() {
             if (error is CancellationException) {
                 throw error
             }
-            AiSubtitleTaskStateBus.publishFailed(target, error.message ?: "AI 字幕生成失败")
+            aiSubtitleTaskStateStore.publishFailed(target, error.message ?: "AI 字幕生成失败")
             updateNotification(target, force = true)
         } finally {
             jobs.remove(target.trackId)
@@ -177,7 +184,7 @@ class AiSubtitleGenerationService : Service() {
                     target = target,
                     modelState = modelState,
                 ) { progress, preview ->
-                    AiSubtitleTaskStateBus.publishTranscribing(target, progress, preview)
+                    aiSubtitleTaskStateStore.publishTranscribing(target, progress, preview)
                     updateNotification(target)
                 }
             }
@@ -188,7 +195,7 @@ class AiSubtitleGenerationService : Service() {
                     target = target,
                     settings = settings,
                 ) { progress, preview, remoteProgress ->
-                    AiSubtitleTaskStateBus.publishTranscribing(
+                    aiSubtitleTaskStateStore.publishTranscribing(
                         target = target,
                         progress = progress,
                         preview = preview,
@@ -236,7 +243,7 @@ class AiSubtitleGenerationService : Service() {
             .toMutableMap()
         val translated = sourceLines.mapNotNull { translatedById[it.id] }.toMutableList()
         val batches = sourceLines.chunked(TRANSLATION_BATCH_SIZE)
-        AiSubtitleTaskStateBus.publishTranslating(
+        aiSubtitleTaskStateStore.publishTranslating(
             target = target,
             progress = completedBatchProgress(sourceLines, translatedById, batches),
             preview = if (translated.isEmpty()) {
@@ -248,7 +255,7 @@ class AiSubtitleGenerationService : Service() {
         updateNotification(target, force = true)
         batches.forEachIndexed { index, batch ->
             if (batch.all { translatedById[it.id]?.translatedText?.isNotBlank() == true }) {
-                AiSubtitleTaskStateBus.publishTranslating(
+                aiSubtitleTaskStateStore.publishTranslating(
                     target = target,
                     progress = ((index + 1).toFloat() / batches.size),
                     preview = sourceLines.mapNotNull { translatedById[it.id] },
@@ -282,7 +289,7 @@ class AiSubtitleGenerationService : Service() {
                 translatedLines = translated,
                 sceneContext = sceneContext,
             )
-            AiSubtitleTaskStateBus.publishTranslating(
+            aiSubtitleTaskStateStore.publishTranslating(
                 target = target,
                 progress = ((index + 1).toFloat() / batches.size),
                 preview = translated,
@@ -299,14 +306,14 @@ class AiSubtitleGenerationService : Service() {
     }
 
     private fun cancelGeneration(trackId: String, paused: Boolean) {
-        val target = AiSubtitleTaskStateBus.taskFor(trackId)?.target ?: return
+        val target = aiSubtitleTaskStateStore.taskFor(trackId)?.target ?: return
         jobs.remove(trackId)?.cancel()
         if (paused) {
-            AiSubtitleTaskStateBus.publishPaused(target)
+            aiSubtitleTaskStateStore.publishPaused(target)
             updateNotification(target, force = true)
         } else {
             clearAiSubtitleCaches(trackId)
-            AiSubtitleTaskStateBus.remove(trackId)
+            aiSubtitleTaskStateStore.remove(trackId)
         }
         clearNotificationState(trackId)
         if (jobs.isEmpty()) {
@@ -315,7 +322,7 @@ class AiSubtitleGenerationService : Service() {
     }
 
     private fun updateNotification(target: SubtitleGenerationTarget, force: Boolean = false) {
-        val state = AiSubtitleTaskStateBus.taskFor(target.trackId) ?: return
+        val state = aiSubtitleTaskStateStore.taskFor(target.trackId) ?: return
         if (!force && shouldSkipNotification(target.trackId, state)) {
             return
         }

@@ -163,6 +163,13 @@ fun PageHeader(
 ) {
     val tokens = LocalAmberTokens.current
     val displayTitle = if (title == "睡眠模式") "睡眠定时" else title
+    val screenId = when (title) {
+        "资料库" -> "library"
+        "睡眠模式" -> "sleep"
+        "DLsite" -> "dlsite"
+        "设置" -> "settings"
+        else -> title
+    }
     val eyebrow = when (title) {
         "资料库" -> "本地播放"
         "睡眠模式" -> "温柔入眠"
@@ -173,6 +180,7 @@ fun PageHeader(
         modifier = Modifier
             .fillMaxWidth()
             .statusBarsPadding()
+            .uiProbe("app.header.$screenId", "顶部标题栏：$displayTitle", "PageHeader.kt")
             .padding(start = 22.dp, top = 14.dp, end = 16.dp, bottom = 14.dp),
         verticalAlignment = Alignment.Bottom,
     ) {
@@ -206,6 +214,7 @@ fun PageHeader(
                 Box(
                     modifier = Modifier
                         .size(42.dp)
+                        .uiProbe("app.header.media-menu", "资料库顶部菜单按钮", "PageHeader.kt")
                         .clip(CircleShape)
                         .background(Brush.linearGradient(listOf(tokens.gray5, tokens.switchOff)))
                         .border(BorderStroke(1.dp, tokens.separator), CircleShape)

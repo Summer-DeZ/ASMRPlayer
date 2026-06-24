@@ -53,7 +53,6 @@ import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.lazy.itemsIndexed
-import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
@@ -65,16 +64,13 @@ import androidx.compose.material.icons.automirrored.filled.OpenInNew
 import androidx.compose.material.icons.filled.Add
 import androidx.compose.material.icons.filled.Bedtime
 import androidx.compose.material.icons.filled.Check
-import androidx.compose.material.icons.filled.CheckCircle
 import androidx.compose.material.icons.filled.Close
 import androidx.compose.material.icons.filled.Delete
 import androidx.compose.material.icons.filled.Download
 import androidx.compose.material.icons.filled.Edit
-import androidx.compose.material.icons.filled.FolderOpen
+import androidx.compose.material.icons.filled.KeyboardArrowDown
 import androidx.compose.material.icons.filled.LibraryMusic
 import androidx.compose.material.icons.filled.Lock
-import androidx.compose.material.icons.filled.MoreVert
-import androidx.compose.material.icons.filled.MusicNote
 import androidx.compose.material.icons.filled.Notifications
 import androidx.compose.material.icons.filled.Pause
 import androidx.compose.material.icons.filled.Person
@@ -87,13 +83,9 @@ import androidx.compose.material.icons.filled.Subtitles
 import androidx.compose.material.icons.filled.Sync
 import androidx.compose.material.icons.filled.Timer
 import androidx.compose.material.icons.filled.UploadFile
-import androidx.compose.material3.Button
-import androidx.compose.material3.DropdownMenu
-import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
-import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.ModalBottomSheet
 import androidx.compose.material3.OutlinedTextField
@@ -106,6 +98,7 @@ import androidx.compose.material3.TextButton
 import androidx.compose.material3.darkColorScheme
 import androidx.compose.material3.lightColorScheme
 import androidx.compose.material3.rememberModalBottomSheetState
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableIntStateOf
@@ -125,6 +118,7 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.StrokeCap
 import androidx.compose.ui.graphics.drawscope.Stroke
 import androidx.compose.ui.graphics.vector.ImageVector
+import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
@@ -134,8 +128,14 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.compose.ui.viewinterop.AndroidView
 import androidx.compose.animation.AnimatedContent
+import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.animation.animateColorAsState
+import androidx.compose.animation.core.animateFloatAsState
 import androidx.compose.animation.core.tween
+import androidx.compose.animation.expandVertically
+import androidx.compose.animation.fadeIn
+import androidx.compose.animation.fadeOut
+import androidx.compose.animation.shrinkVertically
 import androidx.compose.animation.slideInVertically
 import androidx.compose.animation.slideOutVertically
 import androidx.compose.animation.togetherWith
@@ -144,6 +144,7 @@ import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import java.text.SimpleDateFormat
 import java.util.Date
 import java.util.Locale
+import java.io.File
 import kotlin.math.max
 
 private val DlsiteBlue = Color(0xFF4F9BE0)
@@ -157,6 +158,8 @@ fun DlsiteTab(
     onLogout: () -> Unit,
     onSync: () -> Unit,
     onDownload: (DlsiteWork) -> Unit,
+    onDownloadContent: (DlsiteWork, DlsiteContent) -> Unit,
+    onDeleteContent: (DlsiteWork, DlsiteContent) -> Unit,
     onPause: (DlsiteWork) -> Unit,
     onResume: (DlsiteWork) -> Unit,
     onDelete: (DlsiteWork) -> Unit,
@@ -166,10 +169,26 @@ fun DlsiteTab(
 ) {
     val tokens = LocalAmberTokens.current
     val offlineWorkCount = state.works.count { work ->
-        work.isDownloaded() || state.contentsByWork[work.workId].orEmpty().any { it.isDownloaded() }
+        state.contentsByWork[work.workId].orEmpty().any { it.isDownloaded() }
+    }
+    var expandedWorkId by remember { mutableStateOf<String?>(null) }
+    LaunchedEffect(state.works.map { it.workId }) {
+        if (expandedWorkId != null && state.works.none { it.workId == expandedWorkId }) {
+            expandedWorkId = null
+        }
+    }
+    val activeContentTaskWorkId = state.downloadState.tasks.values.firstOrNull { task ->
+        task.contentId.isNotBlank() && task.status != DlsiteDownloadTaskStatus.COMPLETED
+    }?.workId
+    LaunchedEffect(activeContentTaskWorkId) {
+        if (!activeContentTaskWorkId.isNullOrEmpty()) {
+            expandedWorkId = activeContentTaskWorkId
+        }
     }
     LazyColumn(
-        modifier = Modifier.fillMaxSize(),
+        modifier = Modifier
+            .fillMaxSize()
+            .uiProbe("dlsite.root", "DLsite 页面列表", "DlsiteScreen.kt"),
         contentPadding = PaddingValues(start = 22.dp, top = 4.dp, end = 22.dp, bottom = 16.dp),
         verticalArrangement = Arrangement.spacedBy(14.dp),
     ) {
@@ -209,12 +228,26 @@ fun DlsiteTab(
             }
         } else {
             items(state.works, key = { it.workId }) { work ->
+                val contents = state.contentsByWork[work.workId].orEmpty()
+                val expanded = contents.isNotEmpty() && expandedWorkId == work.workId
                 DlsiteWorkRow(
                     work = work,
                     busy = state.busy,
                     taskState = state.downloadState.tasks[work.workId],
-                    contents = state.contentsByWork[work.workId].orEmpty(),
-                    onDownload = { onDownload(work) },
+                    contents = contents,
+                    expanded = expanded,
+                    onToggleExpanded = {
+                        expandedWorkId = if (expanded) null else work.workId
+                    },
+                    onDownload = {
+                        expandedWorkId = work.workId
+                        onDownload(work)
+                    },
+                    onDownloadContent = { content ->
+                        expandedWorkId = work.workId
+                        onDownloadContent(work, content)
+                    },
+                    onDeleteContent = { content -> onDeleteContent(work, content) },
                     onPause = { onPause(work) },
                     onResume = { onResume(work) },
                     onDelete = { onDelete(work) },
@@ -230,19 +263,31 @@ fun DlsiteWorkRow(
     busy: Boolean,
     taskState: DlsiteDownloadTaskState?,
     contents: List<DlsiteContent>,
+    expanded: Boolean,
+    onToggleExpanded: () -> Unit,
     onDownload: () -> Unit,
+    onDownloadContent: (DlsiteContent) -> Unit,
+    onDeleteContent: (DlsiteContent) -> Unit,
     onPause: () -> Unit,
     onResume: () -> Unit,
     onDelete: () -> Unit,
 ) {
     val tokens = LocalAmberTokens.current
-    val statusLabel = dlsiteWorkStatusText(work, taskState, contents)
-    val progress = dlsiteProgressFraction(work, taskState)
-    val failed = taskState?.status == DlsiteDownloadTaskStatus.FAILED || work.isFailed()
-    val actionState = dlsiteRowActionState(work, taskState, contents)
+    val workTaskState = taskState?.takeIf { it.contentId.isBlank() }
+    val statusLabel = dlsiteWorkStatusText(work, workTaskState, contents)
+    val hasContents = contents.isNotEmpty()
+    val progress = if (hasContents) null else dlsiteProgressFraction(work, workTaskState)
+    val failed = !hasContents && (workTaskState?.status == DlsiteDownloadTaskStatus.FAILED || work.isFailed())
+    val actionState = dlsiteRowActionState(work, workTaskState, contents)
+    val chevronRotation by animateFloatAsState(
+        targetValue = if (expanded) 180f else 0f,
+        animationSpec = tween(220),
+        label = "dlsiteWorkChevron",
+    )
+    val noAction: () -> Unit = {}
     val actionClick = when (actionState) {
         DlsiteRowActionState.Download -> onDownload
-        DlsiteRowActionState.Done -> onDownload
+        DlsiteRowActionState.Ready -> noAction
         DlsiteRowActionState.Queued -> onDelete
         DlsiteRowActionState.Downloading -> onPause
         DlsiteRowActionState.Paused -> onResume
@@ -252,7 +297,19 @@ fun DlsiteWorkRow(
         shape = RoundedCornerShape(24.dp),
         color = tokens.card,
         border = BorderStroke(0.5.dp, tokens.separator),
-        modifier = Modifier.fillMaxWidth(),
+        modifier = Modifier
+            .fillMaxWidth()
+            .uiProbe(
+                id = "dlsite.work-row:${work.workId}",
+                label = "DLsite 作品卡：${work.displayTitle()}",
+                sourceHint = "DlsiteScreen.kt",
+                metadata = mapOf(
+                    "workId" to work.workId,
+                    "status" to statusLabel,
+                    "action" to actionState.name,
+                    "expanded" to expanded.toString(),
+                ),
+            ),
     ) {
         Column(
             modifier = Modifier
@@ -261,6 +318,9 @@ fun DlsiteWorkRow(
             verticalArrangement = Arrangement.spacedBy(8.dp),
         ) {
             Row(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .clickable(enabled = hasContents, onClick = onToggleExpanded),
                 verticalAlignment = Alignment.CenterVertically,
             ) {
                 CoverBox(work.coverUri, Modifier.size(52.dp))
@@ -275,7 +335,7 @@ fun DlsiteWorkRow(
                         overflow = TextOverflow.Ellipsis,
                     )
                     Text(
-                        "${work.workId} · $statusLabel",
+                        work.workId,
                         color = tokens.label2,
                         fontSize = 12.5.sp,
                         maxLines = 1,
@@ -283,12 +343,28 @@ fun DlsiteWorkRow(
                     )
                 }
                 Spacer(Modifier.width(10.dp))
-                DlsiteDownloadStatusControl(
-                    state = actionState,
-                    progressPercent = taskState?.progressPercent,
-                    enabled = !busy,
-                    onClick = actionClick,
-                )
+                if (hasContents) {
+                    Box(
+                        modifier = Modifier
+                            .size(32.dp)
+                            .graphicsLayer { rotationZ = chevronRotation },
+                        contentAlignment = Alignment.Center,
+                    ) {
+                        Icon(
+                            Icons.Default.KeyboardArrowDown,
+                            contentDescription = if (expanded) "收起内容" else "展开内容",
+                            tint = tokens.accent,
+                            modifier = Modifier.size(22.dp),
+                        )
+                    }
+                } else {
+                    DlsiteDownloadStatusControl(
+                        state = actionState,
+                        progressPercent = workTaskState?.progressPercent,
+                        enabled = !busy && actionState != DlsiteRowActionState.Ready,
+                        onClick = actionClick,
+                    )
+                }
             }
             if (progress != null) {
                 DlsiteProgressLine(
@@ -298,12 +374,13 @@ fun DlsiteWorkRow(
                 )
             }
             DlsiteWorkContentPanel(
-                work = work,
                 busy = busy,
                 taskState = taskState,
                 actionState = actionState,
                 contents = contents,
-                onDownload = onDownload,
+                expanded = expanded,
+                onDownloadContent = onDownloadContent,
+                onDeleteContent = onDeleteContent,
                 onPause = onPause,
                 onResume = onResume,
                 onDelete = onDelete,
@@ -314,89 +391,57 @@ fun DlsiteWorkRow(
 
 @Composable
 private fun DlsiteWorkContentPanel(
-    work: DlsiteWork,
     busy: Boolean,
     taskState: DlsiteDownloadTaskState?,
     actionState: DlsiteRowActionState,
     contents: List<DlsiteContent>,
-    onDownload: () -> Unit,
+    expanded: Boolean,
+    onDownloadContent: (DlsiteContent) -> Unit,
+    onDeleteContent: (DlsiteContent) -> Unit,
     onPause: () -> Unit,
     onResume: () -> Unit,
     onDelete: () -> Unit,
 ) {
     val tokens = LocalAmberTokens.current
-    Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
-        HorizontalDivider(color = tokens.separator)
-        if (contents.isEmpty()) {
-            DlsiteNoContentRow(
-                busy = busy,
-                onDownload = onDownload,
-            )
-        } else {
-            Column(verticalArrangement = Arrangement.spacedBy(0.dp)) {
-                contents.forEachIndexed { index, content ->
-                    DlsiteContentRow(
-                        content = content,
-                        taskState = taskState?.takeIf { it.contentId == content.optionId },
-                        busy = busy,
-                        onOpenOptions = onDownload,
-                        onPause = onPause,
-                        onResume = onResume,
-                    )
-                    if (index != contents.lastIndex) {
-                        HorizontalDivider(color = tokens.separator)
+    val showActions = dlsiteExpandedActionsVisible(actionState) && (expanded || contents.isEmpty())
+    if ((!expanded || contents.isEmpty()) && !showActions) {
+        return
+    }
+    AnimatedVisibility(
+        visible = expanded || showActions,
+        enter = expandVertically(animationSpec = tween(260)) + fadeIn(animationSpec = tween(200)),
+        exit = shrinkVertically(animationSpec = tween(220)) + fadeOut(animationSpec = tween(150)),
+    ) {
+        Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
+            HorizontalDivider(color = tokens.separator)
+            if (expanded && contents.isNotEmpty()) {
+                Column(verticalArrangement = Arrangement.spacedBy(0.dp)) {
+                    contents.forEachIndexed { index, content ->
+                        DlsiteContentRow(
+                            content = content,
+                            taskState = taskState?.takeIf { it.contentId == content.optionId },
+                            busy = busy,
+                            onDownload = { onDownloadContent(content) },
+                            onDelete = { onDeleteContent(content) },
+                            onPause = onPause,
+                            onResume = onResume,
+                        )
+                        if (index != contents.lastIndex) {
+                            HorizontalDivider(color = tokens.separator)
+                        }
                     }
                 }
             }
+            if (showActions) {
+                DlsiteExpandedActionRow(
+                    busy = busy,
+                    actionState = actionState,
+                    onPause = onPause,
+                    onResume = onResume,
+                    onDelete = onDelete,
+                )
+            }
         }
-        DlsiteExpandedActionRow(
-            work = work,
-            busy = busy,
-            actionState = actionState,
-            hasContents = contents.isNotEmpty(),
-            onDownload = onDownload,
-            onPause = onPause,
-            onResume = onResume,
-            onDelete = onDelete,
-        )
-    }
-}
-
-@Composable
-private fun DlsiteNoContentRow(
-    busy: Boolean,
-    onDownload: () -> Unit,
-) {
-    val tokens = LocalAmberTokens.current
-    Row(
-        modifier = Modifier
-            .fillMaxWidth()
-            .padding(horizontal = 2.dp, vertical = 8.dp),
-        verticalAlignment = Alignment.CenterVertically,
-    ) {
-        Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(4.dp)) {
-            Text(
-                "尚未解析下载内容",
-                color = tokens.label,
-                fontSize = 14.sp,
-                fontWeight = FontWeight.SemiBold,
-                maxLines = 1,
-                overflow = TextOverflow.Ellipsis,
-            )
-            Text(
-                "打开现有内容选择入口后会读取 DLsite 可下载目录",
-                color = tokens.label2,
-                fontSize = 12.sp,
-                maxLines = 1,
-                overflow = TextOverflow.Ellipsis,
-            )
-        }
-        DlsiteSoftActionPill(
-            icon = Icons.Default.FolderOpen,
-            text = "查看",
-            onClick = onDownload,
-            enabled = !busy,
-        )
     }
 }
 
@@ -405,95 +450,136 @@ private fun DlsiteContentRow(
     content: DlsiteContent,
     taskState: DlsiteDownloadTaskState?,
     busy: Boolean,
-    onOpenOptions: () -> Unit,
+    onDownload: () -> Unit,
+    onDelete: () -> Unit,
     onPause: () -> Unit,
     onResume: () -> Unit,
 ) {
     val tokens = LocalAmberTokens.current
-    val failed = content.isFailed() || taskState?.status == DlsiteDownloadTaskStatus.FAILED
-    Row(
+    val context = LocalContext.current
+    val cached = remember(
+        content.workId,
+        content.optionId,
+        content.status,
+        content.localPath,
+        content.updatedAt,
+        taskState?.status,
+    ) {
+        dlsiteContentHasLocalCache(context, content)
+    }
+    val progress = dlsiteContentProgressFraction(content, taskState)
+    val failed = taskState?.status == DlsiteDownloadTaskStatus.FAILED || content.isFailed()
+    Column(
         modifier = Modifier
             .fillMaxWidth()
+            .uiProbe(
+                id = "dlsite.content-row:${content.optionId}",
+                label = "DLsite 内容行：${content.title.ifEmpty { "默认版本" }}",
+                sourceHint = "DlsiteScreen.kt",
+                metadata = mapOf(
+                    "optionId" to content.optionId,
+                    "status" to (taskState?.statusText ?: contentStatusText(content, cached)),
+                    "cached" to cached.toString(),
+                ),
+            )
             .padding(horizontal = 2.dp, vertical = 11.dp),
-        verticalAlignment = Alignment.CenterVertically,
     ) {
-        DlsiteContentStatusDot(content = content, activeTask = taskState)
-        Spacer(Modifier.width(11.dp))
-        Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(5.dp)) {
-            Text(
-                content.title.ifEmpty { "默认版本" },
-                color = tokens.label,
-                fontSize = 14.sp,
-                fontWeight = FontWeight.SemiBold,
-                maxLines = 1,
-                overflow = TextOverflow.Ellipsis,
-            )
-            Text(
-                dlsiteContentMetaText(content, taskState),
-                color = tokens.label2,
-                fontSize = 12.sp,
-                maxLines = 1,
-                overflow = TextOverflow.Ellipsis,
-            )
-        }
-        Spacer(Modifier.width(8.dp))
-        Column(
-            horizontalAlignment = Alignment.End,
-            verticalArrangement = Arrangement.spacedBy(6.dp),
-        ) {
-            DlsiteStatusPill(
-                taskState?.statusText ?: contentStatusText(content),
-                failed = failed,
-            )
-            when {
-                content.isDownloading() || taskState?.status == DlsiteDownloadTaskStatus.DOWNLOADING -> {
-                    DlsiteTinyTextAction("暂停", enabled = !busy, onClick = onPause)
-                }
-                content.isPaused() || content.isFailed() ||
-                    taskState?.status == DlsiteDownloadTaskStatus.PAUSED ||
-                    taskState?.status == DlsiteDownloadTaskStatus.FAILED -> {
-                    DlsiteTinyTextAction("继续", enabled = !busy, onClick = onResume)
-                }
-                content.isDownloaded() -> {
-                    DlsiteTinyTextAction("查看", enabled = !busy, onClick = onOpenOptions)
-                }
-                else -> {
-                    DlsiteTinyTextAction("选择", enabled = !busy, onClick = onOpenOptions)
+        Row(verticalAlignment = Alignment.CenterVertically) {
+            DlsiteContentStatusDot(downloaded = cached)
+            Spacer(Modifier.width(11.dp))
+            Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(5.dp)) {
+                Text(
+                    content.title.ifEmpty { "默认版本" },
+                    color = tokens.label,
+                    fontSize = 14.sp,
+                    fontWeight = FontWeight.SemiBold,
+                    maxLines = 1,
+                    overflow = TextOverflow.Ellipsis,
+                )
+                Text(
+                    dlsiteContentMetaText(content, taskState, cached),
+                    color = tokens.label2,
+                    fontSize = 12.sp,
+                    maxLines = 1,
+                    overflow = TextOverflow.Ellipsis,
+                )
+            }
+            Spacer(Modifier.width(8.dp))
+            Box(contentAlignment = Alignment.CenterEnd) {
+                when {
+                    content.isDownloading() || taskState?.status == DlsiteDownloadTaskStatus.DOWNLOADING -> {
+                        DlsiteSoftActionPill(
+                            icon = Icons.Default.Pause,
+                            text = "暂停",
+                            onClick = onPause,
+                            enabled = !busy,
+                        )
+                    }
+                    content.isQueued() || taskState?.status == DlsiteDownloadTaskStatus.QUEUED -> {
+                        DlsiteStatusPill("排队中", failed = false)
+                    }
+                    content.isPaused() || taskState?.status == DlsiteDownloadTaskStatus.PAUSED -> {
+                        DlsiteSoftActionPill(
+                            icon = Icons.Default.PlayArrow,
+                            text = "继续",
+                            onClick = onResume,
+                            enabled = !busy,
+                        )
+                    }
+                    content.isFailed() || taskState?.status == DlsiteDownloadTaskStatus.FAILED -> {
+                        DlsiteSoftActionPill(
+                            icon = Icons.Default.Download,
+                            text = "重试",
+                            onClick = onDownload,
+                            enabled = !busy,
+                        )
+                    }
+                    cached -> {
+                        DlsiteSoftActionPill(
+                            icon = Icons.Default.Delete,
+                            text = "删除",
+                            onClick = onDelete,
+                            enabled = !busy,
+                        )
+                    }
+                    else -> {
+                        DlsiteSoftActionPill(
+                            icon = Icons.Default.Download,
+                            text = "下载",
+                            onClick = onDownload,
+                            enabled = !busy,
+                        )
+                    }
                 }
             }
+        }
+        if (progress != null) {
+            DlsiteProgressLine(
+                progress = progress,
+                failed = failed,
+                modifier = Modifier
+                    .padding(start = 39.dp, top = 8.dp)
+                    .fillMaxWidth(),
+            )
         }
     }
 }
 
 @Composable
 private fun DlsiteContentStatusDot(
-    content: DlsiteContent,
-    activeTask: DlsiteDownloadTaskState?,
+    downloaded: Boolean,
 ) {
     val tokens = LocalAmberTokens.current
-    val color = when {
-        activeTask?.status == DlsiteDownloadTaskStatus.DOWNLOADING || content.isDownloading() -> tokens.accent
-        activeTask?.status == DlsiteDownloadTaskStatus.FAILED || content.isFailed() -> tokens.accent2
-        activeTask?.status == DlsiteDownloadTaskStatus.PAUSED || content.isPaused() -> DlsiteBlue
-        content.isDownloaded() -> Color(0xFF84C2A3)
-        content.isQueued() || activeTask?.status == DlsiteDownloadTaskStatus.QUEUED -> DlsiteBlue
-        else -> tokens.label3
-    }
+    val color = if (downloaded) tokens.accent else tokens.label3
     Surface(
         shape = CircleShape,
         color = color.copy(alpha = 0.16f),
-        border = BorderStroke(0.5.dp, color.copy(alpha = 0.5f)),
+        border = BorderStroke(0.5.dp, color.copy(alpha = if (downloaded) 0.55f else 0.35f)),
         modifier = Modifier.size(28.dp),
     ) {
         Box(contentAlignment = Alignment.Center) {
             Icon(
-                when {
-                    content.isDownloaded() -> Icons.Default.Check
-                    content.isFailed() || activeTask?.status == DlsiteDownloadTaskStatus.FAILED -> Icons.Default.Close
-                    content.isPaused() || activeTask?.status == DlsiteDownloadTaskStatus.PAUSED -> Icons.Default.Pause
-                    content.isDownloading() || activeTask?.status == DlsiteDownloadTaskStatus.DOWNLOADING -> Icons.Default.Download
-                    else -> Icons.Default.MusicNote
-                },
+                Icons.Default.Check,
                 contentDescription = null,
                 tint = color,
                 modifier = Modifier.size(15.dp),
@@ -503,30 +589,9 @@ private fun DlsiteContentStatusDot(
 }
 
 @Composable
-private fun DlsiteTinyTextAction(
-    text: String,
-    enabled: Boolean,
-    onClick: () -> Unit,
-) {
-    val tokens = LocalAmberTokens.current
-    Text(
-        text,
-        color = if (enabled) DlsiteBlue else tokens.label3,
-        fontSize = 12.sp,
-        fontWeight = FontWeight.SemiBold,
-        maxLines = 1,
-        overflow = TextOverflow.Ellipsis,
-        modifier = Modifier.clickable(enabled = enabled, onClick = onClick),
-    )
-}
-
-@Composable
 private fun DlsiteExpandedActionRow(
-    work: DlsiteWork,
     busy: Boolean,
     actionState: DlsiteRowActionState,
-    hasContents: Boolean,
-    onDownload: () -> Unit,
     onPause: () -> Unit,
     onResume: () -> Unit,
     onDelete: () -> Unit,
@@ -536,12 +601,6 @@ private fun DlsiteExpandedActionRow(
         verticalAlignment = Alignment.CenterVertically,
         horizontalArrangement = Arrangement.spacedBy(8.dp),
     ) {
-        DlsiteSoftActionPill(
-            icon = Icons.Default.FolderOpen,
-            text = if (hasContents) "选择内容" else "查看内容",
-            onClick = onDownload,
-            enabled = !busy,
-        )
         when (actionState) {
             DlsiteRowActionState.Queued -> {
                 DlsiteSoftActionPill(
@@ -587,16 +646,7 @@ private fun DlsiteExpandedActionRow(
                     enabled = !busy,
                 )
             }
-            DlsiteRowActionState.Done -> {
-                if (work.isDownloaded()) {
-                    DlsiteSoftActionPill(
-                        icon = Icons.Default.Delete,
-                        text = "删除缓存",
-                        onClick = onDelete,
-                        enabled = !busy,
-                    )
-                }
-            }
+            DlsiteRowActionState.Ready -> Unit
             DlsiteRowActionState.Download -> Unit
         }
     }
@@ -604,11 +654,11 @@ private fun DlsiteExpandedActionRow(
 
 private enum class DlsiteRowActionState {
     Download,
+    Ready,
     Queued,
     Downloading,
     Paused,
     Failed,
-    Done,
 }
 
 private fun dlsiteRowActionState(
@@ -616,14 +666,24 @@ private fun dlsiteRowActionState(
     taskState: DlsiteDownloadTaskState?,
     contents: List<DlsiteContent>,
 ): DlsiteRowActionState {
-    val downloaded = work.isDownloaded() || contents.any { it.isDownloaded() }
     return when {
-        downloaded -> DlsiteRowActionState.Done
+        contents.isNotEmpty() -> DlsiteRowActionState.Ready
         taskState?.status == DlsiteDownloadTaskStatus.QUEUED || work.isQueued() -> DlsiteRowActionState.Queued
         taskState?.status == DlsiteDownloadTaskStatus.DOWNLOADING || work.isDownloading() -> DlsiteRowActionState.Downloading
         taskState?.status == DlsiteDownloadTaskStatus.PAUSED || work.isPaused() -> DlsiteRowActionState.Paused
         taskState?.status == DlsiteDownloadTaskStatus.FAILED || work.isFailed() -> DlsiteRowActionState.Failed
         else -> DlsiteRowActionState.Download
+    }
+}
+
+private fun dlsiteExpandedActionsVisible(actionState: DlsiteRowActionState): Boolean {
+    return when (actionState) {
+        DlsiteRowActionState.Queued,
+        DlsiteRowActionState.Downloading,
+        DlsiteRowActionState.Paused,
+        DlsiteRowActionState.Failed -> true
+        DlsiteRowActionState.Download,
+        DlsiteRowActionState.Ready -> false
     }
 }
 
@@ -635,14 +695,30 @@ private fun DlsiteDownloadStatusControl(
     onClick: () -> Unit,
 ) {
     val tokens = LocalAmberTokens.current
-    val sage = Color(0xFF84C2A3)
     val (icon, text, color) = when (state) {
-        DlsiteRowActionState.Download -> Triple(Icons.Default.Download, "下载", tokens.label3)
-        DlsiteRowActionState.Queued -> Triple(Icons.Default.Sync, "排队中", DlsiteBlue)
+        DlsiteRowActionState.Download -> Triple(Icons.Default.Sync, "同步", tokens.accent)
+        DlsiteRowActionState.Ready -> Triple(Icons.Default.KeyboardArrowDown, "内容", tokens.accent)
+        DlsiteRowActionState.Queued -> Triple(Icons.Default.Sync, "排队中", tokens.accent)
         DlsiteRowActionState.Downloading -> Triple(Icons.Default.Pause, progressPercent?.let { "$it%" } ?: "下载中", tokens.accent)
-        DlsiteRowActionState.Paused -> Triple(Icons.Default.PlayArrow, "继续", DlsiteBlue)
+        DlsiteRowActionState.Paused -> Triple(Icons.Default.PlayArrow, "继续", tokens.accent)
         DlsiteRowActionState.Failed -> Triple(Icons.Default.Download, "重试", tokens.accent2)
-        DlsiteRowActionState.Done -> Triple(Icons.Default.CheckCircle, "已下载", sage)
+    }
+    if (state == DlsiteRowActionState.Download) {
+        Box(
+            modifier = Modifier
+                .size(40.dp)
+                .clip(CircleShape)
+                .clickable(enabled = enabled, onClick = onClick),
+            contentAlignment = Alignment.Center,
+        ) {
+            Icon(
+                icon,
+                contentDescription = text,
+                tint = if (enabled) color else tokens.label3,
+                modifier = Modifier.size(21.dp),
+            )
+        }
+        return
     }
     Row(
         modifier = Modifier
@@ -682,6 +758,7 @@ fun DownloadManagerSheet(
     Column(
         Modifier
             .fillMaxWidth()
+            .uiProbe("dlsite.download-manager-sheet", "DLsite 下载管理 Sheet", "DlsiteScreen.kt")
             .navigationBarsPadding()
             .verticalScroll(rememberScrollState())
             .padding(horizontal = 18.dp, vertical = 10.dp),
@@ -723,7 +800,6 @@ fun DownloadManagerSheet(
                             work = work,
                             busy = state.busy,
                             taskState = task,
-                            contents = state.contentsByWork[work.workId].orEmpty(),
                             onPause = { onPause(work) },
                             onResume = { onResume(work) },
                             onCancel = { onCancel(work) },
@@ -737,126 +813,6 @@ fun DownloadManagerSheet(
             Icon(Icons.Default.Delete, contentDescription = null, tint = tokens.label2, modifier = Modifier.size(18.dp))
             Spacer(Modifier.width(5.dp))
             Text("清除已完成", color = tokens.label2)
-        }
-    }
-}
-
-@Composable
-fun DownloadContentsSheet(
-    work: DlsiteWork,
-    options: List<DlsiteDownloadOption>,
-    contents: List<DlsiteContent>,
-    onDismiss: () -> Unit,
-    onStart: (List<DlsiteDownloadOption>) -> Unit,
-    onDeleteContent: (DlsiteContent) -> Unit,
-) {
-    val tokens = LocalAmberTokens.current
-    val contentsById = contents.associateBy { it.optionId }
-    var selectedIds by remember(options) {
-        mutableStateOf(emptySet<String>())
-    }
-    val selectableOptions = options.filter {
-        contentsById[it.id]?.isDownloaded() != true &&
-            contentsById[it.id]?.isDownloading() != true &&
-            contentsById[it.id]?.isQueued() != true
-    }
-    Column(
-        Modifier
-            .fillMaxWidth()
-            .navigationBarsPadding()
-            .verticalScroll(rememberScrollState())
-            .padding(horizontal = 18.dp, vertical = 10.dp),
-    ) {
-        DlsiteSheetGrabber()
-        Spacer(Modifier.height(18.dp))
-        Row(verticalAlignment = Alignment.CenterVertically) {
-            Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(4.dp)) {
-                Text("选择下载内容", color = tokens.label, fontSize = 26.sp, fontWeight = FontWeight.ExtraBold)
-                Text(work.displayTitle(), color = tokens.label2, fontSize = 13.sp, maxLines = 1, overflow = TextOverflow.Ellipsis)
-                Text("已解析文件目录树，共 ${options.size} 项", color = tokens.label2, fontSize = 12.sp)
-            }
-            DlsiteIconActionButton(
-                icon = Icons.Default.Close,
-                contentDescription = "关闭",
-                onClick = onDismiss,
-                destructive = false,
-                filled = false,
-                size = 44.dp,
-            )
-        }
-        Row(Modifier.fillMaxWidth().padding(top = 12.dp), verticalAlignment = Alignment.CenterVertically) {
-            Text("勾选文件夹或根目录音频", color = tokens.label2, fontSize = 13.sp, modifier = Modifier.weight(1f))
-            TextButton(
-                onClick = { selectedIds = selectableOptions.map { it.id }.toSet() },
-                enabled = selectableOptions.isNotEmpty(),
-            ) {
-                Text("全选", color = tokens.accent)
-            }
-            TextButton(
-                onClick = { selectedIds = emptySet() },
-                enabled = selectedIds.isNotEmpty(),
-            ) {
-                Text("清空", color = tokens.accent2)
-            }
-        }
-        Spacer(Modifier.height(6.dp))
-        Surface(
-            shape = RoundedCornerShape(20.dp),
-            color = tokens.card,
-            border = BorderStroke(0.5.dp, tokens.separator),
-            modifier = Modifier.fillMaxWidth(),
-        ) {
-            Column(Modifier.padding(horizontal = 14.dp, vertical = 4.dp)) {
-                options.forEachIndexed { index, option ->
-                    val content = contentsById[option.id]
-                    val downloaded = content?.isDownloaded() == true
-                    val active = content?.isDownloading() == true || content?.isQueued() == true
-                    Row(
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .clickable(enabled = !downloaded && !active) {
-                                selectedIds = if (selectedIds.contains(option.id)) {
-                                    selectedIds - option.id
-                                } else {
-                                    selectedIds + option.id
-                                }
-                            }
-                            .padding(vertical = 13.dp),
-                        verticalAlignment = Alignment.CenterVertically,
-                    ) {
-                        DlsiteContentCheckBox(
-                            checked = selectedIds.contains(option.id) || downloaded,
-                            disabled = active,
-                        )
-                        Spacer(Modifier.width(13.dp))
-                        Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(4.dp)) {
-                            Text(option.title, color = tokens.label, fontSize = 16.sp, fontWeight = FontWeight.SemiBold, maxLines = 1, overflow = TextOverflow.Ellipsis)
-                            Text("${option.audioFiles.size} 首 · ${contentStatusText(content)}", color = tokens.label2, fontSize = 12.sp, maxLines = 1, overflow = TextOverflow.Ellipsis)
-                        }
-                        when {
-                            downloaded -> TextButton(onClick = { onDeleteContent(content) }) {
-                                Text("删除", color = tokens.accent2)
-                            }
-                            active -> DlsiteStatusPill("载入中", failed = false)
-                            content?.isFailed() == true -> DlsiteStatusPill("载入失败", failed = true)
-                        }
-                    }
-                    if (index != options.lastIndex) {
-                        HorizontalDivider(color = tokens.separator)
-                    }
-                }
-            }
-        }
-        Row(Modifier.fillMaxWidth().padding(top = 14.dp), verticalAlignment = Alignment.CenterVertically) {
-            Text("已选择 ${selectedIds.size} 项", color = tokens.label2, fontSize = 13.sp, modifier = Modifier.weight(1f))
-            Button(
-                onClick = { onStart(options.filter { selectedIds.contains(it.id) }) },
-                enabled = selectedIds.isNotEmpty(),
-            ) {
-                Icon(Icons.Default.Download, contentDescription = null, modifier = Modifier.size(18.dp))
-                Spacer(Modifier.width(6.dp))
-                Text("加入下载")
-            }
         }
     }
 }
@@ -876,7 +832,10 @@ private fun DlsiteAccountCard(
     val tokens = LocalAmberTokens.current
     val context = LocalContext.current
     if (!loggedIn) {
-        Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
+        Column(
+            modifier = Modifier.uiProbe("dlsite.account-card", "DLsite 未登录账号卡", "DlsiteScreen.kt"),
+            verticalArrangement = Arrangement.spacedBy(12.dp),
+        ) {
             Surface(
                 shape = RoundedCornerShape(28.dp),
                 color = Color.Transparent,
@@ -967,7 +926,19 @@ private fun DlsiteAccountCard(
         return
     }
 
-    Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
+    Column(
+        modifier = Modifier.uiProbe(
+            id = "dlsite.account-card",
+            label = "DLsite 已登录账号卡",
+            sourceHint = "DlsiteScreen.kt",
+            metadata = mapOf(
+                "workCount" to workCount.toString(),
+                "offlineWorkCount" to offlineWorkCount.toString(),
+                "busy" to busy.toString(),
+            ),
+        ),
+        verticalArrangement = Arrangement.spacedBy(12.dp),
+    ) {
         Surface(
             shape = RoundedCornerShape(28.dp),
             color = tokens.card,
@@ -1072,7 +1043,17 @@ private fun DlsiteVisualInput(
     onClick: () -> Unit,
 ) {
     val tokens = LocalAmberTokens.current
-    Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+    Column(
+        modifier = Modifier.uiProbe(
+            id = "dlsite.visual-input:$label",
+            label = "DLsite 登录输入框：$label",
+            sourceHint = "DlsiteScreen.kt",
+            metadata = mapOf(
+                "placeholder" to placeholder,
+            ),
+        ),
+        verticalArrangement = Arrangement.spacedBy(8.dp),
+    ) {
         Text(
             label,
             color = tokens.label,
@@ -1181,10 +1162,12 @@ private fun DlsiteSoftActionPill(
     enabled: Boolean = true,
 ) {
     val tokens = LocalAmberTokens.current
+    val accentSoft = tokens.accent.copy(alpha = 0.14f)
+    val accentBorder = tokens.accent.copy(alpha = 0.34f)
     Surface(
         shape = RoundedCornerShape(999.dp),
-        color = if (enabled) DlsiteBlueSoft else tokens.gray5,
-        border = BorderStroke(0.5.dp, if (enabled) DlsiteBlueBorder else tokens.separator),
+        color = if (enabled) accentSoft else tokens.gray5,
+        border = BorderStroke(0.5.dp, if (enabled) accentBorder else tokens.separator),
         modifier = Modifier
             .height(38.dp)
             .clickable(enabled = enabled, onClick = onClick),
@@ -1197,13 +1180,13 @@ private fun DlsiteSoftActionPill(
             Icon(
                 icon,
                 contentDescription = null,
-                tint = if (enabled) DlsiteBlue else tokens.label3,
+                tint = if (enabled) tokens.accent else tokens.label3,
                 modifier = Modifier.size(15.dp),
             )
             Spacer(Modifier.width(7.dp))
             Text(
                 text,
-                color = if (enabled) DlsiteBlue else tokens.label3,
+                color = if (enabled) tokens.accent else tokens.label3,
                 fontSize = 14.sp,
                 fontWeight = FontWeight.SemiBold,
                 maxLines = 1,
@@ -1214,82 +1197,16 @@ private fun DlsiteSoftActionPill(
 }
 
 @Composable
-private fun DlsiteWorkActions(
-    work: DlsiteWork,
-    busy: Boolean,
-    taskState: DlsiteDownloadTaskState?,
-    onDownload: () -> Unit,
-    onPause: () -> Unit,
-    onResume: () -> Unit,
-    onDelete: () -> Unit,
-) {
-    val status = taskState?.status
-    val tokens = LocalAmberTokens.current
-    var menuExpanded by remember { mutableStateOf(false) }
-    Box {
-        IconButton(onClick = { menuExpanded = true }, enabled = !busy) {
-            Icon(Icons.Default.MoreVert, contentDescription = "作品操作", tint = tokens.label2)
-        }
-        DropdownMenu(expanded = menuExpanded, onDismissRequest = { menuExpanded = false }) {
-            fun closeThen(action: () -> Unit): () -> Unit = {
-                menuExpanded = false
-                action()
-            }
-            when {
-                status == DlsiteDownloadTaskStatus.QUEUED || work.isQueued() -> {
-                    DlsiteMenuAction("取消载入", Icons.Default.Close, closeThen(onDelete), destructive = true)
-                }
-                status == DlsiteDownloadTaskStatus.DOWNLOADING || work.isDownloading() -> {
-                    DlsiteMenuAction("暂停载入", Icons.Default.Pause, closeThen(onPause))
-                }
-                status == DlsiteDownloadTaskStatus.PAUSED || work.isPaused() -> {
-                    DlsiteMenuAction("继续载入", Icons.Default.PlayArrow, closeThen(onResume))
-                    DlsiteMenuAction("删除缓存", Icons.Default.Delete, closeThen(onDelete), destructive = true)
-                }
-                status == DlsiteDownloadTaskStatus.FAILED || work.isFailed() -> {
-                    DlsiteMenuAction("重试载入", Icons.Default.Download, closeThen(onResume))
-                    DlsiteMenuAction("删除缓存", Icons.Default.Delete, closeThen(onDelete), destructive = true)
-                }
-                work.isDownloaded() -> {
-                    DlsiteMenuAction("选择内容", Icons.Default.FolderOpen, closeThen(onDownload))
-                    DlsiteMenuAction("删除缓存", Icons.Default.Delete, closeThen(onDelete), destructive = true)
-                }
-                else -> {
-                    DlsiteMenuAction("载入内容", Icons.Default.Download, closeThen(onDownload))
-                }
-            }
-        }
-    }
-}
-
-@Composable
-private fun DlsiteMenuAction(
-    text: String,
-    icon: ImageVector,
-    onClick: () -> Unit,
-    destructive: Boolean = false,
-) {
-    val tokens = LocalAmberTokens.current
-    val color = if (destructive) tokens.accent2 else tokens.label
-    DropdownMenuItem(
-        text = { Text(text, color = color) },
-        leadingIcon = { Icon(icon, contentDescription = null, tint = color) },
-        onClick = onClick,
-    )
-}
-
-@Composable
 private fun DlsiteDownloadTaskRow(
     work: DlsiteWork,
     busy: Boolean,
     taskState: DlsiteDownloadTaskState,
-    contents: List<DlsiteContent>,
     onPause: () -> Unit,
     onResume: () -> Unit,
     onCancel: () -> Unit,
 ) {
     val tokens = LocalAmberTokens.current
-    val statusLabel = dlsiteTaskStatusText(taskState, work, contents)
+    val statusLabel = dlsiteTaskStatusText(taskState)
     val progress = dlsiteProgressFraction(work, taskState)
     val failed = taskState.status == DlsiteDownloadTaskStatus.FAILED || work.isFailed()
     Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
@@ -1345,12 +1262,12 @@ private fun DlsiteStatusPill(text: String, failed: Boolean) {
     val tokens = LocalAmberTokens.current
     Surface(
         shape = RoundedCornerShape(999.dp),
-        color = if (failed) tokens.accent2Soft else DlsiteBlueSoft,
-        border = BorderStroke(0.5.dp, if (failed) tokens.accent2.copy(alpha = 0.45f) else DlsiteBlueBorder),
+        color = if (failed) tokens.accent2Soft else tokens.accent.copy(alpha = 0.14f),
+        border = BorderStroke(0.5.dp, if (failed) tokens.accent2.copy(alpha = 0.45f) else tokens.accent.copy(alpha = 0.34f)),
     ) {
         Text(
             text,
-            color = if (failed) tokens.accent2 else DlsiteBlue,
+            color = if (failed) tokens.accent2 else tokens.accent,
             fontSize = 12.sp,
             fontWeight = FontWeight.SemiBold,
             maxLines = 1,
@@ -1455,6 +1372,12 @@ private fun DlsiteIconActionButton(
         border = if (filled) null else BorderStroke(0.5.dp, if (destructive) tokens.separator else DlsiteBlueBorder),
         modifier = Modifier
             .size(size)
+            .uiProbe(
+                id = "dlsite.action.${contentDescription.ifBlank { "button" }}",
+                label = "DLsite 操作按钮：$contentDescription",
+                sourceHint = "DlsiteScreen.kt",
+                metadata = mapOf("enabled" to enabled.toString()),
+            )
             .clickable(enabled = enabled, onClick = onClick),
     ) {
         Box(contentAlignment = Alignment.Center) {
@@ -1498,32 +1421,20 @@ private fun DlsiteSheetGrabber() {
     }
 }
 
-@Composable
-private fun DlsiteContentCheckBox(checked: Boolean, disabled: Boolean) {
-    val tokens = LocalAmberTokens.current
-    Surface(
-        shape = RoundedCornerShape(7.dp),
-        color = when {
-            checked -> tokens.accent
-            disabled -> tokens.gray5
-            else -> Color.Transparent
-        },
-        border = BorderStroke(1.dp, if (checked) tokens.accent else tokens.separator),
-        modifier = Modifier.size(24.dp),
-    ) {
-        Box(contentAlignment = Alignment.Center) {
-            if (checked) {
-                Text("✓", color = tokens.bg, fontSize = 14.sp, fontWeight = FontWeight.Bold)
-            }
-        }
-    }
-}
-
 private fun dlsiteProgressFraction(work: DlsiteWork, taskState: DlsiteDownloadTaskState?): Float? {
     val progress = taskState?.progressPercent
     return when {
         progress != null -> (progress.coerceIn(0, 100) / 100f)
         taskState?.status == DlsiteDownloadTaskStatus.FAILED || work.isFailed() -> 1f
+        else -> null
+    }
+}
+
+private fun dlsiteContentProgressFraction(content: DlsiteContent, taskState: DlsiteDownloadTaskState?): Float? {
+    val progress = taskState?.progressPercent
+    return when {
+        progress != null -> (progress.coerceIn(0, 100) / 100f)
+        taskState?.status == DlsiteDownloadTaskStatus.FAILED || content.isFailed() -> 1f
         else -> null
     }
 }
@@ -1544,6 +1455,9 @@ private fun dlsiteWorkStatusText(
     taskState: DlsiteDownloadTaskState?,
     contents: List<DlsiteContent>,
 ): String {
+    if (contents.isNotEmpty()) {
+        return "${contents.size} 个内容"
+    }
     return when {
         taskState?.status == DlsiteDownloadTaskStatus.QUEUED || work.isQueued() -> "排队中"
         taskState?.status == DlsiteDownloadTaskStatus.DOWNLOADING || work.isDownloading() -> {
@@ -1551,15 +1465,13 @@ private fun dlsiteWorkStatusText(
         }
         taskState?.status == DlsiteDownloadTaskStatus.PAUSED || work.isPaused() -> "已暂停"
         taskState?.status == DlsiteDownloadTaskStatus.FAILED || work.isFailed() -> "载入失败"
-        taskState?.status == DlsiteDownloadTaskStatus.COMPLETED -> "已载入"
-        else -> contentAwareStatusLabel(work, contents)
+        taskState?.status == DlsiteDownloadTaskStatus.COMPLETED -> "已完成"
+        else -> "未载入"
     }
 }
 
 private fun dlsiteTaskStatusText(
     taskState: DlsiteDownloadTaskState,
-    work: DlsiteWork,
-    contents: List<DlsiteContent>,
 ): String {
     return when (taskState.status) {
         DlsiteDownloadTaskStatus.QUEUED -> "排队中"
@@ -1567,27 +1479,14 @@ private fun dlsiteTaskStatusText(
             taskState.progressPercent?.let { "载入中 $it%" } ?: "载入中"
         DlsiteDownloadTaskStatus.PAUSED -> "已暂停"
         DlsiteDownloadTaskStatus.FAILED -> "载入失败"
-        DlsiteDownloadTaskStatus.COMPLETED -> contentAwareStatusLabel(work, contents)
+        DlsiteDownloadTaskStatus.COMPLETED -> "已完成"
     }
 }
 
-private fun contentAwareStatusLabel(work: DlsiteWork, contents: List<DlsiteContent>): String {
-    val downloadedCount = contents.count { it.isDownloaded() }
-    return when {
-        downloadedCount > 0 && downloadedCount < contents.size -> "部分载入"
-        downloadedCount > 0 || work.isDownloaded() -> "已载入"
-        work.isQueued() -> "排队中"
-        work.isDownloading() -> "载入中"
-        work.isPaused() -> "已暂停"
-        work.isFailed() -> "载入失败"
-        else -> "未载入"
-    }
-}
-
-private fun contentStatusText(content: DlsiteContent?): String {
+private fun contentStatusText(content: DlsiteContent?, cached: Boolean = content?.isDownloaded() == true): String {
     return when {
         content == null -> "未载入"
-        content.isDownloaded() -> "已载入"
+        cached -> "已载入"
         content.isQueued() -> "排队中"
         content.isDownloading() -> "载入中"
         content.isPaused() -> "已暂停"
@@ -1599,6 +1498,7 @@ private fun contentStatusText(content: DlsiteContent?): String {
 private fun dlsiteContentMetaText(
     content: DlsiteContent,
     taskState: DlsiteDownloadTaskState?,
+    cached: Boolean,
 ): String {
     val parts = mutableListOf<String>()
     parts += if (content.trackCount > 0) {
@@ -1606,7 +1506,7 @@ private fun dlsiteContentMetaText(
     } else {
         "音频数待解析"
     }
-    parts += if (content.localPath.isNotEmpty()) {
+    parts += if (cached) {
         "本地缓存"
     } else {
         "未缓存"
@@ -1615,6 +1515,22 @@ private fun dlsiteContentMetaText(
         parts += "${formatBytes(taskState.bytesDownloaded)} / ${formatBytes(taskState.totalBytes)}"
     }
     return parts.joinToString(" · ")
+}
+
+private fun dlsiteContentHasLocalCache(context: android.content.Context, content: DlsiteContent): Boolean {
+    if (content.isDownloaded() || content.localPath.isNotEmpty()) {
+        return true
+    }
+    val contentDir = File(
+        File(File(context.filesDir, "dlsite/works/${content.workId}"), "contents"),
+        safeDlsiteContentId(content.optionId),
+    )
+    return File(contentDir, ".downloaded").isFile
+}
+
+private fun safeDlsiteContentId(optionId: String): String {
+    val id = optionId.ifEmpty { "default" }
+    return id.replace(Regex("[\\\\/:*?\"<>|]+"), "_")
 }
 
 private fun formatSyncTimeCompact(lastSyncMs: Long): String {

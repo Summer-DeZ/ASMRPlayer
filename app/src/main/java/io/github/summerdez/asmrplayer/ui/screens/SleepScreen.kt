@@ -181,6 +181,17 @@ fun SleepTab(
     Column(
         Modifier
             .fillMaxSize()
+            .uiProbe(
+                id = "sleep.root",
+                label = "睡眠定时页根容器",
+                sourceHint = "SleepScreen.kt",
+                metadata = mapOf(
+                    "active" to state.active.toString(),
+                    "atEndOfTrack" to state.atEndOfTrack.toString(),
+                    "minutes" to state.minutes.toString(),
+                    "selectedMinutes" to selectedMinutes.toString(),
+                ),
+            )
             .verticalScroll(rememberScrollState())
             .padding(start = 22.dp, end = 22.dp, top = 4.dp, bottom = 32.dp),
         horizontalAlignment = Alignment.CenterHorizontally,
@@ -247,11 +258,21 @@ fun SleepTab(
                 }
             },
         )
-        TextButton(onClick = onCustom, modifier = Modifier.height(44.dp)) {
+        TextButton(
+            onClick = onCustom,
+            modifier = Modifier
+                .height(44.dp)
+                .uiProbe("sleep.custom-minutes", "自定义睡眠分钟按钮", "SleepScreen.kt"),
+        ) {
             Text("自定义分钟数", color = tokens.label3, fontSize = 13.sp, fontWeight = FontWeight.SemiBold)
         }
         if (state.active) {
-            TextButton(onClick = onCancel, modifier = Modifier.height(54.dp)) {
+            TextButton(
+                onClick = onCancel,
+                modifier = Modifier
+                    .height(54.dp)
+                    .uiProbe("sleep.cancel", "取消睡眠定时按钮", "SleepScreen.kt"),
+            ) {
                 Text("取消睡眠定时", color = tokens.accent2, fontSize = 17.sp, fontWeight = FontWeight.Bold)
             }
         }
@@ -268,7 +289,22 @@ fun SleepRing(state: SleepTimerUiState, displayMinutes: Int) {
         }
         else -> (displayMinutes.toFloat() / 90f).coerceIn(0f, 1f)
     }
-    Column(horizontalAlignment = Alignment.CenterHorizontally, modifier = Modifier.padding(top = 6.dp)) {
+    Column(
+        horizontalAlignment = Alignment.CenterHorizontally,
+        modifier = Modifier
+            .padding(top = 6.dp)
+            .uiProbe(
+                id = "sleep.ring",
+                label = "睡眠定时环",
+                sourceHint = "SleepScreen.kt",
+                metadata = mapOf(
+                    "active" to state.active.toString(),
+                    "atEndOfTrack" to state.atEndOfTrack.toString(),
+                    "displayMinutes" to displayMinutes.toString(),
+                    "progressPercent" to (progress * 100f).toInt().toString(),
+                ),
+            ),
+    ) {
         Box(
             contentAlignment = Alignment.Center,
             modifier = Modifier
@@ -339,7 +375,15 @@ fun SleepChip(minutes: Int, selected: Boolean, modifier: Modifier, onClick: () -
     val tokens = LocalAmberTokens.current
     val shape = CircleShape
     Surface(
-        modifier = modifier.height(40.dp).noRippleClickable(onClick = onClick),
+        modifier = modifier
+            .height(40.dp)
+            .uiProbe(
+                id = "sleep.chip:$minutes",
+                label = "睡眠定时快捷分钟：$minutes 分",
+                sourceHint = "SleepScreen.kt",
+                metadata = mapOf("minutes" to minutes.toString(), "selected" to selected.toString()),
+            )
+            .noRippleClickable(onClick = onClick),
         shape = shape,
         color = if (selected) tokens.accent else tokens.label.copy(alpha = 0.06f),
         border = BorderStroke(1.dp, if (selected) Color.Transparent else tokens.separator),
@@ -375,6 +419,12 @@ private fun SleepSwitchSettingRow(
         modifier = Modifier
             .fillMaxWidth()
             .height(76.dp)
+            .uiProbe(
+                id = "sleep.switch-row:$title",
+                label = "睡眠设置开关：$title",
+                sourceHint = "SleepScreen.kt",
+                metadata = mapOf("checked" to checked.toString(), "subtitle" to subtitle),
+            )
             .clickable(onClick = onCheckedChange)
             .padding(horizontal = 18.dp),
         verticalAlignment = Alignment.CenterVertically,
@@ -420,6 +470,12 @@ private fun SleepVolumeSettingRow(volume: Int, onVolumeChange: (Int) -> Unit) {
     Column(
         modifier = Modifier
             .fillMaxWidth()
+            .uiProbe(
+                id = "sleep.volume-row",
+                label = "睡眠入睡音量设置",
+                sourceHint = "SleepScreen.kt",
+                metadata = mapOf("volume" to volume.toString()),
+            )
             .padding(horizontal = 18.dp, vertical = 16.dp),
     ) {
         Row(verticalAlignment = Alignment.CenterVertically) {
@@ -464,6 +520,12 @@ private fun SleepPrimaryButton(
         modifier = Modifier
             .fillMaxWidth()
             .height(52.dp)
+            .uiProbe(
+                id = "sleep.primary-button",
+                label = "开始睡眠定时按钮",
+                sourceHint = "SleepScreen.kt",
+                metadata = mapOf("text" to text),
+            )
             .noRippleClickable(onClick = onClick),
         shape = CircleShape,
         color = tokens.accent,
@@ -488,6 +550,12 @@ fun SleepOptionRow(icon: ImageVector, title: String, subtitle: String, selected:
         modifier = Modifier
             .fillMaxWidth()
             .height(76.dp)
+            .uiProbe(
+                id = "sleep.option-row:$title",
+                label = "睡眠选项行：$title",
+                sourceHint = "SleepScreen.kt",
+                metadata = mapOf("subtitle" to subtitle, "selected" to selected.toString()),
+            )
             .clickable(onClick = onClick)
             .padding(horizontal = 16.dp),
         verticalAlignment = Alignment.CenterVertically,

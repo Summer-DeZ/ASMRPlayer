@@ -1,7 +1,7 @@
 package io.github.summerdez.asmrplayer
 
 import io.github.summerdez.asmrplayer.data.update.AppUpdateDownloadState
-import io.github.summerdez.asmrplayer.data.update.AppUpdateDownloadStateBus
+import io.github.summerdez.asmrplayer.data.update.AppUpdateDownloadStateStore
 import io.github.summerdez.asmrplayer.data.update.AppUpdateDownloadStateStatus
 import io.github.summerdez.asmrplayer.data.update.AppUpdateRelease
 import io.github.summerdez.asmrplayer.presentation.AppUpdateDownloadStatus
@@ -13,61 +13,57 @@ import org.junit.Test
 
 class AppUpdateDownloadStateTest {
     @Test
-    fun stateBusComputesSpeedFromProgressDelta() {
+    fun stateStoreComputesSpeedFromProgressDelta() {
         val release = testRelease()
-        try {
-            AppUpdateDownloadStateBus.publishDownloading(
-                release = release,
-                bytesDownloaded = 1_000L,
-                totalBytes = 4_000L,
-                nowMillis = 1_000L,
-            )
-            AppUpdateDownloadStateBus.publishDownloading(
-                release = release,
-                bytesDownloaded = 3_000L,
-                totalBytes = 4_000L,
-                nowMillis = 2_000L,
-            )
+        val store = AppUpdateDownloadStateStore()
 
-            val state = AppUpdateDownloadStateBus.state.value
-            assertTrue(state.active)
-            assertEquals(AppUpdateDownloadStateStatus.DOWNLOADING, state.status)
-            assertEquals(75, state.progressPercent)
-            assertEquals(2_000L, state.speedBytesPerSecond)
-        } finally {
-            AppUpdateDownloadStateBus.clear()
-        }
+        store.publishDownloading(
+            release = release,
+            bytesDownloaded = 1_000L,
+            totalBytes = 4_000L,
+            nowMillis = 1_000L,
+        )
+        store.publishDownloading(
+            release = release,
+            bytesDownloaded = 3_000L,
+            totalBytes = 4_000L,
+            nowMillis = 2_000L,
+        )
+
+        val state = store.state.value
+        assertTrue(state.active)
+        assertEquals(AppUpdateDownloadStateStatus.DOWNLOADING, state.status)
+        assertEquals(75, state.progressPercent)
+        assertEquals(2_000L, state.speedBytesPerSecond)
     }
 
     @Test
     fun canceledDownloadKeepsTerminalCanceledState() {
         val release = testRelease()
-        try {
-            AppUpdateDownloadStateBus.publishDownloading(
-                release = release,
-                bytesDownloaded = 512L,
-                totalBytes = 4_096L,
-                nowMillis = 1_000L,
-            )
-            AppUpdateDownloadStateBus.publishCanceled(
-                release = release,
-                bytesDownloaded = 512L,
-                totalBytes = 4_096L,
-                nowMillis = 1_100L,
-            )
+        val store = AppUpdateDownloadStateStore()
 
-            val state = AppUpdateDownloadStateBus.state.value
-            assertFalse(state.active)
-            assertEquals(AppUpdateDownloadStateStatus.CANCELED, state.status)
-            assertEquals(512L, state.bytesDownloaded)
-            assertEquals(AppUpdateDownloadStatus.Idle, appUpdateDownloadUiStatus(state))
-        } finally {
-            AppUpdateDownloadStateBus.clear()
-        }
+        store.publishDownloading(
+            release = release,
+            bytesDownloaded = 512L,
+            totalBytes = 4_096L,
+            nowMillis = 1_000L,
+        )
+        store.publishCanceled(
+            release = release,
+            bytesDownloaded = 512L,
+            totalBytes = 4_096L,
+            nowMillis = 1_100L,
+        )
+
+        val state = store.state.value
+        assertFalse(state.active)
+        assertEquals(AppUpdateDownloadStateStatus.CANCELED, state.status)
+        assertEquals(512L, state.bytesDownloaded)
+        assertEquals(AppUpdateDownloadStatus.Idle, appUpdateDownloadUiStatus(state))
     }
 
     @Test
-    fun uiStatusMapsStateBusTerminalAndFailedStates() {
+    fun uiStatusMapsStateStoreTerminalAndFailedStates() {
         val release = testRelease()
 
         val downloaded = appUpdateDownloadUiStatus(

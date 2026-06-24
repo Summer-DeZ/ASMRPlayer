@@ -1,52 +1,42 @@
 package io.github.summerdez.asmrplayer.data
 
-import io.github.summerdez.asmrplayer.R
-import io.github.summerdez.asmrplayer.data.*
-import io.github.summerdez.asmrplayer.data.remote.*
-import io.github.summerdez.asmrplayer.data.download.*
-import io.github.summerdez.asmrplayer.data.files.*
-import io.github.summerdez.asmrplayer.domain.*
-import io.github.summerdez.asmrplayer.domain.model.*
-import io.github.summerdez.asmrplayer.playback.*
-import io.github.summerdez.asmrplayer.presentation.*
-import io.github.summerdez.asmrplayer.ui.*
-import io.github.summerdez.asmrplayer.ui.activity.*
-import io.github.summerdez.asmrplayer.ui.components.*
-import io.github.summerdez.asmrplayer.ui.screens.*
-import io.github.summerdez.asmrplayer.ui.theme.*
-import io.github.summerdez.asmrplayer.ui.util.*
-import io.github.summerdez.asmrplayer.di.*
 import android.content.Context
 import io.github.summerdez.asmrplayer.domain.model.AiSubtitleSettings
 import io.github.summerdez.asmrplayer.domain.model.AiTranscriptionBackend
 import io.github.summerdez.asmrplayer.domain.model.AiTranslationEngine
 import io.github.summerdez.asmrplayer.domain.model.WhisperModelSpec
+import io.github.summerdez.asmrplayer.ui.theme.AppThemeMode
+import io.github.summerdez.asmrplayer.ui.theme.AppUi
+import kotlinx.coroutines.CoroutineDispatcher
+import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.combine
+import kotlinx.coroutines.withContext
 
 interface SettingsRepository {
     val aiSubtitleSettingsFlow: Flow<AiSubtitleSettings>
 
     fun themeMode(): AppThemeMode
     fun setThemeMode(mode: AppThemeMode)
-    fun aiSubtitleSettings(): AiSubtitleSettings
-    fun setAiTranscriptionBackend(backend: AiTranscriptionBackend)
-    fun setAiTranslationEngine(engine: AiTranslationEngine)
-    fun setAiOllamaBaseUrl(value: String)
-    fun setAiOllamaModel(value: String)
-    fun setAiDeepSeekBaseUrl(value: String)
-    fun setAiDeepSeekModel(value: String)
-    fun setAiDeepSeekApiKey(value: String)
-    fun setAiWhisperModelId(value: String)
-    fun setAiRemoteWhisperBaseUrl(value: String)
-    fun setAiRemoteWhisperModel(value: String)
-    fun setAiRemoteWhisperToken(value: String)
-    fun setAiAdultContentTranslationAllowed(value: Boolean)
+    suspend fun aiSubtitleSettings(): AiSubtitleSettings
+    suspend fun setAiTranscriptionBackend(backend: AiTranscriptionBackend)
+    suspend fun setAiTranslationEngine(engine: AiTranslationEngine)
+    suspend fun setAiOllamaBaseUrl(value: String)
+    suspend fun setAiOllamaModel(value: String)
+    suspend fun setAiDeepSeekBaseUrl(value: String)
+    suspend fun setAiDeepSeekModel(value: String)
+    suspend fun setAiDeepSeekApiKey(value: String)
+    suspend fun setAiWhisperModelId(value: String)
+    suspend fun setAiRemoteWhisperBaseUrl(value: String)
+    suspend fun setAiRemoteWhisperModel(value: String)
+    suspend fun setAiRemoteWhisperToken(value: String)
+    suspend fun setAiAdultContentTranslationAllowed(value: Boolean)
 }
 
 class AppSettingsRepository(
     context: Context,
     private val settingsDao: AppSettingsDao,
+    private val ioDispatcher: CoroutineDispatcher = Dispatchers.IO,
 ) : SettingsRepository {
     private val appContext = context.applicationContext
     override val aiSubtitleSettingsFlow: Flow<AiSubtitleSettings> = combine(
@@ -76,8 +66,8 @@ class AppSettingsRepository(
         AppUi.setThemeMode(appContext, mode)
     }
 
-    override fun aiSubtitleSettings(): AiSubtitleSettings {
-        return DbIo.run {
+    override suspend fun aiSubtitleSettings(): AiSubtitleSettings {
+        return withContext(ioDispatcher) {
             aiSettingsFromValues(
                 arrayOf(
                     settingsDao.value(KEY_AI_TRANSLATION_ENGINE),
@@ -97,56 +87,56 @@ class AppSettingsRepository(
         }
     }
 
-    override fun setAiTranscriptionBackend(backend: AiTranscriptionBackend) {
+    override suspend fun setAiTranscriptionBackend(backend: AiTranscriptionBackend) {
         put(KEY_AI_TRANSCRIPTION_BACKEND, backend.name)
     }
 
-    override fun setAiTranslationEngine(engine: AiTranslationEngine) {
+    override suspend fun setAiTranslationEngine(engine: AiTranslationEngine) {
         put(KEY_AI_TRANSLATION_ENGINE, engine.name)
     }
 
-    override fun setAiOllamaBaseUrl(value: String) {
+    override suspend fun setAiOllamaBaseUrl(value: String) {
         put(KEY_AI_OLLAMA_BASE_URL, value.trim())
     }
 
-    override fun setAiOllamaModel(value: String) {
+    override suspend fun setAiOllamaModel(value: String) {
         put(KEY_AI_OLLAMA_MODEL, value.trim())
     }
 
-    override fun setAiDeepSeekBaseUrl(value: String) {
+    override suspend fun setAiDeepSeekBaseUrl(value: String) {
         put(KEY_AI_DEEPSEEK_BASE_URL, value.trim())
     }
 
-    override fun setAiDeepSeekModel(value: String) {
+    override suspend fun setAiDeepSeekModel(value: String) {
         put(KEY_AI_DEEPSEEK_MODEL, value.trim())
     }
 
-    override fun setAiDeepSeekApiKey(value: String) {
+    override suspend fun setAiDeepSeekApiKey(value: String) {
         put(KEY_AI_DEEPSEEK_API_KEY, value.trim())
     }
 
-    override fun setAiWhisperModelId(value: String) {
+    override suspend fun setAiWhisperModelId(value: String) {
         put(KEY_AI_WHISPER_MODEL_ID, WhisperModelSpec.byId(value).id)
     }
 
-    override fun setAiRemoteWhisperBaseUrl(value: String) {
+    override suspend fun setAiRemoteWhisperBaseUrl(value: String) {
         put(KEY_AI_REMOTE_WHISPER_BASE_URL, value.trim())
     }
 
-    override fun setAiRemoteWhisperModel(value: String) {
+    override suspend fun setAiRemoteWhisperModel(value: String) {
         put(KEY_AI_REMOTE_WHISPER_MODEL, value.trim())
     }
 
-    override fun setAiRemoteWhisperToken(value: String) {
+    override suspend fun setAiRemoteWhisperToken(value: String) {
         put(KEY_AI_REMOTE_WHISPER_TOKEN, value.trim())
     }
 
-    override fun setAiAdultContentTranslationAllowed(value: Boolean) {
+    override suspend fun setAiAdultContentTranslationAllowed(value: Boolean) {
         put(KEY_AI_ADULT_CONTENT_TRANSLATION, value.toString())
     }
 
-    private fun put(key: String, value: String) {
-        DbIo.run {
+    private suspend fun put(key: String, value: String) {
+        withContext(ioDispatcher) {
             settingsDao.put(AppSettingEntity(key, value))
         }
     }

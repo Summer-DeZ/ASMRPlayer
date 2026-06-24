@@ -163,6 +163,7 @@ fun BottomPlaybackArea(
     Column(
         modifier = Modifier
             .fillMaxWidth()
+            .uiProbe("app.bottom-playback-area", "底部播放与导航区域", "PlaybackChrome.kt")
             .background(tokens.bar)
             .navigationBarsPadding(),
     ) {
@@ -172,6 +173,12 @@ fun BottomPlaybackArea(
                 .fillMaxWidth()
                 .padding(start = 10.dp, end = 10.dp, top = 8.dp, bottom = 7.dp)
                 .height(64.dp)
+                .uiProbe(
+                    id = "app.mini-player",
+                    label = "底部迷你播放器",
+                    sourceHint = "PlaybackChrome.kt",
+                    metadata = mapOf("audioTitle" to playbackState.audioTitle),
+                )
                 .noRippleClickable(onClick = onOpenPlayer),
             shape = miniPlayerShape,
             color = tokens.glass,
@@ -274,6 +281,11 @@ fun DockButton(tab: MainTab, icon: AsmrIconName, selectedTab: MainTab, onTabSele
         horizontalAlignment = Alignment.CenterHorizontally,
         modifier = Modifier
             .width(84.dp)
+            .uiProbe(
+                id = "app.tab.${tab.name.lowercase()}",
+                label = "底部 Tab：${if (tab == MainTab.SLEEP) "睡眠定时" else tab.title}",
+                sourceHint = "PlaybackChrome.kt",
+            )
             .noRippleClickable { onTabSelected(tab) }
             .padding(vertical = 6.dp),
     ) {

@@ -93,16 +93,14 @@ data class DlsiteDownloadState(
         }
 }
 
-object DlsiteDownloadStateBus {
+class DlsiteDownloadStateStore {
     private val _state = MutableStateFlow(DlsiteDownloadState())
     val state: StateFlow<DlsiteDownloadState> = _state.asStateFlow()
 
-    @JvmStatic
     fun publish(workId: String?, title: String?, status: String?) {
         publishProgress(workId, title, status, 0L, -1L)
     }
 
-    @JvmStatic
     fun publishProgress(
         workId: String?,
         title: String?,
@@ -120,19 +118,16 @@ object DlsiteDownloadStateBus {
         )
     }
 
-    @JvmStatic
     fun clear() {
         _state.value = DlsiteDownloadState()
     }
 
-    @JvmStatic
     fun clearCompleted() {
         _state.update { current ->
             rebuild(current.tasks.filterValues { it.status != DlsiteDownloadTaskStatus.COMPLETED })
         }
     }
 
-    @JvmStatic
     fun remove(workId: String?) {
         if (workId.isNullOrEmpty()) {
             return
@@ -142,7 +137,6 @@ object DlsiteDownloadStateBus {
         }
     }
 
-    @JvmStatic
     fun publishQueued(workId: String?, title: String?, queuePosition: Int) {
         publishTask(
             workId = workId,
@@ -152,30 +146,24 @@ object DlsiteDownloadStateBus {
         )
     }
 
-    @JvmStatic
     fun publishPaused(workId: String?, title: String?) {
         publishTask(workId, title, DlsiteDownloadTaskStatus.PAUSED, "已暂停")
     }
 
-    @JvmStatic
     fun publishFailed(workId: String?, title: String?, message: String?) {
         publishTask(workId, title, DlsiteDownloadTaskStatus.FAILED, message)
     }
 
-    @JvmStatic
     fun publishCompleted(workId: String?, title: String?) {
         publishTask(workId, title, DlsiteDownloadTaskStatus.COMPLETED, "已完成")
     }
 
-    @JvmStatic
     fun snapshot(): DlsiteDownloadState = _state.value
 
-    @JvmStatic
     fun taskFor(workId: String?): DlsiteDownloadTaskState? {
         return if (workId.isNullOrEmpty()) null else _state.value.tasks[workId]
     }
 
-    @JvmStatic
     @JvmOverloads
     fun publishTask(
         workId: String?,

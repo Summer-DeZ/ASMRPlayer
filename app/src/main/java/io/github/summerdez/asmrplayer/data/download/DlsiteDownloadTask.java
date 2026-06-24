@@ -51,28 +51,28 @@ public final class DlsiteDownloadTask {
     static Result downloadAndImport(
             Context context,
             DlsiteApi dlsiteApi,
-            LibraryRepository libraryRepository,
+            DlsiteDownloadBlockingAdapter repository,
             DlsiteWork work) throws IOException {
-        return downloadAndImport(context, dlsiteApi, libraryRepository, work, "");
+        return downloadAndImport(context, dlsiteApi, repository, work, "");
     }
 
     static Result downloadAndImport(
             Context context,
             DlsiteApi dlsiteApi,
-            LibraryRepository libraryRepository,
+            DlsiteDownloadBlockingAdapter repository,
             DlsiteWork work,
             String downloadOptionId) throws IOException {
         List<String> optionIds = new ArrayList<>();
         if (!TextUtils.isEmpty(downloadOptionId)) {
             optionIds.add(downloadOptionId);
         }
-        return downloadAndImport(context, dlsiteApi, libraryRepository, work, optionIds, null);
+        return downloadAndImport(context, dlsiteApi, repository, work, optionIds, null);
     }
 
     static Result downloadAndImport(
             Context context,
             DlsiteApi dlsiteApi,
-            LibraryRepository libraryRepository,
+            DlsiteDownloadBlockingAdapter repository,
             DlsiteWork work,
             List<String> downloadOptionIds,
             ContentListener listener) throws IOException {
@@ -159,7 +159,7 @@ public final class DlsiteDownloadTask {
         if (coverFile != null && coverFile.isFile()) {
             coverUri = Uri.fromFile(coverFile).toString();
         }
-        ImportResult importResult = importPlaylist(context, libraryRepository, importWork, importedAudioFiles, coverFile);
+        ImportResult importResult = importPlaylist(context, repository, importWork, importedAudioFiles, coverFile);
         List<ContentResult> contentResults = contentResultsForImport(downloadedContents, importResult);
         for (int i = 0; i < downloadedContents.size(); i++) {
             if (listener != null) {
@@ -192,16 +192,16 @@ public final class DlsiteDownloadTask {
 
     private static ImportResult importPlaylist(
             Context context,
-            LibraryRepository libraryRepository,
+            DlsiteDownloadBlockingAdapter repository,
             DlsiteWork work,
             List<File> audioFiles,
             File coverFile) {
-        Playlist playlist = libraryRepository.getPlaylist(work.playlistId);
+        Playlist playlist = repository.getPlaylist(work.playlistId);
         if (playlist == null) {
-            playlist = libraryRepository.createPlaylist(work.displayTitle());
+            playlist = repository.createPlaylist(work.displayTitle());
         }
         if (coverFile != null && coverFile.isFile()) {
-            libraryRepository.setPlaylistCover(playlist.id, Uri.fromFile(coverFile).toString());
+            repository.setPlaylistCover(playlist.id, Uri.fromFile(coverFile).toString());
         }
         Set<String> existingUris = new HashSet<>();
         Map<String, String> existingTrackIdsByUri = new HashMap<>();
@@ -223,7 +223,7 @@ public final class DlsiteDownloadTask {
             }
             File subtitleFile = subtitles.get(normalizedName(audioFile.getName() + ".vtt"));
             String trackId = UUID.randomUUID().toString();
-            libraryRepository.addTrack(
+            repository.addTrack(
                     playlist.id,
                     new TrackItem(
                             trackId,
@@ -237,7 +237,7 @@ public final class DlsiteDownloadTask {
             existingTrackIdsByUri.put(audioUri, trackId);
             trackIdsByPath.put(audioFile.getAbsolutePath(), trackId);
         }
-        Playlist updated = libraryRepository.getPlaylist(playlist.id);
+        Playlist updated = repository.getPlaylist(playlist.id);
         return new ImportResult(
                 playlist.id,
                 addedTrackIds,

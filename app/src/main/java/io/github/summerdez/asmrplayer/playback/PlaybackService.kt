@@ -22,20 +22,26 @@ import androidx.media3.session.SessionResult
 import com.google.common.util.concurrent.Futures
 import com.google.common.util.concurrent.ListenableFuture
 import java.io.IOException
-import io.github.summerdez.asmrplayer.data.LibraryRepository
 import io.github.summerdez.asmrplayer.di.AppGraph
 import io.github.summerdez.asmrplayer.domain.SleepTimerState
 import io.github.summerdez.asmrplayer.domain.model.Playlist
 import io.github.summerdez.asmrplayer.ui.activity.MainActivity
+import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.Job
+import kotlinx.coroutines.SupervisorJob
+import kotlinx.coroutines.cancel
+import kotlinx.coroutines.launch
 import kotlin.math.max
 
 @androidx.annotation.OptIn(UnstableApi::class)
 class PlaybackService : MediaSessionService() {
     private val handler = Handler(Looper.getMainLooper())
+    private val serviceScope = CoroutineScope(SupervisorJob() + Dispatchers.Main.immediate)
     private val subtitleTicker = object : Runnable {
         override fun run() {
             updateSubtitleForCurrentPosition()
-            handler.postDelayed(this, SUBTITLE_REFRESH_MS.toLong())
+            scheduleNextSubtitleUpdate()
         }
     }
     private val sleepTimer = SleepTimerState()
@@ -46,8 +52,12 @@ class PlaybackService : MediaSessionService() {
 
     private lateinit var player: ExoPlayer
     private var mediaSession: MediaSession? = null
-    private lateinit var libraryRepository: LibraryRepository
+    private lateinit var playbackPlaylistResolver: PlaybackPlaylistResolver
     private var subtitleOverlayWindow: SubtitleOverlayWindow? = null
+    private var playlistLoadJob: Job? = null
+    private var trackSyncJob: Job? = null
+    private var playlistLoadVersion: Long = 0L
+    private var lastSessionExtrasSnapshot = PlaybackServiceSnapshot()
 
     private var currentAudioUri: Uri? = null
     private var currentSubtitleUri: Uri? = null
@@ -63,7 +73,7 @@ class PlaybackService : MediaSessionService() {
 
     override fun onCreate() {
         super.onCreate()
-        libraryRepository = AppGraph.container(this).libraryRepository
+        playbackPlaylistResolver = AppGraph.container(this).playbackPlaylistResolver
         subtitleOverlayWindow = SubtitleOverlayWindow(this, object : SubtitleOverlayWindow.Listener {
             override fun onPrevious() {
                 playRelativeInPlaylist(-1)
@@ -94,6 +104,7 @@ class PlaybackService : MediaSessionService() {
         mediaSession = MediaSession.Builder(this, player)
             .setSessionActivity(sessionActivity())
             .setCallback(SessionCallback())
+            .setSessionExtras(PlaybackServiceSnapshot().toSessionExtras())
             .build()
         publishState()
     }
@@ -109,6 +120,7 @@ class PlaybackService : MediaSessionService() {
     }
 
     override fun onDestroy() {
+        serviceScope.cancel()
         handler.removeCallbacksAndMessages(null)
         removeOverlay()
         mediaSession?.run {
@@ -116,7 +128,6 @@ class PlaybackService : MediaSessionService() {
             release()
         }
         mediaSession = null
-        PlaybackServiceState.disconnect()
         super.onDestroy()
     }
 
@@ -150,7 +161,7 @@ class PlaybackService : MediaSessionService() {
             if (reason == Player.MEDIA_ITEM_TRANSITION_REASON_AUTO && consumeSleepAtEndOfTrack()) {
                 return
             }
-            updateSubtitleForCurrentPosition()
+            updateSubtitleForCurrentPositionAndSchedule()
             publishState()
         }
 
@@ -167,7 +178,7 @@ class PlaybackService : MediaSessionService() {
                     Player.EVENT_MEDIA_METADATA_CHANGED,
                 )
             ) {
-                updateSubtitleForCurrentPosition()
+                updateSubtitleForCurrentPositionAndSchedule()
                 publishState()
             }
         }
@@ -246,16 +257,42 @@ class PlaybackService : MediaSessionService() {
         trackTitle = title?.takeIf { it.isNotBlank() } ?: DEFAULT_TRACK_TITLE
         loadSubtitle(subtitleUri)
 
-        val playlist = libraryRepository.getPlaylist(currentPlaylistId)
+        val requestVersion = nextPlaylistLoadVersion()
+        val requestedAudioUri = audioUri.toString()
+        val requestedPlaylistId = currentPlaylistId
+        val requestedPlaylistIndex = currentPlaylistIndex
+        val requestedTitle = trackTitle
+        playlistLoadJob = serviceScope.launch {
+            val playlist = loadPlaylistForPlayback(requestedPlaylistId)
+            if (!isLatestPlaylistRequest(requestVersion)
+                || currentAudioUri?.toString() != requestedAudioUri
+                || currentPlaylistId != requestedPlaylistId
+                || currentPlaylistIndex != requestedPlaylistIndex
+            ) {
+                return@launch
+            }
+            prepareAndPlay(requestedAudioUri, requestedTitle, requestedPlaylistId, requestedPlaylistIndex, playlist)
+        }
+        publishState()
+    }
+
+    private fun prepareAndPlay(
+        audioUriValue: String,
+        title: String,
+        playlistId: String,
+        playlistIndex: Int,
+        playlist: Playlist?,
+    ) {
+        val audioUri = parseUri(audioUriValue) ?: return
         val queue = playlist?.let(PlaybackMediaQueue::buildPlaylistQueue).orEmpty()
         val queueIndex = queue.indexOfFirst {
-            it.mediaId == PlaybackMediaQueue.mediaId(currentPlaylistId, playlistIndex, currentAudioUri?.toString().orEmpty())
+            it.mediaId == PlaybackMediaQueue.mediaId(playlistId, playlistIndex, audioUriValue)
         }
         if (queueIndex >= 0) {
             player.setMediaItems(queue, queueIndex, 0L)
         } else {
             player.setMediaItem(
-                PlaybackMediaQueue.buildMediaItem(audioUri, trackTitle, currentPlaylistId, playlistIndex, playlist?.coverUri),
+                PlaybackMediaQueue.buildMediaItem(audioUri, title, playlistId, playlistIndex, playlist?.coverUri),
             )
         }
         player.prepare()
@@ -269,7 +306,7 @@ class PlaybackService : MediaSessionService() {
 
     private fun setSubtitle(subtitleUri: Uri?) {
         loadSubtitle(subtitleUri)
-        updateSubtitleForCurrentPosition()
+        updateSubtitleForCurrentPositionAndSchedule()
         publishState()
     }
 
@@ -298,7 +335,7 @@ class PlaybackService : MediaSessionService() {
             return
         }
         player.seekTo(max(0L, positionMs))
-        updateSubtitleForCurrentPosition()
+        updateSubtitleForCurrentPositionAndSchedule()
         publishState()
     }
 
@@ -306,7 +343,7 @@ class PlaybackService : MediaSessionService() {
         overlayRequested = visible
         if (visible) {
             ensureOverlay()
-            updateSubtitleForCurrentPosition()
+            updateSubtitleForCurrentPositionAndSchedule()
         } else {
             removeOverlay()
         }
@@ -338,29 +375,39 @@ class PlaybackService : MediaSessionService() {
         publishState()
     }
 
-    private fun playRelativeInPlaylist(delta: Int): Boolean {
+    private fun playRelativeInPlaylist(delta: Int) {
         if (delta > 0 && player.hasNextMediaItem()) {
             player.seekToNextMediaItem()
             player.play()
-            return true
+            return
         }
         if (delta < 0 && player.hasPreviousMediaItem()) {
             player.seekToPreviousMediaItem()
             player.play()
-            return true
+            return
         }
         if (currentPlaylistId.isEmpty() || currentPlaylistIndex < 0) {
-            return false
+            return
         }
 
-        val playlist = libraryRepository.getPlaylist(currentPlaylistId) ?: return false
-        val targetIndex = currentPlaylistIndex + delta
-        val track = playlist.tracks.getOrNull(targetIndex) ?: return false
-        if (!track.hasAudioUri()) {
-            return false
+        val requestVersion = nextPlaylistLoadVersion()
+        val requestedPlaylistId = currentPlaylistId
+        val requestedPlaylistIndex = currentPlaylistIndex
+        playlistLoadJob = serviceScope.launch {
+            val playlist = loadPlaylistForPlayback(requestedPlaylistId) ?: return@launch
+            if (!isLatestPlaylistRequest(requestVersion)
+                || currentPlaylistId != requestedPlaylistId
+                || currentPlaylistIndex != requestedPlaylistIndex
+            ) {
+                return@launch
+            }
+            val targetIndex = requestedPlaylistIndex + delta
+            val track = playlist.tracks.getOrNull(targetIndex) ?: return@launch
+            if (!track.hasAudioUri()) {
+                return@launch
+            }
+            playMedia(track.audioUri(), track.subtitleUriOrNull(), track.title, playlist.id, targetIndex)
         }
-        playMedia(track.audioUri(), track.subtitleUriOrNull(), track.title, playlist.id, targetIndex)
-        return true
     }
 
     private fun loadSubtitle(subtitleUri: Uri?) {
@@ -386,6 +433,11 @@ class PlaybackService : MediaSessionService() {
         updateSubtitleText(SubtitleParser.textAt(subtitleCues, playerPositionMs().toLong()))
     }
 
+    private fun updateSubtitleForCurrentPositionAndSchedule() {
+        updateSubtitleForCurrentPosition()
+        scheduleNextSubtitleUpdate()
+    }
+
     private fun updateSubtitleText(text: String?) {
         lastSubtitleText = text.orEmpty()
         subtitleOverlayWindow?.updateText(lastSubtitleText)
@@ -403,15 +455,30 @@ class PlaybackService : MediaSessionService() {
 
     private fun startSubtitleTicker() {
         if (tickerRunning) {
+            updateSubtitleForCurrentPositionAndSchedule()
             return
         }
         tickerRunning = true
-        handler.post(subtitleTicker)
+        updateSubtitleForCurrentPositionAndSchedule()
     }
 
     private fun stopSubtitleTicker() {
         tickerRunning = false
         handler.removeCallbacks(subtitleTicker)
+    }
+
+    private fun scheduleNextSubtitleUpdate() {
+        handler.removeCallbacks(subtitleTicker)
+        if (!tickerRunning || !player.isPlaying || subtitleCues.isEmpty()) {
+            return
+        }
+        val positionMs = playerPositionMs().toLong()
+        val nextStartMs = SubtitleParser.nextCueStartAfter(subtitleCues, positionMs)
+        if (nextStartMs < 0L) {
+            return
+        }
+        val delayMs = max(0L, nextStartMs - positionMs + SUBTITLE_BOUNDARY_GUARD_MS)
+        handler.postDelayed(subtitleTicker, delayMs)
     }
 
     private fun ensureOverlay(): Boolean {
@@ -463,27 +530,57 @@ class PlaybackService : MediaSessionService() {
     private fun syncCurrentTrack(mediaItem: MediaItem?) {
         val identity = PlaybackMediaQueue.parseMediaId(mediaItem?.mediaId)
         if (identity != null) {
-            val playlist = libraryRepository.getPlaylist(identity.playlistId)
-            val track = playlist?.tracks?.getOrNull(identity.index)
-            if (track != null) {
-                currentPlaylistId = identity.playlistId
-                currentPlaylistIndex = identity.index
-                currentAudioUri = track.audioUri()
-                trackTitle = track.title
-                loadSubtitle(track.subtitleUriOrNull())
-                return
+            val mediaId = mediaItem?.mediaId.orEmpty()
+            trackSyncJob?.cancel()
+            trackSyncJob = serviceScope.launch {
+                val playlist = loadPlaylistForPlayback(identity.playlistId)
+                if (player.currentMediaItem?.mediaId != mediaId) {
+                    return@launch
+                }
+                val track = playlist?.tracks?.getOrNull(identity.index)
+                if (track != null) {
+                    currentPlaylistId = identity.playlistId
+                    currentPlaylistIndex = identity.index
+                    currentAudioUri = track.audioUri()
+                    trackTitle = track.title
+                    loadSubtitle(track.subtitleUriOrNull())
+                    updateSubtitleForCurrentPositionAndSchedule()
+                    publishState()
+                    return@launch
+                }
+                syncMediaMetadataFallback(mediaItem)
+                publishState()
             }
+            return
         }
+        syncMediaMetadataFallback(mediaItem)
+    }
+
+    private fun syncMediaMetadataFallback(mediaItem: MediaItem?) {
         mediaItem?.localConfiguration?.uri?.let { currentAudioUri = it }
         mediaItem?.mediaMetadata?.title?.toString()?.takeIf { it.isNotBlank() }?.let { trackTitle = it }
     }
 
-    private fun playerDurationMs(): Int {
-        val duration = player.duration
-        if (duration == C.TIME_UNSET || duration <= 0L) {
-            return 0
+    private fun nextPlaylistLoadVersion(): Long {
+        playlistLoadJob?.cancel()
+        playlistLoadVersion += 1L
+        return playlistLoadVersion
+    }
+
+    private fun isLatestPlaylistRequest(requestVersion: Long): Boolean {
+        return requestVersion == playlistLoadVersion
+    }
+
+    private suspend fun loadPlaylistForPlayback(playlistId: String): Playlist? {
+        return when (val result = playbackPlaylistResolver.resolve(playlistId)) {
+            PlaybackPlaylistResolveResult.None -> null
+            is PlaybackPlaylistResolveResult.Loaded -> result.playlist
+            is PlaybackPlaylistResolveResult.Failed -> {
+                lastError = "无法读取播放列表"
+                publishState()
+                null
+            }
         }
-        return duration.coerceAtMost(Int.MAX_VALUE.toLong()).toInt()
     }
 
     private fun playerPositionMs(): Int {
@@ -503,28 +600,43 @@ class PlaybackService : MediaSessionService() {
     }
 
     private fun publishState() {
+        val snapshot = currentServiceSnapshot()
+        val sessionExtrasSnapshot = snapshot.asSessionExtrasSnapshot()
+        if (sessionExtrasSnapshot != lastSessionExtrasSnapshot) {
+            lastSessionExtrasSnapshot = sessionExtrasSnapshot
+            mediaSession?.setSessionExtras(sessionExtrasSnapshot.toSessionExtras())
+        }
+    }
+
+    private fun currentServiceSnapshot(): PlaybackServiceSnapshot {
         val sleepRemainingMs = getSleepTimerRemainingMs()
         val sleepAtEndOfTrack = sleepTimer.isAtEndOfTrack()
-        PlaybackServiceState.publish(
-            currentPlaylistId,
-            currentPlaylistIndex,
-            currentAudioUri?.toString(),
-            player.isPlaying,
-            playerDurationMs(),
-            playerPositionMs(),
-            getSubtitleTextAtOffset(-1),
-            lastSubtitleText,
-            getSubtitleTextAtOffset(1),
-            subtitleCues.map { it.text },
-            currentSubtitleIndex(),
-            subtitleCues.size,
-            overlayRequested,
-            overlayLocked,
-            lastError,
-            sleepAtEndOfTrack || sleepRemainingMs > 0L,
-            sleepAtEndOfTrack,
-            sleepRemainingMs,
-            sleepTimer.minutes(),
+        return PlaybackServiceSnapshot(
+            connected = true,
+            playlistId = currentPlaylistId,
+            playlistIndex = currentPlaylistIndex,
+            audioUri = currentAudioUri?.toString().orEmpty(),
+            previousSubtitle = getSubtitleTextAtOffset(-1),
+            currentSubtitle = lastSubtitleText,
+            nextSubtitle = getSubtitleTextAtOffset(1),
+            subtitleLines = subtitleCues.map { it.text },
+            subtitleIndex = currentSubtitleIndex(),
+            subtitleCount = subtitleCues.size,
+            overlayRequested = overlayRequested,
+            overlayLocked = overlayLocked,
+            error = PlaybackError.fromMessage(lastError),
+            sleepTimerActive = sleepAtEndOfTrack || sleepRemainingMs > 0L,
+            sleepTimerAtEndOfTrack = sleepAtEndOfTrack,
+            sleepTimerEndElapsedRealtimeMs = sleepTimer.endElapsedRealtimeMs(),
+            sleepTimerRemainingMs = sleepRemainingMs,
+            sleepTimerMinutes = sleepTimer.minutes(),
+        )
+    }
+
+    private fun PlaybackServiceSnapshot.asSessionExtrasSnapshot(): PlaybackServiceSnapshot {
+        // Session extras carry only low-frequency custom state; the client derives countdown ticks locally.
+        return copy(
+            sleepTimerRemainingMs = 0L,
         )
     }
 
@@ -567,7 +679,7 @@ class PlaybackService : MediaSessionService() {
         const val EXTRA_PLAYLIST_INDEX = "extra_playlist_index"
         const val EXTRA_SLEEP_MINUTES = "extra_sleep_minutes"
 
-        private const val SUBTITLE_REFRESH_MS = 250
+        private const val SUBTITLE_BOUNDARY_GUARD_MS = 25L
         private const val DEFAULT_TRACK_TITLE = "ASMRPlayer"
         private val CUSTOM_COMMANDS = listOf(
             COMMAND_PLAY_MEDIA,

@@ -21,9 +21,14 @@ class AppUpdateDownloadService : Service() {
     private var downloadJob: Job? = null
     private var lastNotificationAt = 0L
     private var lastNotificationProgress: Int? = null
+    private lateinit var updateRepository: AppUpdateRepository
+    private lateinit var appUpdateDownloadStateStore: AppUpdateDownloadStateStore
 
     override fun onCreate() {
         super.onCreate()
+        val dependencies = AppGraph.container(this).appUpdateDownloadServiceDependencies
+        updateRepository = dependencies.updateRepository
+        appUpdateDownloadStateStore = dependencies.appUpdateDownloadStateStore
         AppUpdateNotifications.ensureChannel(this)
     }
 
@@ -54,7 +59,7 @@ class AppUpdateDownloadService : Service() {
         }
         lastNotificationAt = 0L
         lastNotificationProgress = null
-        AppUpdateDownloadStateBus.publishDownloading(
+        appUpdateDownloadStateStore.publishDownloading(
             release = release,
             bytesDownloaded = 0L,
             totalBytes = release.apkSizeBytes,
@@ -62,9 +67,8 @@ class AppUpdateDownloadService : Service() {
         promoteToForeground()
         downloadJob = scope.launch {
             try {
-                val repository = AppGraph.container(this@AppUpdateDownloadService).updateRepository
-                val apkFile = repository.downloadReleaseApk(release) { progress ->
-                    AppUpdateDownloadStateBus.publishDownloading(
+                val apkFile = updateRepository.downloadReleaseApk(release) { progress ->
+                    appUpdateDownloadStateStore.publishDownloading(
                         release = release,
                         bytesDownloaded = progress.bytesDownloaded,
                         totalBytes = progress.totalBytes,
@@ -73,7 +77,7 @@ class AppUpdateDownloadService : Service() {
                     updateNotification()
                 }
                 val totalBytes = apkFile.length().takeIf { it > 0L } ?: release.apkSizeBytes
-                AppUpdateDownloadStateBus.publishDownloaded(
+                appUpdateDownloadStateStore.publishDownloaded(
                     release = release,
                     apkPath = apkFile.absolutePath,
                     totalBytes = totalBytes,
@@ -81,13 +85,13 @@ class AppUpdateDownloadService : Service() {
                 finishWithTerminalNotification()
             } catch (error: Throwable) {
                 if (error is CancellationException) {
-                    AppUpdateDownloadStateBus.publishCanceled(release)
+                    appUpdateDownloadStateStore.publishCanceled(release)
                     removeNotification()
                     stopSelf(startId)
                     return@launch
                 }
-                val current = AppUpdateDownloadStateBus.state.value
-                AppUpdateDownloadStateBus.publishFailed(
+                val current = appUpdateDownloadStateStore.state.value
+                appUpdateDownloadStateStore.publishFailed(
                     release = release,
                     message = error.message ?: "下载更新失败",
                     bytesDownloaded = current.bytesDownloaded,
@@ -107,13 +111,13 @@ class AppUpdateDownloadService : Service() {
             activeJob.cancel()
             return
         }
-        AppUpdateDownloadStateBus.publishCanceled()
+        appUpdateDownloadStateStore.publishCanceled()
         removeNotification()
         stopSelf(startId)
     }
 
     private fun promoteToForeground() {
-        val notification = AppUpdateNotifications.buildDownloading(this, AppUpdateDownloadStateBus.state.value)
+        val notification = AppUpdateNotifications.buildDownloading(this, appUpdateDownloadStateStore.state.value)
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
             startForeground(
                 AppUpdateNotifications.NOTIFICATION_ID,
@@ -126,7 +130,7 @@ class AppUpdateDownloadService : Service() {
     }
 
     private fun updateNotification() {
-        val state = AppUpdateDownloadStateBus.state.value
+        val state = appUpdateDownloadStateStore.state.value
         if (shouldSkipNotification(state)) {
             return
         }
@@ -145,7 +149,7 @@ class AppUpdateDownloadService : Service() {
     }
 
     private fun finishWithTerminalNotification() {
-        AppUpdateNotifications.notifyTerminal(this, AppUpdateDownloadStateBus.state.value)
+        AppUpdateNotifications.notifyTerminal(this, appUpdateDownloadStateStore.state.value)
         stopForegroundSafely(STOP_FOREGROUND_DETACH)
         stopSelf()
     }

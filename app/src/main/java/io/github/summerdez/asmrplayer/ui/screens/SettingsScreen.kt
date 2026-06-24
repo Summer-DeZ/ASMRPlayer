@@ -27,10 +27,8 @@ import androidx.compose.material.icons.automirrored.filled.KeyboardArrowRight
 import androidx.compose.material.icons.automirrored.filled.OpenInNew
 import androidx.compose.material.icons.filled.Close
 import androidx.compose.material.icons.filled.DarkMode
-import androidx.compose.material.icons.filled.Description
 import androidx.compose.material.icons.filled.Download
 import androidx.compose.material.icons.filled.Hearing
-import androidx.compose.material.icons.filled.HighQuality
 import androidx.compose.material.icons.filled.Info
 import androidx.compose.material.icons.filled.LockOpen
 import androidx.compose.material.icons.filled.MergeType
@@ -73,6 +71,7 @@ import io.github.summerdez.asmrplayer.presentation.SettingsUiState
 import io.github.summerdez.asmrplayer.ui.components.GroupedCard
 import io.github.summerdez.asmrplayer.ui.theme.AppThemeMode
 import io.github.summerdez.asmrplayer.ui.theme.LocalAmberTokens
+import io.github.summerdez.asmrplayer.ui.uiProbe
 
 @Composable
 fun SettingsTab(
@@ -108,7 +107,6 @@ fun SettingsTab(
     var binauralEnhanced by remember { mutableStateOf(true) }
     var crossfadeEnabled by remember { mutableStateOf(true) }
     var wifiOnly by remember { mutableStateOf(true) }
-    var qualityIndex by remember { mutableStateOf(1) }
     val context = LocalContext.current
     fun placeholder(message: String) {
         Toast.makeText(context, message, Toast.LENGTH_SHORT).show()
@@ -141,6 +139,12 @@ fun SettingsTab(
     Column(
         Modifier
             .fillMaxSize()
+            .uiProbe(
+                id = "settings.root",
+                label = "设置页根容器",
+                sourceHint = "SettingsScreen.kt",
+                metadata = mapOf("aiSettingsOpen" to aiSettingsOpen.toString()),
+            )
             .verticalScroll(rememberScrollState())
             .padding(horizontal = 22.dp, vertical = 8.dp),
         verticalArrangement = Arrangement.spacedBy(0.dp),
@@ -167,17 +171,6 @@ fun SettingsTab(
                     placeholder("淡入淡出衔接暂未接入真实播放设置")
                 },
                 subtitle = "作品之间平滑过渡",
-            )
-            SettingsDivider()
-            SettingsSegmentPreferenceRow(
-                icon = Icons.Default.HighQuality,
-                title = "播放音质",
-                labels = listOf("标准", "高", "无损"),
-                selectedIndex = qualityIndex,
-                onSelected = { index ->
-                    qualityIndex = index
-                    placeholder("播放音质已作为本地 UI 状态切换")
-                },
             )
         }
 
@@ -264,9 +257,8 @@ fun SettingsTab(
         GroupedCard {
             SettingsActionRow(
                 icon = Icons.Default.Subtitles,
-                title = "AI 设置",
-                value = "翻译 · 语音识别",
-                subtitle = "字幕生成与作品文本翻译",
+                title = "AI字幕生成设置",
+                value = "",
                 onClick = { aiSettingsOpen = true },
             )
         }
@@ -285,13 +277,6 @@ fun SettingsTab(
                         else -> onCheckForUpdates()
                     }
                 },
-            )
-            SettingsDivider()
-            SettingsActionRow(
-                icon = Icons.Default.Description,
-                title = "隐私政策",
-                value = "查看",
-                onClick = { placeholder("隐私政策页面暂未实现") },
             )
         }
         UpdateDownloadCard(
@@ -331,6 +316,15 @@ private fun AiSettingsPage(
     Column(
         Modifier
             .fillMaxSize()
+            .uiProbe(
+                id = "settings.ai.root",
+                label = "AI 设置页根容器",
+                sourceHint = "SettingsScreen.kt",
+                metadata = mapOf(
+                    "translationEngine" to settings.translationEngine.name,
+                    "transcriptionBackend" to settings.transcriptionBackend.name,
+                ),
+            )
             .verticalScroll(rememberScrollState())
             .padding(horizontal = 22.dp, vertical = 8.dp),
         verticalArrangement = Arrangement.spacedBy(0.dp),
@@ -339,6 +333,7 @@ private fun AiSettingsPage(
             modifier = Modifier
                 .fillMaxWidth()
                 .height(40.dp)
+                .uiProbe("settings.ai.back", "AI 设置返回按钮", "SettingsScreen.kt")
                 .clickable(onClick = onBack),
             verticalAlignment = Alignment.CenterVertically,
         ) {
@@ -553,6 +548,12 @@ private fun SettingsValueRow(icon: ImageVector, title: String, value: String, va
         modifier = Modifier
             .fillMaxWidth()
             .height(66.dp)
+            .uiProbe(
+                id = "settings.value-row:$title",
+                label = "设置值行：$title",
+                sourceHint = "SettingsScreen.kt",
+                metadata = mapOf("value" to value, "valueAccent" to valueAccent.toString()),
+            )
             .padding(start = 16.dp, end = 16.dp),
         verticalAlignment = Alignment.CenterVertically,
     ) {
@@ -600,6 +601,18 @@ private fun SettingsActionRow(
         modifier = Modifier
             .fillMaxWidth()
             .height(rowHeight)
+            .uiProbe(
+                id = "settings.action-row:$title",
+                label = "设置操作行：$title",
+                sourceHint = "SettingsScreen.kt",
+                metadata = mapOf(
+                    "value" to value,
+                    "subtitle" to subtitle,
+                    "valueAccent" to valueAccent.toString(),
+                    "showDot" to showDot.toString(),
+                    "trailing" to trailing.name,
+                ),
+            )
             .clickable(onClick = onClick)
             .padding(start = 16.dp, end = 16.dp),
         verticalAlignment = Alignment.CenterVertically,
@@ -634,13 +647,15 @@ private fun SettingsActionRow(
             )
             Spacer(Modifier.width(8.dp))
         }
-        Text(
-            value,
-            fontSize = 13.sp,
-            color = if (valueAccent) tokens.accent else tokens.label3,
-            maxLines = 1,
-            overflow = TextOverflow.Ellipsis,
-        )
+        if (value.isNotBlank()) {
+            Text(
+                value,
+                fontSize = 13.sp,
+                color = if (valueAccent) tokens.accent else tokens.label3,
+                maxLines = 1,
+                overflow = TextOverflow.Ellipsis,
+            )
+        }
         when (trailing) {
             RowTrailing.Chevron -> {
                 Spacer(Modifier.width(8.dp))
@@ -680,6 +695,16 @@ private fun SettingsSwitchIconRow(
         modifier = Modifier
             .fillMaxWidth()
             .height(rowHeight)
+            .uiProbe(
+                id = "settings.switch-row:$title",
+                label = "设置开关行：$title",
+                sourceHint = "SettingsScreen.kt",
+                metadata = mapOf(
+                    "checked" to checked.toString(),
+                    "subtitle" to subtitle,
+                    "alt" to alt.toString(),
+                ),
+            )
             .clickable(onClick = onClick)
             .padding(start = 16.dp, end = 16.dp),
         verticalAlignment = Alignment.CenterVertically,
@@ -730,29 +755,39 @@ private fun SettingsSegmentPreferenceRow(
     onSelected: (Int) -> Unit,
 ) {
     val tokens = LocalAmberTokens.current
-    Column(
+    Row(
         modifier = Modifier
             .fillMaxWidth()
-            .padding(start = 16.dp, end = 16.dp, top = 15.dp, bottom = 15.dp),
-    ) {
-        Row(verticalAlignment = Alignment.CenterVertically) {
-            SettingsIcon(icon)
-            Spacer(Modifier.width(14.dp))
-            Text(
-                title,
-                fontSize = 15.sp,
-                fontWeight = FontWeight.SemiBold,
-                color = tokens.label,
-                maxLines = 1,
-                overflow = TextOverflow.Ellipsis,
-                modifier = Modifier.weight(1f),
+            .height(72.dp)
+            .uiProbe(
+                id = "settings.segment-row:$title",
+                label = "设置分段行：$title",
+                sourceHint = "SettingsScreen.kt",
+                metadata = mapOf(
+                    "selectedIndex" to selectedIndex.toString(),
+                    "selectedLabel" to labels.getOrElse(selectedIndex) { "" },
+                ),
             )
-        }
+            .padding(start = 16.dp, end = 16.dp),
+        verticalAlignment = Alignment.CenterVertically,
+    ) {
+        SettingsIcon(icon)
+        Spacer(Modifier.width(14.dp))
+        Text(
+            title,
+            fontSize = 15.sp,
+            fontWeight = FontWeight.SemiBold,
+            color = tokens.label,
+            maxLines = 1,
+            overflow = TextOverflow.Ellipsis,
+            modifier = Modifier.width(48.dp),
+        )
+        Spacer(Modifier.width(12.dp))
         SettingsSegmentedControl(
             labels = labels,
             selectedIndex = selectedIndex,
             onSelected = onSelected,
-            modifier = Modifier.padding(start = 48.dp, top = 12.dp),
+            modifier = Modifier.weight(1f),
         )
     }
 }
@@ -768,7 +803,16 @@ private fun SettingsSegmentedControl(
     Surface(
         modifier = modifier
             .fillMaxWidth()
-            .height(48.dp),
+            .height(48.dp)
+            .uiProbe(
+                id = "settings.segmented-control:${labels.joinToString("|")}",
+                label = "设置分段控件：${labels.joinToString(" / ")}",
+                sourceHint = "SettingsScreen.kt",
+                metadata = mapOf(
+                    "selectedIndex" to selectedIndex.toString(),
+                    "selectedLabel" to labels.getOrElse(selectedIndex) { "" },
+                ),
+            ),
         shape = RoundedCornerShape(24.dp),
         color = tokens.label.copy(alpha = 0.06f),
         border = BorderStroke(1.dp, tokens.separator),
@@ -788,6 +832,15 @@ private fun SettingsSegmentedControl(
                     modifier = Modifier
                         .weight(1f)
                         .fillMaxHeight()
+                        .uiProbe(
+                            id = "settings.segment-option:$label",
+                            label = "设置分段选项：$label",
+                            sourceHint = "SettingsScreen.kt",
+                            metadata = mapOf(
+                                "index" to index.toString(),
+                                "selected" to selected.toString(),
+                            ),
+                        )
                         .clickable { onSelected(index) },
                     shape = RoundedCornerShape(20.dp),
                     color = if (selected) tokens.accent else Color.Transparent,
@@ -824,6 +877,12 @@ private fun SettingsSelectableRow(
         modifier = Modifier
             .fillMaxWidth()
             .height(66.dp)
+            .uiProbe(
+                id = "settings.selectable-row:$title",
+                label = "设置选择行：$title",
+                sourceHint = "SettingsScreen.kt",
+                metadata = mapOf("value" to value, "selected" to selected.toString()),
+            )
             .clickable(onClick = onClick)
             .padding(start = 16.dp, end = 16.dp),
         verticalAlignment = Alignment.CenterVertically,
@@ -868,6 +927,18 @@ private fun WhisperModelStatusRow(
     Column(
         Modifier
             .fillMaxWidth()
+            .uiProbe(
+                id = "settings.whisper-model-status",
+                label = "本机 Whisper 模型状态",
+                sourceHint = "SettingsScreen.kt",
+                metadata = mapOf(
+                    "status" to statusText,
+                    "action" to action,
+                    "downloading" to model.downloading.toString(),
+                    "downloaded" to model.downloaded.toString(),
+                    "error" to model.error,
+                ),
+            )
             .padding(start = 16.dp, end = 16.dp, top = 15.dp, bottom = 13.dp),
     ) {
         Row(verticalAlignment = Alignment.CenterVertically) {
@@ -939,6 +1010,12 @@ private fun RemoteWhisperTestRow(status: RemoteWhisperTestStatus, onClick: () ->
         modifier = Modifier
             .fillMaxWidth()
             .height(66.dp)
+            .uiProbe(
+                id = "settings.remote-whisper-test",
+                label = "远程转写连接测试",
+                sourceHint = "SettingsScreen.kt",
+                metadata = mapOf("status" to status::class.simpleName.orEmpty()),
+            )
             .clickable(enabled = !checking, onClick = onClick)
             .padding(start = 16.dp, end = 16.dp),
         verticalAlignment = Alignment.CenterVertically,
@@ -980,6 +1057,15 @@ private fun UpdateCheckRow(status: AppUpdateStatus, onClick: () -> Unit) {
         modifier = Modifier
             .fillMaxWidth()
             .height(66.dp)
+            .uiProbe(
+                id = "settings.update-check",
+                label = "检查更新行",
+                sourceHint = "SettingsScreen.kt",
+                metadata = mapOf(
+                    "status" to status::class.simpleName.orEmpty(),
+                    "enabled" to enabled.toString(),
+                ),
+            )
             .clickable(enabled = enabled, onClick = onClick)
             .padding(start = 16.dp, end = 16.dp),
         verticalAlignment = Alignment.CenterVertically,
@@ -1028,8 +1114,6 @@ private fun UpdateCheckRow(status: AppUpdateStatus, onClick: () -> Unit) {
                 Icon(Icons.AutoMirrored.Filled.KeyboardArrowRight, contentDescription = null, tint = tokens.label3, modifier = Modifier.size(19.dp))
             }
             AppUpdateStatus.Idle -> {
-                Text("未检查", fontSize = 13.sp, color = tokens.label3)
-                Spacer(Modifier.width(8.dp))
                 Icon(Icons.AutoMirrored.Filled.KeyboardArrowRight, contentDescription = null, tint = tokens.label3, modifier = Modifier.size(19.dp))
             }
         }
@@ -1081,7 +1165,18 @@ private fun UpdateDownloadCard(
         border = BorderStroke(1.dp, tokens.separator),
         tonalElevation = 0.dp,
         shadowElevation = 0.dp,
-        modifier = Modifier.fillMaxWidth(),
+        modifier = Modifier
+            .fillMaxWidth()
+            .uiProbe(
+                id = "settings.update-download-card",
+                label = if (failed) "更新下载失败卡片" else "更新下载进度卡片",
+                sourceHint = "SettingsScreen.kt",
+                metadata = mapOf(
+                    "versionName" to release.versionName,
+                    "progressPercent" to (progress * 100f).toInt().toString(),
+                    "failed" to failed.toString(),
+                ),
+            ),
     ) {
         Column(Modifier.padding(16.dp)) {
             Row(verticalAlignment = Alignment.CenterVertically) {

@@ -1,9 +1,41 @@
 > 当前软件版本：1.6.1（versionCode 22）
-> 文档更新日期：2026-06-24
+> 文档更新日期：2026-06-25
 
 # TODOList
 
 ## 1.6.1
+
+### 2026-06-25
+
+架构重构：按 `DOCS/tech/refactor-hotspots.md` 推进 P0 主线程阻塞与双数据源问题，先完成低风险 import 清理和 Repository suspend/Flow 主线。
+
+- [x] 需要做：删除 `DbIo.runBlocking` 桥接层，Repository DB 写入和必要快照读取改为 `suspend` + IO 调度。
+- [x] 需要做：资料库和 DLsite ViewModel 删除命令式 `sync/refresh` DB 二次拉取，状态来源改为 Room `Flow`。
+- [x] 需要做：文件导入、文件夹导入、字幕绑定、曲目移动、DLsite 下载操作和 AI 设置写入改为 ViewModel coroutine 调用，并用事件回传一次性 UI 结果。
+- [x] 需要做：DLsite Java 下载服务/Task 通过明确的后台 blocking adapter 过渡，阻塞边界放在调度线程或下载 worker，不回到 UI 主线程。
+- [x] 需要做：本轮触碰的热点 Kotlin 文件清理全家桶 wildcard import，并删除旧 `DbIoTest`。
+- [x] 需要做：Phase C 第一切片：`MediaSession.sessionExtras` 承载 playlist identity、字幕、悬浮窗和错误等自定义低频播放状态，`PlaybackViewModel` 优先使用 `PlaybackCommandClient` 快照。
+- [x] 需要做：Phase C 设置页切片：`SettingsViewModel` 的悬浮窗状态改为从 `PlaybackCommandClient.snapshots` 派生。
+- [x] 需要做：Phase C 睡眠定时切片：`SleepTimerViewModel` 改为从 `PlaybackCommandClient.snapshots` 派生，`sessionExtras` 只下发低频 sleep deadline，客户端本地计算剩余时间。
+- [x] 需要做：Phase C 全局播放状态 bus 切片：`PlaybackViewModel` 移除旧 fallback 订阅，`PlaybackService` 只发布 `MediaSession.sessionExtras`，全局播放状态 bus 删除。
+- [x] 需要做：Phase C C4 字幕调度切片：`PlaybackService` 固定 250ms 字幕轮询改为 cue 边界定时，悬浮窗和 `sessionExtras` 字幕状态仍由 Service 维护。
+- [x] 需要做：Phase C/D1 快照去重切片：`PlaybackServiceSnapshot` 不再重复承载 `isPlaying`、`durationMs`、`positionMs`，播放三字段保留在 `PlaybackControllerSnapshot`。
+- [x] 需要做：Phase D/A5 应用更新下载 bus 切片：`AppUpdateDownloadStateStore` 由 `AppContainer` 持有并注入 `SettingsViewModel` 与 `AppUpdateDownloadService`，设置页和前台下载服务共享同一个更新下载状态 store。
+- [x] 需要做：Phase D/A5 AI 字幕任务 bus 切片：`AiSubtitleTaskStateStore` 由 `AppContainer` 持有并注入 `AiSubtitleGenerationService` 与 `AiSubtitleTaskViewModel`，Service 和 UI 按 `target.trackId` 共享任务状态。
+- [x] 需要做：Phase D/A5 DLsite 下载状态 bus 切片：`DlsiteDownloadStateStore` 由 `AppContainer` 持有并注入 `RoomDlsiteRepository` 与 `DlsiteDownloadService`，下载页和 Java 前台下载服务共享同一个多任务下载状态 store。
+- [x] 需要做：Phase D/A5 PlaybackService service-locator 切片：新增 `PlaybackPlaylistResolver` 封装播放服务唯一的 `LibraryRepository.getPlaylist()` 读取与异常分类，由 `AppContainer` 构造后注入 Service。
+- [x] 需要做：Phase D/A5 前台 Service dependency bundle 切片：`AppContainer` 为更新下载、AI 字幕生成和 DLsite 下载分别提供只含所需协作者的 Service dependencies，Service 不再逐个从容器挑 repository/store/API。
+- [x] 需要做：Phase E/A7 第一切片：抽出 `DlsiteDownloadQueueRepository` 管理 DLsite 持久下载队列状态机，`RoomDlsiteRepository` 暂时保留队列 API 并委托给新 repository。
+- [x] 需要做：Phase E/A7 远程源切片：抽出 `DlsiteRemoteSource` 承接 DLsite 网络 adapter，`RoomDlsiteRepository` 只依赖远程源接口，并保留 `DlsiteApi` 作为 Java 下载服务/Task 兼容门面。
+- [x] 需要做：Phase E/A7 第二切片：抽出 `DlsiteLocalStore` 承接 DLsite Room/DB/Flow 本地存储职责，`RoomDlsiteRepository` 只保留协调门面并委托本地、远程、队列和下载状态依赖。
+- [x] 需要做：Phase E/D2 文件导入 use-case 第一片：`LibraryFileImportUseCase` 承接音频多选导入和文件夹导入 IO/业务编排，`LibraryViewModel` 保留原 public API 并只负责事件映射。
+- [x] 需要做：Phase E/D2 文件导入 use-case 第二片：字幕绑定 IO 编排已下沉到 `LibraryFileImportUseCase`，`LibraryViewModel` 保留原 public API 并只负责 pending target、选中列表刷新和 `SubtitleBound` 事件映射。
+- [x] 需要做：Phase E/D2 文件导入 use-case 第三片：封面选择的 SAF 读取权限和播放列表封面写入已下沉到 `LibraryFileImportUseCase`，`ASMRPlayerApp` 不再直接持久化封面 URI 权限。
+- [ ] 后续做：Phase C 继续评估 `PlaybackCommandClient` 播放位置 ticker 的收敛方式，并收敛重复快照数据类和手工字段搬运。
+- [ ] 后续做：Phase D 继续处理其它剩余 service-locator 去耦，逐步收敛到注入的仓库/服务边界。
+- [ ] 后续做：Phase E 继续拆分 `ASMRPlayerApp.kt` 组合根和巨型 Screen 文件。
+- [ ] 后续做：Phase F 优先迁移核心 model 与 `data/remote/` Java 文件到 Kotlin，再收紧 nullable API。
+- [ ] 暂不做：本轮全仓 Optimize Imports；当前工作区已有多处 UI Probe 和界面改动，后续应单独做纯 import cleanup 变更。
 
 ### 2026-06-24
 
@@ -70,11 +102,11 @@
 
 - [x] 需要做：新增 `AppUpdateDownloadService`，以前台 `dataSync` 服务执行 APK 下载，支持下载和取消 action。
 - [x] 需要做：新增“应用更新”通知渠道，下载中通知显示版本号、百分比、速度、已下载/总大小和取消操作；完成/失败更新终态通知，取消移除通知。
-- [x] 需要做：新增 `AppUpdateDownloadStateBus`，把 release、状态、字节进度、速度、APK 路径和错误同步给设置页。
+- [x] 需要做：新增更新下载状态 store，把 release、状态、字节进度、速度、APK 路径和错误同步给设置页。
 - [x] 需要做：`SettingsViewModel` 不再直接在 `viewModelScope` 下载 APK，改为启动前台服务；取消改为发送 cancel intent。
 - [x] 需要做：`GitHubAppUpdateRepository.downloadReleaseApk()` 进度回调携带速度，并在协程取消时取消 OkHttp Call，提高阻塞读流时的取消可靠性。
 - [x] 需要做：设置页下载卡副文案显示「速度/s · 已下载/总大小」。
-- [x] 需要做：补充单元测试覆盖更新下载 StateBus 速度计算、取消状态和设置页状态映射。
+- [x] 需要做：补充单元测试覆盖更新下载状态 store 速度计算、取消状态和设置页状态映射。
 
 ## 1.3.1
 
@@ -351,11 +383,11 @@ UI：
 
 新功能：DLsite 多任务下载 + 总下载进度条。
 
-现状：`DlsiteDownloadService` 是严格单任务串行（`static activeDownload` 标志，下载进行中时新请求被 `START_NOT_STICKY` 直接丢弃、不排队）；`DlsiteDownloadStateBus` 只持有单个 `DlsiteDownloadState`。本版改造为下载队列 + 并发执行 + 多任务状态。
+现状：`DlsiteDownloadService` 是严格单任务串行（`static activeDownload` 标志，下载进行中时新请求被 `START_NOT_STICKY` 直接丢弃、不排队）；旧下载状态通道只持有单个 `DlsiteDownloadState`。本版改造为下载队列 + 并发执行 + 多任务状态。
 
 - [x] 需要做：把下载从「单任务丢弃」改为「下载队列」——新下载按加入顺序入队，并发上限内同时下载，其余排队（显示「排队中 · 第 N 位」）。
 - [x] 需要做：改造 `DlsiteDownloadService` 支持多任务并发（多线程/协程 + 槽位管理），保留按 workId 的暂停/继续/取消/删除缓存语义。
-- [x] 需要做：把 `DlsiteDownloadStateBus` 从单个 `DlsiteDownloadState` 升级为多任务状态（`Map<workId, 任务状态/进度>`）并对外暴露汇总。
+- [x] 需要做：把下载状态从单个 `DlsiteDownloadState` 升级为多任务状态（`Map<workId, 任务状态/进度>`）并对外暴露汇总。
 - [x] 需要做：计算总下载进度——按各任务字节加权汇总（已确认）；大小未知的任务不计入百分比，改为展示其当前下载速度与已下大小，避免百分比跳变。
 - [x] 需要做：DLsite 页顶部总下载进度卡——「正在下载 N / 总数 项」+ 总进度细线条 + 速度 + 已下载/总大小 + 「全部暂停/继续」；无任务时隐藏。
 - [x] 需要做：作品行多态——下载中（行内细线进度 + 百分比 + 暂停）、排队中（取消）、已暂停（继续）、失败（accent2 + 重试 + 简短原因）、已完成（导入/删除缓存）。

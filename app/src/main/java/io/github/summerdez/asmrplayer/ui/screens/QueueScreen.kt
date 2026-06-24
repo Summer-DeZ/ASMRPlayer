@@ -158,7 +158,18 @@ fun QueueContent(
 ) {
     val tokens = LocalAmberTokens.current
     Surface(
-        modifier = Modifier.fillMaxWidth(),
+        modifier = Modifier
+            .fillMaxWidth()
+            .uiProbe(
+                id = "queue.sheet",
+                label = "播放队列弹层",
+                sourceHint = "QueueScreen.kt",
+                metadata = mapOf(
+                    "playlistId" to (playlist?.id ?: ""),
+                    "playlistName" to (playlist?.name ?: ""),
+                    "trackCount" to (playlist?.tracks?.size ?: 0).toString(),
+                ),
+            ),
         color = tokens.sheet,
         shape = RoundedCornerShape(topStart = 36.dp, topEnd = 36.dp),
         border = BorderStroke(1.dp, tokens.separator),
@@ -204,6 +215,7 @@ fun QueueContent(
                         modifier = Modifier
                             .size(40.dp)
                             .clip(CircleShape)
+                            .uiProbe("queue.close", "关闭播放队列按钮", "QueueScreen.kt")
                             .noRippleClickable(onClick = onDismissRequest),
                         contentAlignment = Alignment.Center,
                     ) {
@@ -217,7 +229,13 @@ fun QueueContent(
             }
             val queuePlaylist = playlist
             if (queuePlaylist == null || queuePlaylist.tracks.isEmpty()) {
-                Text("队列为空", color = tokens.label2, modifier = Modifier.padding(start = 22.dp, end = 22.dp, top = 16.dp, bottom = 20.dp))
+                Text(
+                    "队列为空",
+                    color = tokens.label2,
+                    modifier = Modifier
+                        .padding(start = 22.dp, end = 22.dp, top = 16.dp, bottom = 20.dp)
+                        .uiProbe("queue.empty-state", "播放队列空状态", "QueueScreen.kt"),
+                )
                 return@Column
             }
             val currentIndex = if (playbackState.playlistId == queuePlaylist.id) {
@@ -256,6 +274,18 @@ private fun QueueTrackRow(
         modifier = Modifier
             .fillMaxWidth()
             .background(if (active) tokens.accentSoft.copy(alpha = 0.50f) else Color.Transparent)
+            .uiProbe(
+                id = "queue.track-row:${track.id}",
+                label = "播放队列曲目：${track.title}",
+                sourceHint = "QueueScreen.kt",
+                metadata = mapOf(
+                    "trackId" to track.id,
+                    "index" to index.toString(),
+                    "active" to active.toString(),
+                    "playing" to playing.toString(),
+                    "durationMs" to track.durationMs.toString(),
+                ),
+            )
             .noRippleClickable(onClick = onClick)
             .padding(start = 22.dp, end = 22.dp, top = 11.dp, bottom = 11.dp),
         verticalAlignment = Alignment.CenterVertically,

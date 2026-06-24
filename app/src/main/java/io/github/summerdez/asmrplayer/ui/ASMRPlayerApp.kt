@@ -26,16 +26,18 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
+import io.github.summerdez.asmrplayer.BuildConfig
 import io.github.summerdez.asmrplayer.data.files.DocumentFiles
 import io.github.summerdez.asmrplayer.data.ai.AiSubtitleGenerationService
-import io.github.summerdez.asmrplayer.data.ai.AiSubtitleTaskStateBus
 import io.github.summerdez.asmrplayer.domain.PlaylistQueries
 import io.github.summerdez.asmrplayer.domain.model.AiSubtitleStage
 import io.github.summerdez.asmrplayer.domain.model.Playlist
 import io.github.summerdez.asmrplayer.domain.model.SubtitleGenerationTarget
 import io.github.summerdez.asmrplayer.domain.model.TrackItem
+import io.github.summerdez.asmrplayer.presentation.AiSubtitleTaskViewModel
 import io.github.summerdez.asmrplayer.presentation.DlsiteEvent
 import io.github.summerdez.asmrplayer.presentation.DlsiteViewModel
+import io.github.summerdez.asmrplayer.presentation.LibraryEvent
 import io.github.summerdez.asmrplayer.presentation.LibraryViewModel
 import io.github.summerdez.asmrplayer.presentation.MainTab
 import io.github.summerdez.asmrplayer.presentation.MainViewModel
@@ -51,7 +53,6 @@ import io.github.summerdez.asmrplayer.ui.components.MoveTrackDialog
 import io.github.summerdez.asmrplayer.ui.components.PageHeader
 import io.github.summerdez.asmrplayer.ui.components.TextInputDialog
 import io.github.summerdez.asmrplayer.ui.components.UpdateDetailsDialog
-import io.github.summerdez.asmrplayer.ui.screens.DownloadContentsSheet
 import io.github.summerdez.asmrplayer.ui.screens.DownloadManagerSheet
 import io.github.summerdez.asmrplayer.ui.screens.DlsiteTab
 import io.github.summerdez.asmrplayer.ui.screens.AiSubtitleGenerationSheet
@@ -85,6 +86,7 @@ fun ASMRPlayerApp(
     settingsViewModel: SettingsViewModel,
     sleepTimerViewModel: SleepTimerViewModel,
     dlsiteViewModel: DlsiteViewModel,
+    aiSubtitleTaskViewModel: AiSubtitleTaskViewModel,
     onOpenOverlaySettings: () -> Unit,
     onToggleOverlay: () -> Unit,
     onUnlockOverlay: () -> Unit,
@@ -99,7 +101,7 @@ fun ASMRPlayerApp(
     val settingsState by settingsViewModel.state.collectAsStateWithLifecycle()
     val sleepState by sleepTimerViewModel.state.collectAsStateWithLifecycle()
     val dlsiteState by dlsiteViewModel.state.collectAsStateWithLifecycle()
-    val aiSubtitleTasks by AiSubtitleTaskStateBus.tasks.collectAsStateWithLifecycle()
+    val aiSubtitleTasks by aiSubtitleTaskViewModel.tasks.collectAsStateWithLifecycle()
     val toast: (String) -> Unit = { message ->
         if (message.isNotEmpty()) {
             Toast.makeText(context, message, Toast.LENGTH_SHORT).show()
@@ -110,6 +112,39 @@ fun ASMRPlayerApp(
         dlsiteViewModel.events.collect { event ->
             when (event) {
                 is DlsiteEvent.Message -> toast(event.text)
+            }
+        }
+    }
+    LaunchedEffect(libraryViewModel, playbackViewModel) {
+        libraryViewModel.events.collect { event ->
+            when (event) {
+                is LibraryEvent.AudioUrisImported -> {
+                    val count = event.count
+                    toast(if (count == 0) "未选择音频" else "已添加 $count 首音频")
+                }
+                is LibraryEvent.FolderImported -> {
+                    val result = event.result
+                    toast(
+                        if (result.audioCount == 0) {
+                            "文件夹中没有可导入的音频"
+                        } else {
+                            "已导入 ${result.audioCount} 首音频，匹配 ${result.subtitleCount} 个字幕"
+                        },
+                    )
+                }
+                is LibraryEvent.SubtitleBound -> {
+                    val binding = event.binding
+                    playbackViewModel.setSubtitleForCurrentTrack(
+                        binding.subtitleUri,
+                        binding.subtitleTitle,
+                        binding.trackId,
+                    )
+                    toast("字幕已绑定")
+                }
+                is LibraryEvent.TrackMoved -> {
+                    playbackViewModel.onTrackMoved(event.result)
+                    toast("已移动到 ${event.targetPlaylistName}")
+                }
             }
         }
     }
@@ -126,8 +161,7 @@ fun ASMRPlayerApp(
         if (result.resultCode != Activity.RESULT_OK || result.data == null) {
             return@rememberLauncherForActivityResult
         }
-        val count = libraryViewModel.addAudioUris(context, DocumentFiles.urisFromResult(result.data))
-        toast(if (count == 0) "未选择音频" else "已添加 $count 首音频")
+        libraryViewModel.addAudioUris(context, DocumentFiles.urisFromResult(result.data))
     }
     val folderLauncher = rememberLauncherForActivityResult(ActivityResultContracts.StartActivityForResult()) { result ->
         val data = result.data
@@ -136,20 +170,12 @@ fun ASMRPlayerApp(
             toast("未选择文件夹")
             return@rememberLauncherForActivityResult
         }
-        val importResult = libraryViewModel.importFolder(context, data, uri)
-        toast(
-            if (importResult.audioCount == 0) {
-                "文件夹中没有可导入的音频"
-            } else {
-                "已导入 ${importResult.audioCount} 首音频，匹配 ${importResult.subtitleCount} 个字幕"
-            },
-        )
+        libraryViewModel.importFolder(context, data, uri)
     }
     val coverLauncher = rememberLauncherForActivityResult(ActivityResultContracts.StartActivityForResult()) { result ->
         val uri = result.data?.data
         if (result.resultCode == Activity.RESULT_OK && uri != null) {
-            DocumentFiles.persistReadPermission(context, uri)
-            libraryViewModel.handleCoverUri(uri)
+            libraryViewModel.handleCoverUri(context, uri)
             toast("封面已设置")
         } else {
             libraryViewModel.clearCoverPicker()
@@ -158,11 +184,7 @@ fun ASMRPlayerApp(
     val subtitleLauncher = rememberLauncherForActivityResult(ActivityResultContracts.StartActivityForResult()) { result ->
         val uri = result.data?.data
         if (result.resultCode == Activity.RESULT_OK && uri != null) {
-            val binding = libraryViewModel.handleSubtitleUri(context, uri)
-            if (binding != null) {
-                playbackViewModel.setSubtitleForCurrentTrack(binding.subtitleUri, binding.subtitleTitle, binding.trackId)
-                toast("字幕已绑定")
-            }
+            libraryViewModel.handleSubtitleUri(context, uri)
         } else {
             libraryViewModel.clearSubtitlePicker()
         }
@@ -247,7 +269,17 @@ fun ASMRPlayerApp(
         } else {
             tokens.bg
         }
-        Box(Modifier.fillMaxSize().background(pageBackground)) {
+        val uiProbeScreen = buildList {
+            add(selectedTab.title)
+            if (playerOpen) add("全屏播放器")
+            if (queueOpen) add("播放队列")
+            if (downloadManagerOpen) add("下载管理")
+            if (activeAiSubtitleTrackId != null) add("AI 字幕进度")
+            if (settingsState.updateDialogRelease != null) add("更新详情")
+            if (settingsState.installPromptRelease != null) add("安装更新")
+        }.joinToString(" / ")
+        UiProbeHost(enabled = BuildConfig.UI_PROBE_ENABLED, screen = uiProbeScreen) {
+            Box(Modifier.fillMaxSize().background(pageBackground).uiProbe("app.root", "应用根容器", "ASMRPlayerApp.kt")) {
             Scaffold(
                 containerColor = pageBackground,
                 contentWindowInsets = WindowInsets(0, 0, 0, 0),
@@ -376,6 +408,14 @@ fun ASMRPlayerApp(
                                 onLogout = { dlsiteViewModel.logout() },
                                 onSync = { dlsiteViewModel.syncWorks() },
                                 onDownload = { dlsiteViewModel.requestDownloadOptions(it) },
+                                onDownloadContent = { work, content -> dlsiteViewModel.startDownload(work, content) },
+                                onDeleteContent = { work, content ->
+                                    dlsiteViewModel.deleteContent(
+                                        work = work,
+                                        content = content,
+                                        onLibraryChanged = {},
+                                    )
+                                },
                                 onPause = { dlsiteViewModel.pauseDownload(it) },
                                 onResume = { dlsiteViewModel.resumeDownload(it) },
                                 onDelete = { work ->
@@ -440,27 +480,6 @@ fun ASMRPlayerApp(
                         onTrackClicked = { playlist, index ->
                             libraryViewModel.selectPlaylist(playlist)
                             playbackViewModel.playPlaylistTrack(playlist, index)
-                        },
-                    )
-                }
-            }
-
-            dlsiteState.optionWork?.let { optionWork ->
-                val sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true)
-                ModalBottomSheet(
-                    onDismissRequest = dlsiteViewModel::dismissDownloadOptions,
-                    sheetState = sheetState,
-                    containerColor = tokens.sheet,
-                    dragHandle = null,
-                ) {
-                    DownloadContentsSheet(
-                        work = optionWork,
-                        options = dlsiteState.downloadOptions,
-                        contents = dlsiteState.contentsByWork[optionWork.workId].orEmpty(),
-                        onDismiss = dlsiteViewModel::dismissDownloadOptions,
-                        onStart = { options -> dlsiteViewModel.startDownload(optionWork, options) },
-                        onDeleteContent = { content ->
-                            dlsiteViewModel.deleteContent(optionWork, content) {}
                         },
                     )
                 }
@@ -617,10 +636,8 @@ fun ASMRPlayerApp(
                     playlists = libraryState.playlists,
                     onDismiss = { moveTrack = null },
                     onChoose = { targetPlaylist ->
-                        val result = libraryViewModel.moveTrack(target.first, target.second, targetPlaylist)
-                        playbackViewModel.onTrackMoved(result)
+                        libraryViewModel.moveTrack(target.first, target.second, targetPlaylist)
                         moveTrack = null
-                        toast("已移动到 ${targetPlaylist.name}")
                     },
                 )
             }
@@ -698,6 +715,7 @@ fun ASMRPlayerApp(
                     },
                 )
             }
+        }
         }
     }
 }

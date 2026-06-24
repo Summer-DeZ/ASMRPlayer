@@ -1,21 +1,5 @@
 package io.github.summerdez.asmrplayer.playback;
 
-import io.github.summerdez.asmrplayer.R;
-import io.github.summerdez.asmrplayer.data.*;
-import io.github.summerdez.asmrplayer.data.remote.*;
-import io.github.summerdez.asmrplayer.data.download.*;
-import io.github.summerdez.asmrplayer.data.files.*;
-import io.github.summerdez.asmrplayer.domain.*;
-import io.github.summerdez.asmrplayer.domain.model.*;
-import io.github.summerdez.asmrplayer.playback.*;
-import io.github.summerdez.asmrplayer.presentation.*;
-import io.github.summerdez.asmrplayer.ui.*;
-import io.github.summerdez.asmrplayer.ui.activity.*;
-import io.github.summerdez.asmrplayer.ui.components.*;
-import io.github.summerdez.asmrplayer.ui.screens.*;
-import io.github.summerdez.asmrplayer.ui.theme.*;
-import io.github.summerdez.asmrplayer.ui.util.*;
-import io.github.summerdez.asmrplayer.di.*;
 import android.content.ContentResolver;
 import android.net.Uri;
 
@@ -95,6 +79,27 @@ public final class SubtitleParser {
             }
         }
         return high >= 0 ? high : -1;
+    }
+
+    public static long nextCueStartAfter(List<SubtitleCue> cues, long positionMs) {
+        if (cues == null || cues.isEmpty()) {
+            return -1L;
+        }
+
+        int low = 0;
+        int high = cues.size() - 1;
+        long nextStartMs = -1L;
+        while (low <= high) {
+            int mid = (low + high) >>> 1;
+            long startMs = cues.get(mid).startMs;
+            if (startMs > positionMs) {
+                nextStartMs = startMs;
+                high = mid - 1;
+            } else {
+                low = mid + 1;
+            }
+        }
+        return nextStartMs;
     }
 
     private static List<String> readLines(ContentResolver resolver, Uri uri) throws IOException {

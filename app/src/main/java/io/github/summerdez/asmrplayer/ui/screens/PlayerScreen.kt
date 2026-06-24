@@ -143,6 +143,7 @@ import io.github.summerdez.asmrplayer.presentation.PlaybackUiState
 import io.github.summerdez.asmrplayer.ui.components.CoverBox
 import io.github.summerdez.asmrplayer.ui.components.EqualizerIcon
 import io.github.summerdez.asmrplayer.ui.theme.LocalAmberTokens
+import io.github.summerdez.asmrplayer.ui.uiProbe
 import io.github.summerdez.asmrplayer.ui.util.formatTime
 import io.github.summerdez.asmrplayer.ui.util.splitSubtitle
 import java.text.DateFormat
@@ -170,12 +171,19 @@ fun SubtitlePlayerScreen(
     val tokens = LocalAmberTokens.current
     var menuOpen by remember { mutableStateOf(false) }
     var subtitlesVisible by remember { mutableStateOf(true) }
+    val rootInteractionSource = remember { MutableInteractionSource() }
     LaunchedEffect(playbackState.playlistId, playbackState.playlistIndex, playbackState.subtitleTitle) {
         subtitlesVisible = true
     }
     Box(
         modifier = Modifier
             .fillMaxSize()
+            .clickable(
+                interactionSource = rootInteractionSource,
+                indication = null,
+                onClick = {},
+            )
+            .uiProbe("player.root", "全屏播放器", "PlayerScreen.kt")
             .background(tokens.playerBase)
             .background(
                 Brush.radialGradient(
@@ -198,10 +206,16 @@ fun SubtitlePlayerScreen(
                 .statusBarsPadding()
                 .padding(start = 26.dp, end = 26.dp, top = 14.dp, bottom = 28.dp),
         ) {
-            Row(verticalAlignment = Alignment.CenterVertically, modifier = Modifier.fillMaxWidth()) {
+            Row(
+                verticalAlignment = Alignment.CenterVertically,
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .uiProbe("player.top-bar", "播放器顶部栏", "PlayerScreen.kt"),
+            ) {
                 Surface(
                     modifier = Modifier
                         .size(44.dp)
+                        .uiProbe("player.close", "播放器关闭按钮", "PlayerScreen.kt")
                         .clickable(onClick = onClose),
                     shape = CircleShape,
                     color = tokens.glass,
@@ -235,6 +249,7 @@ fun SubtitlePlayerScreen(
                 Surface(
                     modifier = Modifier
                         .size(44.dp)
+                        .uiProbe("player.more", "播放器更多菜单按钮", "PlayerScreen.kt")
                         .clickable(onClick = { menuOpen = true }),
                     shape = CircleShape,
                     color = tokens.glass,
@@ -250,6 +265,7 @@ fun SubtitlePlayerScreen(
                 Modifier
                     .weight(1f)
                     .fillMaxWidth()
+                    .uiProbe("player.subtitle-area", "播放器字幕展示区", "PlayerScreen.kt")
                     .padding(top = 10.dp, bottom = 10.dp),
             ) {
                 val lines = playbackState.subtitleLines
@@ -312,6 +328,15 @@ fun SubtitlePlayerScreen(
                             Column(
                                 Modifier
                                     .fillMaxWidth()
+                                    .uiProbe(
+                                        id = "player.subtitle-line:$index",
+                                        label = if (active) "当前字幕行" else "字幕行 $index",
+                                        sourceHint = "PlayerScreen.kt",
+                                        metadata = mapOf(
+                                            "index" to index.toString(),
+                                            "active" to active.toString(),
+                                        ),
+                                    )
                                     .graphicsLayer {
                                         scaleX = scale
                                         scaleY = scale
@@ -374,17 +399,28 @@ fun SubtitlePlayerScreen(
             Row(
                 Modifier
                     .fillMaxWidth()
+                    .uiProbe("player.transport-controls", "播放器主控制区", "PlayerScreen.kt")
                     .padding(top = 18.dp),
                 horizontalArrangement = Arrangement.SpaceEvenly,
                 verticalAlignment = Alignment.CenterVertically,
             ) {
                 Surface(shape = CircleShape, color = tokens.card, border = BorderStroke(1.dp, tokens.separator)) {
-                    IconButton(onClick = onPrevious, modifier = Modifier.size(58.dp)) {
+                    IconButton(
+                        onClick = onPrevious,
+                        modifier = Modifier
+                            .size(58.dp)
+                            .uiProbe("player.previous", "上一首按钮", "PlayerScreen.kt"),
+                    ) {
                         Icon(Icons.Default.SkipPrevious, contentDescription = "上一首", modifier = Modifier.size(30.dp), tint = tokens.label)
                     }
                 }
                 Surface(shape = CircleShape, color = tokens.accent, shadowElevation = 12.dp) {
-                    IconButton(onClick = onPlay, modifier = Modifier.size(78.dp)) {
+                    IconButton(
+                        onClick = onPlay,
+                        modifier = Modifier
+                            .size(78.dp)
+                            .uiProbe("player.play-toggle", "播放/暂停按钮", "PlayerScreen.kt"),
+                    ) {
                         Icon(
                             if (playbackState.isPlaying) Icons.Default.Pause else Icons.Default.PlayArrow,
                             contentDescription = "播放",
@@ -394,7 +430,12 @@ fun SubtitlePlayerScreen(
                     }
                 }
                 Surface(shape = CircleShape, color = tokens.card, border = BorderStroke(1.dp, tokens.separator)) {
-                    IconButton(onClick = onNext, modifier = Modifier.size(58.dp)) {
+                    IconButton(
+                        onClick = onNext,
+                        modifier = Modifier
+                            .size(58.dp)
+                            .uiProbe("player.next", "下一首按钮", "PlayerScreen.kt"),
+                    ) {
                         Icon(Icons.Default.SkipNext, contentDescription = "下一首", modifier = Modifier.size(30.dp), tint = tokens.label)
                     }
                 }
@@ -509,6 +550,7 @@ private fun PlayerMoreMenuSheet(
     Box(
         modifier = Modifier
             .fillMaxSize()
+            .uiProbe("player.more-sheet", "播放器更多菜单 Sheet", "PlayerScreen.kt")
             .zIndex(8f),
     ) {
         Box(
@@ -749,13 +791,10 @@ private fun playerAiSubtitleProgressLabel(task: AiSubtitleTaskState?): String {
 @Composable
 private fun PlayerTrackMeta(playbackState: PlaybackUiState) {
     val tokens = LocalAmberTokens.current
-    val meta = listOf(playbackState.contextTitle, playbackState.subtitleTitle)
-        .filter { it.isNotBlank() && it != "未选择字幕" && it != "未选择音频" }
-        .distinct()
-        .joinToString(" · ")
-        .ifBlank { "当前曲目" }
     Row(
-        modifier = Modifier.fillMaxWidth(),
+        modifier = Modifier
+            .fillMaxWidth()
+            .uiProbe("player.track-meta", "播放器曲目信息", "PlayerScreen.kt"),
         verticalAlignment = Alignment.Top,
     ) {
         CoverBox(playbackState.coverUri, Modifier.size(52.dp))
@@ -768,16 +807,8 @@ private fun PlayerTrackMeta(playbackState: PlaybackUiState) {
                 lineHeight = 29.sp,
                 fontFamily = androidx.compose.ui.text.font.FontFamily.Serif,
                 fontWeight = FontWeight.Normal,
-                maxLines = 2,
-                overflow = TextOverflow.Ellipsis,
-            )
-            Text(
-                meta,
-                color = tokens.label2,
-                fontSize = 13.sp,
                 maxLines = 1,
                 overflow = TextOverflow.Ellipsis,
-                modifier = Modifier.padding(top = 4.dp),
             )
         }
         if (playbackState.overlayRequested) {
@@ -808,7 +839,22 @@ private fun PlayerActionButton(
     onClick: () -> Unit,
 ) {
     val tokens = LocalAmberTokens.current
-    TextButton(onClick = onClick, enabled = enabled) {
+    val actionId = when (label) {
+        "睡眠" -> "sleep"
+        "混音" -> "mix"
+        "队列" -> "queue"
+        else -> label
+    }
+    TextButton(
+        onClick = onClick,
+        enabled = enabled,
+        modifier = Modifier.uiProbe(
+            id = "player.action.$actionId",
+            label = "播放器动作按钮：$label",
+            sourceHint = "PlayerScreen.kt",
+            metadata = mapOf("enabled" to enabled.toString(), "selected" to selected.toString()),
+        ),
+    ) {
         Column(horizontalAlignment = Alignment.CenterHorizontally) {
             Icon(
                 icon,
@@ -841,7 +887,21 @@ fun PlaybackProgressLine(playbackState: PlaybackUiState, onSeek: (Int) -> Unit) 
     val duration = max(1, playbackState.durationMs)
     val position = playbackState.positionMs.coerceIn(0, duration)
     val fraction = position.toFloat() / duration.toFloat()
-    Column(Modifier.fillMaxWidth().padding(horizontal = 6.dp)) {
+    Column(
+        Modifier
+            .fillMaxWidth()
+            .uiProbe(
+                id = "player.progress.scrubber",
+                label = "播放器进度条",
+                sourceHint = "PlayerScreen.kt",
+                metadata = mapOf(
+                    "positionMs" to playbackState.positionMs.toString(),
+                    "durationMs" to playbackState.durationMs.toString(),
+                    "canSeek" to canSeek.toString(),
+                ),
+            )
+            .padding(horizontal = 6.dp),
+    ) {
         Canvas(
             Modifier
                 .fillMaxWidth()

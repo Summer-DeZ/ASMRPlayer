@@ -34,7 +34,7 @@ data class AppUpdateDownloadState(
         }
 }
 
-object AppUpdateDownloadStateBus {
+class AppUpdateDownloadStateStore {
     private val _state = MutableStateFlow(AppUpdateDownloadState())
     val state: StateFlow<AppUpdateDownloadState> = _state.asStateFlow()
 

@@ -16,7 +16,7 @@ import io.github.summerdez.asmrplayer.data.SettingsRepository
 import io.github.summerdez.asmrplayer.data.update.AppUpdateCheckResult
 import io.github.summerdez.asmrplayer.data.update.AppUpdateDownloadService
 import io.github.summerdez.asmrplayer.data.update.AppUpdateDownloadState
-import io.github.summerdez.asmrplayer.data.update.AppUpdateDownloadStateBus
+import io.github.summerdez.asmrplayer.data.update.AppUpdateDownloadStateStore
 import io.github.summerdez.asmrplayer.data.update.AppUpdateDownloadStateStatus
 import io.github.summerdez.asmrplayer.data.update.AppUpdateRelease
 import io.github.summerdez.asmrplayer.data.update.AppUpdateRepository
@@ -26,8 +26,7 @@ import io.github.summerdez.asmrplayer.domain.model.AiTranslationEngine
 import io.github.summerdez.asmrplayer.domain.model.WhisperModelSpec
 import io.github.summerdez.asmrplayer.domain.model.remoteTranscriptionBaseUrl
 import io.github.summerdez.asmrplayer.playback.PlaybackCommandClient
-import io.github.summerdez.asmrplayer.playback.PlaybackServiceSnapshot
-import io.github.summerdez.asmrplayer.playback.PlaybackServiceState
+import io.github.summerdez.asmrplayer.playback.PlaybackControllerSnapshot
 import io.github.summerdez.asmrplayer.ui.theme.AppThemeMode
 import java.util.concurrent.CancellationException
 import kotlinx.coroutines.Job
@@ -108,15 +107,14 @@ class SettingsViewModel(
     private val settingsRepository: SettingsRepository,
     private val playbackCommands: PlaybackCommandClient,
     private val updateRepository: AppUpdateRepository,
+    private val appUpdateDownloadStateStore: AppUpdateDownloadStateStore,
 ) : AndroidViewModel(application) {
     private val whisperModelRepository = WhisperModelRepository(application)
     private val _state = MutableStateFlow(
         SettingsUiState(
             themeMode = settingsRepository.themeMode(),
             currentVersionName = application.installedVersionName(),
-            aiSubtitleSettings = settingsRepository.aiSubtitleSettings(),
-            whisperModelState = WhisperModelRepository(application)
-                .state(WhisperModelSpec.byId(settingsRepository.aiSubtitleSettings().whisperModelId)),
+            whisperModelState = whisperModelRepository.state(WhisperModelSpec.BASE),
         ),
     )
     val state: StateFlow<SettingsUiState> = _state.asStateFlow()
@@ -129,7 +127,7 @@ class SettingsViewModel(
     init {
         playbackCommands.connect()
         viewModelScope.launch {
-            PlaybackServiceState.snapshots.collect { snapshot ->
+            playbackCommands.snapshots.collect { snapshot ->
                 updateState(snapshot)
             }
         }
@@ -144,19 +142,19 @@ class SettingsViewModel(
             }
         }
         viewModelScope.launch {
-            AppUpdateDownloadStateBus.state.collect { downloadState ->
+            appUpdateDownloadStateStore.state.collect { downloadState ->
                 applyUpdateDownloadState(downloadState)
             }
         }
     }
 
     fun refresh() {
-        updateState(PlaybackServiceState.snapshots.value)
+        updateState(playbackCommands.snapshots.value)
     }
 
     fun toggleOverlay() {
-        val snapshot = PlaybackServiceState.snapshots.value
-        playbackCommands.setOverlayVisible(!snapshot.overlayRequested)
+        val snapshot = playbackCommands.snapshots.value
+        playbackCommands.setOverlayVisible(!currentOverlayRequested(snapshot))
         refresh()
     }
 
@@ -165,13 +163,13 @@ class SettingsViewModel(
         refresh()
     }
 
-    private fun updateState(snapshot: PlaybackServiceSnapshot) {
+    private fun updateState(snapshot: PlaybackControllerSnapshot) {
         val context = getApplication<Application>()
         _state.update { current ->
             current.copy(
                 overlayPermissionGranted = Settings.canDrawOverlays(context),
-                overlayRequested = snapshot.connected && snapshot.overlayRequested,
-                overlayLocked = snapshot.connected && snapshot.overlayLocked,
+                overlayRequested = snapshot.connected && snapshot.serviceSnapshot.overlayRequested,
+                overlayLocked = snapshot.connected && snapshot.serviceSnapshot.overlayLocked,
                 notificationGranted = Build.VERSION.SDK_INT < Build.VERSION_CODES.TIRAMISU ||
                     ContextCompat.checkSelfPermission(
                         context,
@@ -180,6 +178,14 @@ class SettingsViewModel(
                 themeMode = settingsRepository.themeMode(),
                 currentVersionName = context.installedVersionName(),
             )
+        }
+    }
+
+    private fun currentOverlayRequested(snapshot: PlaybackControllerSnapshot): Boolean {
+        return if (snapshot.connected) {
+            snapshot.serviceSnapshot.overlayRequested
+        } else {
+            _state.value.overlayRequested
         }
     }
 
@@ -254,7 +260,7 @@ class SettingsViewModel(
                 updateDownloadStatus = AppUpdateDownloadStatus.Downloading(release),
             )
         }
-        AppUpdateDownloadStateBus.publishDownloading(
+        appUpdateDownloadStateStore.publishDownloading(
             release = release,
             bytesDownloaded = 0L,
             totalBytes = release.apkSizeBytes,
@@ -265,7 +271,7 @@ class SettingsViewModel(
                 AppUpdateDownloadService.downloadIntent(context, release),
             )
         } catch (error: Throwable) {
-            AppUpdateDownloadStateBus.publishFailed(
+            appUpdateDownloadStateStore.publishFailed(
                 release = release,
                 message = error.message ?: "启动更新下载失败",
             )
@@ -277,7 +283,7 @@ class SettingsViewModel(
         try {
             context.startService(AppUpdateDownloadService.cancelIntent(context))
         } catch (_: Throwable) {
-            AppUpdateDownloadStateBus.publishCanceled()
+            appUpdateDownloadStateStore.publishCanceled()
             _state.update { it.copy(updateDownloadStatus = AppUpdateDownloadStatus.Idle) }
         }
     }
@@ -307,66 +313,92 @@ class SettingsViewModel(
     }
 
     fun setAiTranslationEngine(engine: AiTranslationEngine) {
-        settingsRepository.setAiTranslationEngine(engine)
+        viewModelScope.launch {
+            settingsRepository.setAiTranslationEngine(engine)
+        }
     }
 
     fun setAiTranscriptionBackend(backend: AiTranscriptionBackend) {
-        settingsRepository.setAiTranscriptionBackend(backend)
+        viewModelScope.launch {
+            settingsRepository.setAiTranscriptionBackend(backend)
+        }
         resetRemoteWhisperTestStatus()
     }
 
     fun setAiOllamaBaseUrl(value: String) {
-        settingsRepository.setAiOllamaBaseUrl(value)
+        viewModelScope.launch {
+            settingsRepository.setAiOllamaBaseUrl(value)
+        }
     }
 
     fun setAiOllamaModel(value: String) {
-        settingsRepository.setAiOllamaModel(value)
+        viewModelScope.launch {
+            settingsRepository.setAiOllamaModel(value)
+        }
     }
 
     fun setAiDeepSeekBaseUrl(value: String) {
-        settingsRepository.setAiDeepSeekBaseUrl(value)
+        viewModelScope.launch {
+            settingsRepository.setAiDeepSeekBaseUrl(value)
+        }
     }
 
     fun setAiDeepSeekModel(value: String) {
-        settingsRepository.setAiDeepSeekModel(value)
+        viewModelScope.launch {
+            settingsRepository.setAiDeepSeekModel(value)
+        }
     }
 
     fun setAiDeepSeekApiKey(value: String) {
-        settingsRepository.setAiDeepSeekApiKey(value)
+        viewModelScope.launch {
+            settingsRepository.setAiDeepSeekApiKey(value)
+        }
     }
 
     fun setAiWhisperModelId(value: String) {
-        settingsRepository.setAiWhisperModelId(value)
+        viewModelScope.launch {
+            settingsRepository.setAiWhisperModelId(value)
+        }
     }
 
     fun setAiRemoteWhisperBaseUrl(value: String) {
-        settingsRepository.setAiRemoteWhisperBaseUrl(value)
+        viewModelScope.launch {
+            settingsRepository.setAiRemoteWhisperBaseUrl(value)
+        }
         resetRemoteWhisperTestStatus()
     }
 
     fun setAiRemoteTranscriptionAddress(value: String) {
         val current = _state.value.aiSubtitleSettings
-        settingsRepository.setAiRemoteWhisperBaseUrl(
-            remoteTranscriptionBaseUrl(value, current.remoteTranscriptionPort),
-        )
+        viewModelScope.launch {
+            settingsRepository.setAiRemoteWhisperBaseUrl(
+                remoteTranscriptionBaseUrl(value, current.remoteTranscriptionPort),
+            )
+        }
         resetRemoteWhisperTestStatus()
     }
 
     fun setAiRemoteTranscriptionPort(value: String) {
         val current = _state.value.aiSubtitleSettings
-        settingsRepository.setAiRemoteWhisperBaseUrl(
-            remoteTranscriptionBaseUrl(current.remoteTranscriptionAddress, value),
-        )
+        viewModelScope.launch {
+            settingsRepository.setAiRemoteWhisperBaseUrl(
+                remoteTranscriptionBaseUrl(current.remoteTranscriptionAddress, value),
+            )
+        }
         resetRemoteWhisperTestStatus()
     }
 
     fun setAiRemoteWhisperModel(value: String) {
-        settingsRepository.setAiRemoteWhisperModel(value)
+        viewModelScope.launch {
+            settingsRepository.setAiRemoteWhisperModel(value)
+        }
         resetRemoteWhisperTestStatus()
     }
 
     fun setAiRemoteWhisperToken(value: String) {
-        settingsRepository.setAiRemoteWhisperToken(value)
+        viewModelScope.launch {
+            settingsRepository.setAiRemoteWhisperToken(value)
+        }
         resetRemoteWhisperTestStatus()
     }
 
@@ -427,7 +459,9 @@ class SettingsViewModel(
     }
 
     fun setAiAdultContentTranslationAllowed(value: Boolean) {
-        settingsRepository.setAiAdultContentTranslationAllowed(value)
+        viewModelScope.launch {
+            settingsRepository.setAiAdultContentTranslationAllowed(value)
+        }
     }
 
     fun downloadWhisperModel() {

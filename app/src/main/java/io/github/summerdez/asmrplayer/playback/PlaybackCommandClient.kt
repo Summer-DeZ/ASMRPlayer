@@ -1,29 +1,15 @@
 package io.github.summerdez.asmrplayer.playback
 
-import io.github.summerdez.asmrplayer.R
-import io.github.summerdez.asmrplayer.data.*
-import io.github.summerdez.asmrplayer.data.remote.*
-import io.github.summerdez.asmrplayer.data.download.*
-import io.github.summerdez.asmrplayer.data.files.*
-import io.github.summerdez.asmrplayer.domain.*
-import io.github.summerdez.asmrplayer.domain.model.*
-import io.github.summerdez.asmrplayer.playback.*
-import io.github.summerdez.asmrplayer.presentation.*
-import io.github.summerdez.asmrplayer.ui.*
-import io.github.summerdez.asmrplayer.ui.activity.*
-import io.github.summerdez.asmrplayer.ui.components.*
-import io.github.summerdez.asmrplayer.ui.screens.*
-import io.github.summerdez.asmrplayer.ui.theme.*
-import io.github.summerdez.asmrplayer.ui.util.*
-import io.github.summerdez.asmrplayer.di.*
 import android.app.Application
 import android.content.ComponentName
 import android.net.Uri
 import android.os.Bundle
+import android.os.SystemClock
 import androidx.core.content.ContextCompat
 import androidx.media3.common.C
 import androidx.media3.common.Player
 import androidx.media3.session.MediaController
+import androidx.media3.session.MediaController.Listener
 import androidx.media3.session.SessionCommand
 import androidx.media3.session.SessionToken
 import com.google.common.util.concurrent.ListenableFuture
@@ -49,6 +35,7 @@ data class PlaybackControllerSnapshot(
     val durationMs: Int = 0,
     val positionMs: Int = 0,
     val hasNextMediaItem: Boolean = false,
+    val serviceSnapshot: PlaybackServiceSnapshot = PlaybackServiceSnapshot(),
 )
 
 class PlaybackCommandClient(private val application: Application) {
@@ -57,6 +44,19 @@ class PlaybackCommandClient(private val application: Application) {
     private var controllerFuture: ListenableFuture<MediaController>? = null
     private var controller: MediaController? = null
     private var controllerJob: Job? = null
+    private val controllerListener = object : Listener {
+        override fun onExtrasChanged(controller: MediaController, extras: Bundle) {
+            _snapshots.value = controller.snapshot()
+        }
+
+        override fun onDisconnected(controller: MediaController) {
+            this@PlaybackCommandClient.controller = null
+            controllerFuture = null
+            controllerJob?.cancel()
+            controllerJob = null
+            _snapshots.value = PlaybackControllerSnapshot()
+        }
+    }
 
     val snapshots: StateFlow<PlaybackControllerSnapshot> = _snapshots.asStateFlow()
 
@@ -65,7 +65,9 @@ class PlaybackCommandClient(private val application: Application) {
             return
         }
         val token = SessionToken(application, ComponentName(application, PlaybackService::class.java))
-        val future = MediaController.Builder(application, token).buildAsync()
+        val future = MediaController.Builder(application, token)
+            .setListener(controllerListener)
+            .buildAsync()
         controllerFuture = future
         future.addListener(
             {
@@ -211,20 +213,35 @@ class PlaybackCommandClient(private val application: Application) {
                 }
             }
         }
+        val sleepTimerTicker = launch {
+            while (isActive) {
+                delay(SLEEP_TIMER_REFRESH_MS)
+                val serviceSnapshot = playbackServiceSnapshotFromSessionExtras(activeController.sessionExtras)
+                if (serviceSnapshot.hasActiveSleepTimerCountdown()) {
+                    emitSnapshot()
+                }
+            }
+        }
         awaitClose {
             positionTicker.cancel()
+            sleepTimerTicker.cancel()
             activeController.removeListener(listener)
         }
     }
 
     private fun MediaController.snapshot(): PlaybackControllerSnapshot {
+        val serviceSnapshot = playbackServiceSnapshotFromSessionExtras(sessionExtras)
+            .withDerivedSleepTimer(SystemClock.elapsedRealtime())
+        val durationMs = duration.toPlaybackIntMs()
+        val positionMs = currentPosition.toPlaybackIntMs()
         return PlaybackControllerSnapshot(
             connected = true,
             mediaId = currentMediaItem?.mediaId.orEmpty(),
             isPlaying = isPlaying,
-            durationMs = duration.toPlaybackIntMs(),
-            positionMs = currentPosition.toPlaybackIntMs(),
+            durationMs = durationMs,
+            positionMs = positionMs,
             hasNextMediaItem = hasNextMediaItem(),
+            serviceSnapshot = serviceSnapshot,
         )
     }
 
@@ -235,7 +252,26 @@ class PlaybackCommandClient(private val application: Application) {
         return coerceAtMost(Int.MAX_VALUE.toLong()).toInt()
     }
 
+    private fun PlaybackServiceSnapshot.withDerivedSleepTimer(nowMs: Long): PlaybackServiceSnapshot {
+        if (!connected || !sleepTimerActive || sleepTimerAtEndOfTrack) {
+            return copy(sleepTimerRemainingMs = 0L)
+        }
+        val remainingMs = (sleepTimerEndElapsedRealtimeMs - nowMs).coerceAtLeast(0L)
+        return copy(
+            sleepTimerActive = remainingMs > 0L,
+            sleepTimerRemainingMs = remainingMs,
+        )
+    }
+
+    private fun PlaybackServiceSnapshot.hasActiveSleepTimerCountdown(): Boolean {
+        return connected &&
+            sleepTimerActive &&
+            !sleepTimerAtEndOfTrack &&
+            sleepTimerEndElapsedRealtimeMs > 0L
+    }
+
     private companion object {
         const val CONTROLLER_POSITION_REFRESH_MS = 250L
+        const val SLEEP_TIMER_REFRESH_MS = 1_000L
     }
 }

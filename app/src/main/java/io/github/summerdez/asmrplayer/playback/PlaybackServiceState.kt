@@ -1,33 +1,13 @@
 package io.github.summerdez.asmrplayer.playback
 
-import io.github.summerdez.asmrplayer.R
-import io.github.summerdez.asmrplayer.data.*
-import io.github.summerdez.asmrplayer.data.remote.*
-import io.github.summerdez.asmrplayer.data.download.*
-import io.github.summerdez.asmrplayer.data.files.*
-import io.github.summerdez.asmrplayer.domain.*
-import io.github.summerdez.asmrplayer.domain.model.*
-import io.github.summerdez.asmrplayer.playback.*
-import io.github.summerdez.asmrplayer.presentation.*
-import io.github.summerdez.asmrplayer.ui.*
-import io.github.summerdez.asmrplayer.ui.activity.*
-import io.github.summerdez.asmrplayer.ui.components.*
-import io.github.summerdez.asmrplayer.ui.screens.*
-import io.github.summerdez.asmrplayer.ui.theme.*
-import io.github.summerdez.asmrplayer.ui.util.*
-import io.github.summerdez.asmrplayer.di.*
-import kotlinx.coroutines.flow.MutableStateFlow
-import kotlinx.coroutines.flow.StateFlow
-import kotlinx.coroutines.flow.asStateFlow
+import android.os.Bundle
+import java.util.ArrayList
 
 data class PlaybackServiceSnapshot(
     val connected: Boolean = false,
     val playlistId: String = "",
     val playlistIndex: Int = -1,
     val audioUri: String = "",
-    val isPlaying: Boolean = false,
-    val durationMs: Int = 0,
-    val positionMs: Int = 0,
     val previousSubtitle: String = "",
     val currentSubtitle: String = "",
     val nextSubtitle: String = "",
@@ -39,6 +19,7 @@ data class PlaybackServiceSnapshot(
     val error: PlaybackError = PlaybackError.None,
     val sleepTimerActive: Boolean = false,
     val sleepTimerAtEndOfTrack: Boolean = false,
+    val sleepTimerEndElapsedRealtimeMs: Long = 0L,
     val sleepTimerRemainingMs: Long = 0L,
     val sleepTimerMinutes: Int = 0,
 )
@@ -59,58 +40,68 @@ sealed interface PlaybackError {
     }
 }
 
-object PlaybackServiceState {
-    private val _snapshots = MutableStateFlow(PlaybackServiceSnapshot())
-    val snapshots: StateFlow<PlaybackServiceSnapshot> = _snapshots.asStateFlow()
-
-    @JvmStatic
-    fun publish(
-        playlistId: String?,
-        playlistIndex: Int,
-        audioUri: String?,
-        isPlaying: Boolean,
-        durationMs: Int,
-        positionMs: Int,
-        previousSubtitle: String?,
-        currentSubtitle: String?,
-        nextSubtitle: String?,
-        subtitleLines: List<String>?,
-        subtitleIndex: Int,
-        subtitleCount: Int,
-        overlayRequested: Boolean,
-        overlayLocked: Boolean,
-        lastError: String?,
-        sleepTimerActive: Boolean,
-        sleepTimerAtEndOfTrack: Boolean,
-        sleepTimerRemainingMs: Long,
-        sleepTimerMinutes: Int,
-    ) {
-        _snapshots.value = PlaybackServiceSnapshot(
-            connected = true,
-            playlistId = playlistId.orEmpty(),
-            playlistIndex = playlistIndex,
-            audioUri = audioUri.orEmpty(),
-            isPlaying = isPlaying,
-            durationMs = durationMs,
-            positionMs = positionMs,
-            previousSubtitle = previousSubtitle.orEmpty(),
-            currentSubtitle = currentSubtitle.orEmpty(),
-            nextSubtitle = nextSubtitle.orEmpty(),
-            subtitleLines = subtitleLines.orEmpty(),
-            subtitleIndex = subtitleIndex,
-            subtitleCount = subtitleCount,
-            overlayRequested = overlayRequested,
-            overlayLocked = overlayLocked,
-            error = PlaybackError.fromMessage(lastError),
-            sleepTimerActive = sleepTimerActive,
-            sleepTimerAtEndOfTrack = sleepTimerAtEndOfTrack,
-            sleepTimerRemainingMs = sleepTimerRemainingMs,
-            sleepTimerMinutes = sleepTimerMinutes,
-        )
-    }
-
-    @JvmStatic
-    fun disconnect() {
-        _snapshots.value = PlaybackServiceSnapshot()
+internal fun PlaybackServiceSnapshot.toSessionExtras(): Bundle {
+    return Bundle().apply {
+        putBoolean(KEY_CONNECTED, connected)
+        putString(KEY_PLAYLIST_ID, playlistId)
+        putInt(KEY_PLAYLIST_INDEX, playlistIndex)
+        putString(KEY_AUDIO_URI, audioUri)
+        putString(KEY_PREVIOUS_SUBTITLE, previousSubtitle)
+        putString(KEY_CURRENT_SUBTITLE, currentSubtitle)
+        putString(KEY_NEXT_SUBTITLE, nextSubtitle)
+        putStringArrayList(KEY_SUBTITLE_LINES, ArrayList(subtitleLines))
+        putInt(KEY_SUBTITLE_INDEX, subtitleIndex)
+        putInt(KEY_SUBTITLE_COUNT, subtitleCount)
+        putBoolean(KEY_OVERLAY_REQUESTED, overlayRequested)
+        putBoolean(KEY_OVERLAY_LOCKED, overlayLocked)
+        putString(KEY_ERROR_MESSAGE, error.message)
+        putBoolean(KEY_SLEEP_TIMER_ACTIVE, sleepTimerActive)
+        putBoolean(KEY_SLEEP_TIMER_AT_END_OF_TRACK, sleepTimerAtEndOfTrack)
+        putLong(KEY_SLEEP_TIMER_END_ELAPSED_REALTIME_MS, sleepTimerEndElapsedRealtimeMs)
+        putInt(KEY_SLEEP_TIMER_MINUTES, sleepTimerMinutes)
     }
 }
+
+internal fun playbackServiceSnapshotFromSessionExtras(extras: Bundle?): PlaybackServiceSnapshot {
+    if (extras == null || !extras.getBoolean(KEY_CONNECTED, false)) {
+        return PlaybackServiceSnapshot()
+    }
+    return PlaybackServiceSnapshot(
+        connected = true,
+        playlistId = extras.getString(KEY_PLAYLIST_ID).orEmpty(),
+        playlistIndex = extras.getInt(KEY_PLAYLIST_INDEX, -1),
+        audioUri = extras.getString(KEY_AUDIO_URI).orEmpty(),
+        previousSubtitle = extras.getString(KEY_PREVIOUS_SUBTITLE).orEmpty(),
+        currentSubtitle = extras.getString(KEY_CURRENT_SUBTITLE).orEmpty(),
+        nextSubtitle = extras.getString(KEY_NEXT_SUBTITLE).orEmpty(),
+        subtitleLines = extras.getStringArrayList(KEY_SUBTITLE_LINES).orEmpty(),
+        subtitleIndex = extras.getInt(KEY_SUBTITLE_INDEX, -1),
+        subtitleCount = extras.getInt(KEY_SUBTITLE_COUNT, 0),
+        overlayRequested = extras.getBoolean(KEY_OVERLAY_REQUESTED, false),
+        overlayLocked = extras.getBoolean(KEY_OVERLAY_LOCKED, false),
+        error = PlaybackError.fromMessage(extras.getString(KEY_ERROR_MESSAGE)),
+        sleepTimerActive = extras.getBoolean(KEY_SLEEP_TIMER_ACTIVE, false),
+        sleepTimerAtEndOfTrack = extras.getBoolean(KEY_SLEEP_TIMER_AT_END_OF_TRACK, false),
+        sleepTimerEndElapsedRealtimeMs = extras.getLong(KEY_SLEEP_TIMER_END_ELAPSED_REALTIME_MS, 0L),
+        sleepTimerMinutes = extras.getInt(KEY_SLEEP_TIMER_MINUTES, 0),
+    )
+}
+
+private const val KEY_PREFIX = "io.github.summerdez.asmrplayer.playback."
+private const val KEY_CONNECTED = KEY_PREFIX + "connected"
+private const val KEY_PLAYLIST_ID = KEY_PREFIX + "playlist_id"
+private const val KEY_PLAYLIST_INDEX = KEY_PREFIX + "playlist_index"
+private const val KEY_AUDIO_URI = KEY_PREFIX + "audio_uri"
+private const val KEY_PREVIOUS_SUBTITLE = KEY_PREFIX + "previous_subtitle"
+private const val KEY_CURRENT_SUBTITLE = KEY_PREFIX + "current_subtitle"
+private const val KEY_NEXT_SUBTITLE = KEY_PREFIX + "next_subtitle"
+private const val KEY_SUBTITLE_LINES = KEY_PREFIX + "subtitle_lines"
+private const val KEY_SUBTITLE_INDEX = KEY_PREFIX + "subtitle_index"
+private const val KEY_SUBTITLE_COUNT = KEY_PREFIX + "subtitle_count"
+private const val KEY_OVERLAY_REQUESTED = KEY_PREFIX + "overlay_requested"
+private const val KEY_OVERLAY_LOCKED = KEY_PREFIX + "overlay_locked"
+private const val KEY_ERROR_MESSAGE = KEY_PREFIX + "error_message"
+private const val KEY_SLEEP_TIMER_ACTIVE = KEY_PREFIX + "sleep_timer_active"
+private const val KEY_SLEEP_TIMER_AT_END_OF_TRACK = KEY_PREFIX + "sleep_timer_at_end_of_track"
+private const val KEY_SLEEP_TIMER_END_ELAPSED_REALTIME_MS = KEY_PREFIX + "sleep_timer_end_elapsed_realtime_ms"
+private const val KEY_SLEEP_TIMER_MINUTES = KEY_PREFIX + "sleep_timer_minutes"

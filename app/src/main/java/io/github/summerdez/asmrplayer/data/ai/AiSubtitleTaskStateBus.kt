@@ -9,7 +9,7 @@ import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.update
 
-object AiSubtitleTaskStateBus {
+class AiSubtitleTaskStateStore {
     private val _tasks = MutableStateFlow<Map<String, AiSubtitleTaskState>>(emptyMap())
     val tasks: StateFlow<Map<String, AiSubtitleTaskState>> = _tasks.asStateFlow()
 
@@ -128,5 +128,7 @@ object AiSubtitleTaskStateBus {
         _tasks.update { tasks -> tasks + (updated.target.trackId to updated) }
     }
 
-    private const val PREVIEW_LIMIT = 4
+    private companion object {
+        const val PREVIEW_LIMIT = 4
+    }
 }

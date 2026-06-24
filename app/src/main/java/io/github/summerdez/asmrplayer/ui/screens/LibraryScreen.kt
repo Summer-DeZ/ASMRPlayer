@@ -201,7 +201,9 @@ fun LibraryTab(
         }
     }
     LazyColumn(
-        modifier = Modifier.fillMaxSize(),
+        modifier = Modifier
+            .fillMaxSize()
+            .uiProbe("library.root", "资料库列表", "LibraryScreen.kt"),
         contentPadding = PaddingValues(start = 16.dp, end = 16.dp, top = 0.dp, bottom = 28.dp),
         verticalArrangement = Arrangement.spacedBy(8.dp),
     ) {
@@ -265,7 +267,9 @@ private fun LibrarySearchField(value: String, onValueChange: (String) -> Unit, m
     OutlinedTextField(
         value = value,
         onValueChange = onValueChange,
-        modifier = modifier.fillMaxWidth(),
+        modifier = modifier
+            .uiProbe("library.search", "资料库搜索框", "LibraryScreen.kt")
+            .fillMaxWidth(),
         singleLine = true,
         shape = RoundedCornerShape(20.dp),
         leadingIcon = {
@@ -291,6 +295,7 @@ private fun LibraryDlsiteEmptyState() {
     Surface(
         modifier = Modifier
             .fillMaxWidth()
+            .uiProbe("library.empty-state", "资料库空态卡片", "LibraryScreen.kt")
             .padding(start = 6.dp, end = 6.dp, top = 10.dp),
         shape = RoundedCornerShape(28.dp),
         color = tokens.card,
@@ -503,7 +508,18 @@ fun PlaylistRow(
         label = "playlistChevron",
     )
     Surface(
-        modifier = Modifier.fillMaxWidth(),
+        modifier = Modifier
+            .fillMaxWidth()
+            .uiProbe(
+                id = "library.playlist-row:${playlist.id}",
+                label = "播放列表卡片：${playlist.name}",
+                sourceHint = "LibraryScreen.kt",
+                metadata = mapOf(
+                    "playlistId" to playlist.id,
+                    "trackCount" to playlist.tracks.size.toString(),
+                    "expanded" to expanded.toString(),
+                ),
+            ),
         color = Color.Transparent,
         shape = shape,
         border = BorderStroke(
@@ -672,6 +688,16 @@ private fun LibrarySegmentRow(
     Column(
         modifier = Modifier
             .fillMaxWidth()
+            .uiProbe(
+                id = "library.segment-row:${track.id}",
+                label = "展开曲目行：${track.title}",
+                sourceHint = "LibraryScreen.kt",
+                metadata = mapOf(
+                    "trackId" to track.id,
+                    "index" to index.toString(),
+                    "active" to active.toString(),
+                ),
+            )
             .background(if (active) tokens.accentSoft.copy(alpha = 0.38f) else Color.Transparent),
     ) {
         Row(
@@ -799,6 +825,15 @@ fun TrackRow(
     Surface(
         modifier = modifier
             .fillMaxWidth()
+            .uiProbe(
+                id = "library.track-row:${track.id}",
+                label = "曲目行：${track.title}",
+                sourceHint = "LibraryScreen.kt",
+                metadata = mapOf(
+                    "trackId" to track.id,
+                    "active" to active.toString(),
+                ),
+            )
             .padding(vertical = if (elevated) 6.dp else 2.dp),
         color = if (active || elevated) tokens.accentSoft.copy(alpha = if (active) 0.62f else 0.28f) else Color.Transparent,
         shape = rowShape,
@@ -925,6 +960,18 @@ fun AiSubtitleGenerationSheet(
     Column(
         Modifier
             .fillMaxWidth()
+            .uiProbe(
+                id = "ai-subtitle.sheet:${task.target.trackId}",
+                label = "AI 字幕生成弹层：${task.target.trackTitle}",
+                sourceHint = "LibraryScreen.kt",
+                metadata = mapOf(
+                    "trackId" to task.target.trackId,
+                    "playlistId" to task.target.playlistId,
+                    "stage" to task.stage.name,
+                    "transcribePercent" to (task.transcribeProgress * 100f).toInt().toString(),
+                    "translatePercent" to (task.translateProgress * 100f).toInt().toString(),
+                ),
+            )
             .navigationBarsPadding()
             .padding(start = 16.dp, end = 16.dp, top = 8.dp, bottom = 18.dp),
     ) {
@@ -939,7 +986,10 @@ fun AiSubtitleGenerationSheet(
         Row(verticalAlignment = Alignment.Top) {
             Text("生成字幕", color = tokens.label, fontSize = 30.sp, fontWeight = FontWeight.ExtraBold, modifier = Modifier.weight(1f))
             Surface(
-                modifier = Modifier.size(48.dp).clickable(onClick = onDismiss),
+                modifier = Modifier
+                    .size(48.dp)
+                    .uiProbe("ai-subtitle.close", "关闭 AI 字幕生成弹层", "LibraryScreen.kt")
+                    .clickable(onClick = onDismiss),
                 shape = CircleShape,
                 color = tokens.label.copy(alpha = 0.08f),
             ) {
@@ -990,7 +1040,18 @@ fun AiSubtitleGenerationSheet(
         )
         if (task.error.isNotBlank()) {
             Spacer(Modifier.height(12.dp))
-            Surface(color = tokens.accent2Soft, shape = RoundedCornerShape(16.dp), modifier = Modifier.fillMaxWidth()) {
+            Surface(
+                color = tokens.accent2Soft,
+                shape = RoundedCornerShape(16.dp),
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .uiProbe(
+                        id = "ai-subtitle.error",
+                        label = "AI 字幕错误提示",
+                        sourceHint = "LibraryScreen.kt",
+                        metadata = mapOf("message" to task.error),
+                    ),
+            ) {
                 Text(
                     task.error,
                     color = tokens.accent2,
@@ -1002,7 +1063,18 @@ fun AiSubtitleGenerationSheet(
         }
         if (task.warning.isNotBlank()) {
             Spacer(Modifier.height(12.dp))
-            Surface(color = tokens.accentSoft, shape = RoundedCornerShape(16.dp), modifier = Modifier.fillMaxWidth()) {
+            Surface(
+                color = tokens.accentSoft,
+                shape = RoundedCornerShape(16.dp),
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .uiProbe(
+                        id = "ai-subtitle.warning",
+                        label = "AI 字幕警告提示",
+                        sourceHint = "LibraryScreen.kt",
+                        metadata = mapOf("message" to task.warning),
+                    ),
+            ) {
                 Text(
                     task.warning,
                     color = tokens.accent,
@@ -1014,7 +1086,18 @@ fun AiSubtitleGenerationSheet(
         }
         if (task.previewLines.isNotEmpty()) {
             Spacer(Modifier.height(14.dp))
-            Surface(color = tokens.card, shape = RoundedCornerShape(16.dp), modifier = Modifier.fillMaxWidth()) {
+            Surface(
+                color = tokens.card,
+                shape = RoundedCornerShape(16.dp),
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .uiProbe(
+                        id = "ai-subtitle.preview",
+                        label = "AI 字幕预览卡片",
+                        sourceHint = "LibraryScreen.kt",
+                        metadata = mapOf("lineCount" to task.previewLines.size.toString()),
+                    ),
+            ) {
                 Column(Modifier.padding(16.dp)) {
                     Icon(Icons.Default.Subtitles, contentDescription = null, tint = tokens.accent, modifier = Modifier.size(22.dp))
                     Spacer(Modifier.height(10.dp))
@@ -1037,22 +1120,41 @@ fun AiSubtitleGenerationSheet(
                     val label = if (task.transcribeProgress >= 1f) "重试翻译" else "重试生成"
                     PrimarySheetAction(label, onRetry)
                     Row(horizontalArrangement = Arrangement.spacedBy(46.dp), modifier = Modifier.padding(top = 16.dp)) {
-                        TextButton(onClick = onRegenerate) {
+                        TextButton(
+                            onClick = onRegenerate,
+                            modifier = Modifier.uiProbe("ai-subtitle.regenerate", "AI 字幕重新分片按钮", "LibraryScreen.kt"),
+                        ) {
                             Text("重新分片", color = tokens.label3)
                         }
-                        TextButton(onClick = onCancel) {
+                        TextButton(
+                            onClick = onCancel,
+                            modifier = Modifier.uiProbe("ai-subtitle.cancel", "取消 AI 字幕生成按钮", "LibraryScreen.kt"),
+                        ) {
                             Text("取消", color = tokens.accent2)
                         }
                     }
                 }
                 AiSubtitleStage.COMPLETED -> {
                     PrimarySheetAction("完成", onDismiss)
-                    TextButton(onClick = onRegenerate, modifier = Modifier.padding(top = 10.dp)) {
+                    TextButton(
+                        onClick = onRegenerate,
+                        modifier = Modifier
+                            .padding(top = 10.dp)
+                            .uiProbe("ai-subtitle.regenerate", "AI 字幕重新分片按钮", "LibraryScreen.kt"),
+                    ) {
                         Text("重新分片", color = tokens.label3)
                     }
                 }
                 else -> {
-                    TextButton(onClick = if (task.stage == AiSubtitleStage.PAUSED) onResume else onPause) {
+                    TextButton(
+                        onClick = if (task.stage == AiSubtitleStage.PAUSED) onResume else onPause,
+                        modifier = Modifier.uiProbe(
+                            id = "ai-subtitle.pause-resume",
+                            label = if (task.stage == AiSubtitleStage.PAUSED) "继续 AI 字幕生成按钮" else "暂停 AI 字幕生成按钮",
+                            sourceHint = "LibraryScreen.kt",
+                            metadata = mapOf("stage" to task.stage.name),
+                        ),
+                    ) {
                         Column(horizontalAlignment = Alignment.CenterHorizontally) {
                             Icon(
                                 if (task.stage == AiSubtitleStage.PAUSED) Icons.Default.PlayArrow else Icons.Default.Pause,
@@ -1063,7 +1165,10 @@ fun AiSubtitleGenerationSheet(
                             Text(if (task.stage == AiSubtitleStage.PAUSED) "继续" else "暂停", color = tokens.accent2, fontSize = 16.sp)
                         }
                     }
-                    TextButton(onClick = onCancel) {
+                    TextButton(
+                        onClick = onCancel,
+                        modifier = Modifier.uiProbe("ai-subtitle.cancel", "取消 AI 字幕生成按钮", "LibraryScreen.kt"),
+                    ) {
                         Text("取消", color = tokens.accent2)
                     }
                 }
@@ -1083,7 +1188,26 @@ private fun AiSubtitleStageCard(
     progress: Float,
 ) {
     val tokens = LocalAmberTokens.current
-    Surface(color = tokens.card, shape = RoundedCornerShape(16.dp), modifier = Modifier.fillMaxWidth()) {
+    Surface(
+        color = tokens.card,
+        shape = RoundedCornerShape(16.dp),
+        modifier = Modifier
+            .fillMaxWidth()
+            .uiProbe(
+                id = "ai-subtitle.stage-card:$index",
+                label = "AI 字幕阶段卡：$title",
+                sourceHint = "LibraryScreen.kt",
+                metadata = mapOf(
+                    "index" to index.toString(),
+                    "title" to title,
+                    "detail" to detail,
+                    "active" to active.toString(),
+                    "done" to done.toString(),
+                    "failed" to failed.toString(),
+                    "progressPercent" to (progress * 100f).toInt().toString(),
+                ),
+            ),
+    ) {
         Column(Modifier.padding(18.dp)) {
             Row(verticalAlignment = Alignment.CenterVertically) {
                 Box(
@@ -1177,6 +1301,11 @@ private fun PrimarySheetAction(text: String, onClick: () -> Unit) {
         modifier = Modifier
             .fillMaxWidth()
             .height(58.dp)
+            .uiProbe(
+                id = "sheet.primary-action:$text",
+                label = "弹层主按钮：$text",
+                sourceHint = "LibraryScreen.kt",
+            )
             .clickable(onClick = onClick),
         shape = RoundedCornerShape(18.dp),
         color = tokens.accent,

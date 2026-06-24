@@ -30,6 +30,7 @@ android {
         versionName = "1.6.1"
 
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
+        buildConfigField("boolean", "UI_PROBE_ENABLED", "false")
     }
 
     signingConfigs {
@@ -43,6 +44,9 @@ android {
         }
     }
     buildTypes {
+        getByName("debug") {
+            buildConfigField("boolean", "UI_PROBE_ENABLED", "false")
+        }
         release {
             if (releaseSigningReady) {
                 signingConfig = signingConfigs.getByName("release")
@@ -56,6 +60,14 @@ android {
                 enable = true
             }
         }
+        create("uiProbe") {
+            initWith(getByName("debug"))
+            applicationIdSuffix = ".uiprobe"
+            versionNameSuffix = "-uiprobe"
+            isDebuggable = true
+            matchingFallbacks += listOf("debug")
+            buildConfigField("boolean", "UI_PROBE_ENABLED", "true")
+        }
     }
     compileOptions {
         sourceCompatibility = JavaVersion.VERSION_17
@@ -68,6 +80,7 @@ android {
     }
     buildFeatures {
         compose = true
+        buildConfig = true
     }
 }
 

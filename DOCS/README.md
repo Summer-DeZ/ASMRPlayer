@@ -1,5 +1,5 @@
 > 当前软件版本：1.6.1（versionCode 22）
-> 文档更新日期：2026-06-24
+> 文档更新日期：2026-06-25
 
 # ASMRPlayer AI 架构速览
 
@@ -15,6 +15,10 @@
 | `TODOList.md` | 后续要做、暂不做或已完成的规划项 |
 | `tech/` | 临时或阶段性的技术方案、实现路线、调研和问题分析 |
 
+## AI 协作 Skill
+
+- `$asrmplayer-ui-probe`：位于 `/home/summer/.codex/skills/asrmplayer-ui-probe/SKILL.md`，用于 ASRMPlayer UI 点选定位、可见模拟器验证、UI Probe JSON/Logcat/截图取证，以及把 `selected.id` / `sourceHint` 映射到 Compose 源文件后再修改 UI。后续涉及 UI-Design 或前端 UI 调整时优先使用这个 Skill。
+
 ## 当前技术栈
 
 - Android 应用模块：`:app`
@@ -23,11 +27,12 @@
 - SDK：`minSdk 26`，`compileSdk 36`，`targetSdk 36`
 - UI：Jetpack Compose + Material 3，自定义暖夜琥珀主题
 - 状态层：ViewModel + `StateFlow` / `SharedFlow`
-- 数据层：Room，数据库 `asrmplayer.db`，schema version 6
+- 数据层：Room，数据库 `asrmplayer.db`，schema version 6；Repository 读状态优先暴露 `Flow`，写入和必要快照读取为 `suspend` IO 调用
 - 播放层：Media3 `MediaSessionService` + `ExoPlayer`
 - 网络：OkHttp + WebView Cookie，服务于 DLsite 登录态、同步、封面、下载和 GitHub Release 更新检查
 - AI 字幕：sherpa-onnx 1.13.3 Android AAR + Silero VAD CPU 默认本机转写 / 可选远程异步 ASR 真实进度转写服务 + OpenAI 兼容 `chat/completions` 翻译
 - 依赖注入：手写 `AppContainer` / `AppGraph`
+- 内部 UI Probe：`uiProbe` build type 独立包名 `io.github.summerdez.asmrplayer.uiprobe`，仅在 `BuildConfig.UI_PROBE_ENABLED=true` 时启用点选高亮、Logcat 和 JSON 输出，不进入 debug/release 正式包行为。
 
 ## 目录边界
 
@@ -45,20 +50,22 @@
 | `app/src/main/java/io/github/summerdez/asmrplayer/playback/` | Media3 播放服务、命令客户端、字幕解析和悬浮字幕 |
 | `app/src/main/java/io/github/summerdez/asmrplayer/di/` | `Application`、容器和 ViewModel Factory |
 | `app/src/test/java/io/github/summerdez/asmrplayer/` | 纯逻辑、数据规划和状态测试 |
+| `app/src/uiProbe/` | UI Probe 构建变体资源覆盖，例如独立应用名，避免和正式包混淆 |
+| `scripts/` | 随仓库提交的辅助脚本，如 `ui-probe.sh`（UI Probe 点选取证），详见「UI Probe 工作流」 |
 
 ## 应用数据流
 
 1. `MainActivity` 创建 Compose UI，并通过 `AppGraph.container(this).viewModelFactory` 注入 ViewModel。
 2. `AppContainer` 持有 Room、Repository、DLsite API、播放命令客户端和 ViewModel Factory。
-3. `LibraryRepository`、`DlsiteRepository`、`SettingsRepository` 负责持久化与外部数据源；DLsite 内容级下载状态存储在 `dlsite_contents`，作品级下载队列存储在 `dlsite_download_queue`。
-4. ViewModel 输出不可变 UI state；Compose 通过 lifecycle-aware collect 渲染。
-5. 播放控制经 `PlaybackCommandClient` 发送给 `PlaybackService`，播放状态由 `PlaybackServiceState` 分发。
+3. `LibraryRepository`、`DlsiteRepository`、`SettingsRepository` 负责持久化与外部数据源；Room 表状态经 `Flow` 自动推送到 ViewModel，写入与必要的单次读取在 `Dispatchers.IO` 上以 `suspend` 执行，不再通过主线程同步 DB 桥接刷新 UI。
+4. ViewModel 输出不可变 UI state，并通过 `SharedFlow` 发送导入结果、字幕绑定、曲目移动、DLsite 提示和设置提示等一次性事件；Compose 通过 lifecycle-aware collect 渲染。
+5. 播放控制经 `PlaybackCommandClient` 发送给 `PlaybackService`；Media3 `MediaController` 提供播放中、时长、位置和队列能力，`MediaSession.sessionExtras` 下发 playlist identity、字幕、悬浮窗、错误和睡眠定时 deadline 等自定义低频状态并并入 `PlaybackControllerSnapshot`。Service 端字幕状态按下一条 cue 边界定时刷新，睡眠倒计时剩余时间由客户端按 `elapsedRealtime` 本地派生，全局播放状态 bus 已删除。
 6. DLsite 登录使用 `DlsiteLoginActivity` WebView，后续网络请求复用 WebView Cookie。
-7. 设置页检查更新经 `GitHubAppUpdateRepository` 请求 GitHub Release；APK 下载交给 `AppUpdateDownloadService` 以前台 `dataSync` 服务写入 `cacheDir/updates/`，`AppUpdateDownloadStateBus` 把进度、速度和完成/失败/取消状态同步回设置页，通知渠道“应用更新”在后台持续显示下载进度；下载完成后再通过 `FileProvider` 交给系统安装器。更新缓存下载前会清理旧 APK 和 `.part`，安装成功收到 `ACTION_MY_PACKAGE_REPLACED` 后清理已安装版本及更旧 APK 和全部 `.part`，应用启动时也会做同样的保守清理。
+7. 设置页检查更新经 `GitHubAppUpdateRepository` 请求 GitHub Release；APK 下载交给 `AppUpdateDownloadService` 以前台 `dataSync` 服务写入 `cacheDir/updates/`，更新下载状态由 `AppContainer` 持有的 `AppUpdateDownloadStateStore` 注入给 Service 与设置页，负责同步进度、速度和完成/失败/取消状态；通知渠道“应用更新”在后台持续显示下载进度；下载完成后再通过 `FileProvider` 交给系统安装器。更新缓存下载前会清理旧 APK 和 `.part`，安装成功收到 `ACTION_MY_PACKAGE_REPLACED` 后清理已安装版本及更旧 APK 和全部 `.part`，应用启动时也会做同样的保守清理。
 8. DLsite 作品菜单的载入入口会先请求 DLsite Play `ziptree.json`，按文件目录树把音频归入目录/根目录音频选项；用户在下载内容 sheet 中手动勾选后，点击加入下载只把任务持久化写入 `dlsite_download_queue` 并启动 `DlsiteDownloadService`，同一 work 的 active `pending` / `running` 入队会去重，且不刷新 `DlsiteWork` / `DlsiteContent` 的 `updatedAt`。
-9. `DlsiteDownloadService` 启动时会把遗留 `running` 任务重置为 `pending`，按 FIFO 调度，最多 2 个作品并发；异常重复 `pending` 不会阻塞后续队列，`DlsiteDownloadStateBus` 暴露多任务 Map 与字节加权总进度。
+9. `DlsiteDownloadService` 启动时会把遗留 `running` 任务重置为 `pending`，按 FIFO 调度，最多 2 个作品并发；Java 下载服务通过调度线程和下载 worker 调用临时 `DlsiteDownloadBlockingAdapter` 过渡到 suspend Repository，阻塞边界不回到 UI 主线程；异常重复 `pending` 不会阻塞后续队列，`AppContainer` 持有的 `DlsiteDownloadStateStore` 注入给 Repository 与 Service，暴露多任务 Map 与字节加权总进度。
 10. DLsite 下载任务不会在每个内容包完成时立刻导入资料库；单次选择的所有内容下载成功后，才统一导入或复用播放列表，再按内容回填 `trackIds`，避免用户在整次下载完成前看到半成品资料库条目。
-11. AI 字幕请求进入 `AiSubtitleGenerationService`：读取转写后端设置，默认使用 sherpa-onnx CPU 后端在本机完成日语转写；用户选择远程后，整段音频上传到用户配置的远程 ASR 转写服务，以异步 job 形式获取真实转写进度，再进入 OpenAI 兼容翻译阶段。
+11. AI 字幕请求进入 `AiSubtitleGenerationService`：任务状态由 `AppContainer` 持有的 `AiSubtitleTaskStateStore` 注入给 Service 与 UI 共享，Service 读取转写后端设置，默认使用 sherpa-onnx CPU 后端在本机完成日语转写；用户选择远程后，整段音频上传到用户配置的远程 ASR 转写服务，以异步 job 形式获取真实转写进度，再进入 OpenAI 兼容翻译阶段。
 12. 本机转写使用 Android `MediaExtractor` / `MediaCodec` 解码音频为 16k mono PCM，交给 Silero VAD 流式切段；producer 端用 0.6s 邻近阈值与 `maxSpeechDuration` 上限合并相邻短段，合并段保留首段 `startMs` 与末段真实 `endMs`，再通过 `Channel` 送入 Whisper worker 识别；worker 数和每 worker 线程数按模型体量、可用内存、低内存状态和 CPU 核数规划，ONNX provider 固定为 `cpu`。
 13. 远程转写设置页的「测试连接」调用用户配置服务器的 `GET /health`，确认服务可达、鉴权可用和 `models_ready`；真正生成字幕时再以 `multipart/form-data` 调用 `POST /transcriptions` 创建任务，服务端返回 `job_id` 后轮询 `GET /transcriptions/{job_id}`；完成后通过 `GET /transcriptions/{job_id}/result` 取回 `segments`，取消时调用 `DELETE /transcriptions/{job_id}`。请求可附带 `Authorization: Bearer <token>`，为支持局域网 `http://host:port`，应用允许 cleartext traffic。
 14. 远程 ASR 合约以 `Qwen3-ASR-0.6B` + `Qwen3-ForcedAligner-0.6B` 为基线模型组合；状态字段、错误码、进度单调性和轮询要求见 `DOCS/tech/remote-asr-progress-contract.md`。远程阶段 UI 进度来自服务端 `progress` / `stage`，不再只用上传完成或本地估算表示转写进度。
@@ -70,6 +77,7 @@
 20. 已完成批次缓存到 `cacheDir/ai-subtitles/translations/`；重试会校验曲目、音频 URI、转写签名、翻译引擎、baseUrl、model、情景卡签名、协议版本、批策略版本和源字幕签名，匹配后跳过已完成批次。翻译完成后写出仅含中文译文的 `.vtt` 并重新绑定；生成文件名包含曲目 ID，避免外部导入的多条音频在标题清洗后同名时共用同一个 VTT 文件。
 21. 生成字幕 sheet 的“重新分片并翻译”会以 `forceRegenerate` 启动 Service，先清除该曲目的分段缓存、情景卡缓存和翻译缓存，再按当前后端重新转写与翻译；普通失败重试仍优先复用可匹配缓存。
 22. AI 字幕生成以前台 Service 保活，通知更新做限频，避免高频转写进度回调触发系统通知队列限流或前台服务超时。
+23. UI Probe 只在 `uiProbe` 构建启用：根 Compose 树由 `UiProbeHost` 包裹，带 `Modifier.uiProbe(id, label, sourceHint, metadata)` 的节点会登记屏幕内 bounds。点右上角“UI 探针”后再次点选界面，命中规则选择包含点击点的最小 bounds；同面积时选择最新登记的节点。结果写入应用私有目录 `files/ui-probe/latest-selection.json`，并用 `ASRM_UI_PROBE` 输出到 Logcat，便于根据真实点选区域定位 Compose 源文件和业务 ID。
 
 ## Release 更新规范
 
@@ -84,10 +92,62 @@
 ## 主要验证命令
 
 ```bash
-GRADLE_USER_HOME=/tmp/asrm-gradle ./gradlew :app:compileDebugKotlin :app:testDebugUnitTest :app:assembleDebug
+GRADLE_USER_HOME=/tmp/asrm-gradle ./gradlew :app:compileDebugKotlin :app:compileDebugJavaWithJavac :app:testDebugUnitTest :app:assembleDebug
+GRADLE_USER_HOME=/tmp/asrm-gradle ./gradlew :app:compileUiProbeKotlin :app:installUiProbe
 GRADLE_USER_HOME=/tmp/asrm-gradle ./gradlew :app:assembleRelease
 GRADLE_USER_HOME=/tmp/asrm-gradle ./gradlew :app:bundleRelease
 adb install -r app/build/outputs/apk/release/app-release.apk
 ```
 
 涉及 UI 或设备行为时，优先安装 debug 包并在真机/模拟器上验证播放、悬浮字幕、DLsite 多任务下载、睡眠定时、设置页检查更新、更新 APK 后台下载通知和 AI 字幕生成主流程；发布验证安装 release APK。更新下载回归重点覆盖切后台后通知仍显示进度/速度、通知取消、设置页进度同步、失败重试、下载完成安装弹窗，以及安装成功或重启后 `cacheDir/updates/` 缓存清理。DLsite 回归重点覆盖目录树选择、加入下载后作品列表排序不变、服务重启后 `running` 恢复为 `pending`、FIFO / 2 并发、active 任务去重、异常重复 `pending` 不阻塞，以及单次选择全部完成后才导入资料库。AI 字幕完整验证需要准备可读取的本地音频：本机路径需先下载 Whisper base 或 small 模型，远程路径需配置实现 `DOCS/tech/remote-asr-progress-contract.md` 的 ASR 服务。CPU 流水线切片路线重点记录实时率、峰值内存、温升、失败率、字幕准确率、进度条单调性、取消响应和 UI 流畅度；远程路线重点覆盖 `POST /transcriptions` 创建 job、`GET /transcriptions/{job_id}` 真实进度轮询、`GET /transcriptions/{job_id}/result` 结果获取、`DELETE /transcriptions/{job_id}` 取消、错误码中文提示、返回 segments 校验和缓存隔离。OpenAI 兼容翻译回归重点覆盖默认 DeepSeek `deepseek-v4-flash`、自定义模型名保存、DeepSeek thinking 控制不污染通用端点、ordered-lines 严格对齐、完整日文字幕全文只读上下文、短拟声 1:1、情景卡缓存、滑动上下文、整批失败后的逐句兜底、翻译失败后复用切片与翻译批次缓存重试，以及最终绑定字幕只保留中文译文。
+
+## UI Probe 工作流
+
+```bash
+# 仅首次需要：创建官方 x86_64 Android 36.1 UI 验证 AVD。当前本机已存在 asrm-ui-x86-api36。
+# 官方 Android Emulator 在 x86_64 Linux 主机上不能直接启动 arm64-v8a system image。
+/home/summer/Android/Sdk/cmdline-tools/latest/bin/sdkmanager --sdk_root=/home/summer/Android/Sdk "system-images;android-36.1;google_apis;x86_64"
+/home/summer/Android/Sdk/cmdline-tools/latest/bin/avdmanager create avd -n asrm-ui-x86-api36 -k "system-images;android-36.1;google_apis;x86_64" -d pixel_7
+/home/summer/Android/Sdk/emulator/emulator -avd asrm-ui-x86-api36 -gpu swiftshader_indirect -no-audio
+
+# Codex 需要把窗口留给用户继续操作时，使用独立 systemd 单元启动可见模拟器。
+# 若宿主机键盘不能输入，先确认 AVD 配置中 `hw.keyboard=yes`，然后重启该模拟器。
+systemd-run --user --unit=asrm-ui-emulator-visible --collect \
+  --setenv=DISPLAY=:0 \
+  --setenv=WAYLAND_DISPLAY=wayland-0 \
+  --setenv=XDG_RUNTIME_DIR=/run/user/1000 \
+  /home/summer/Android/Sdk/emulator/emulator \
+    -avd asrm-ui-x86-api36 \
+    -gpu swiftshader_indirect \
+    -no-audio \
+    -no-snapshot-load \
+    -netdelay none \
+    -netspeed full
+
+# 安装独立 UI Probe 包，不覆盖正式包。
+GRADLE_USER_HOME=/tmp/asrm-gradle ./gradlew :app:installUiProbe
+
+# 在应用内点右上角“UI 探针”，再点想改的 UI 区域，然后读取反馈。
+adb shell run-as io.github.summerdez.asmrplayer.uiprobe cat files/ui-probe/latest-selection.json
+adb logcat -s ASRM_UI_PROBE
+adb exec-out screencap -p > /tmp/asrm-ui-probe-selection.png
+```
+
+上面这些点选取证命令已固化进 `scripts/ui-probe.sh`（随仓库提交，非 `DOCS/` 本地文档），日常协作优先用脚本子命令：
+
+```bash
+scripts/ui-probe.sh install        # 构建并安装 uiProbe 包，然后拉起
+# 在应用内点右上角“UI 探针”，再点目标区域
+scripts/ui-probe.sh read           # 读取并美化 latest-selection.json（默认子命令）
+scripts/ui-probe.sh field selected.id        # 只取单个字段（需要 jq）
+scripts/ui-probe.sh watch          # 等待下一次点选写入后自动打印
+scripts/ui-probe.sh shot           # 截图到 /tmp/asrm-ui-probe-selection.png
+scripts/ui-probe.sh log            # 跟随 ASRM_UI_PROBE Logcat
+scripts/ui-probe.sh help           # 查看全部子命令与环境变量（ADB / ANDROID_SERIAL / GRADLE_USER_HOME）
+```
+
+UI Probe 输出中的 `selected.id` / `label` / `sourceHint` / `metadata` 是后续修改 UI 的入口依据；截图用于确认视觉区域，JSON 用于定位 Compose 源文件和业务对象。若需要验证发布行为，仍使用 release APK，不能用 `uiProbe` 变体替代。
+
+已验证的基准点选链路：在可见模拟器中打开 `ASMRPlayer UI Probe`，点 `UI 探针` 后点资料库搜索框，`latest-selection.json` 应返回 `selected.id=library.search`、`label=资料库搜索框`、`sourceHint=LibraryScreen.kt`，截图中搜索框出现橙色高亮并在底部信息面板显示同样 ID 与来源。
+
+键盘输入基准：`/home/summer/.android/avd/asrm-ui-x86-api36.avd/config.ini` 中 `hw.keyboard` 必须为 `yes`；若修改过此配置，需要重启 `asrm-ui-emulator-visible`。Android 侧可用 `adb shell settings put secure show_ime_with_hard_keyboard 1` 让启用硬件键盘时仍显示软键盘。

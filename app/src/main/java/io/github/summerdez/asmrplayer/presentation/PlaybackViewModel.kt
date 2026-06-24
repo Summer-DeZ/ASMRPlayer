@@ -1,25 +1,20 @@
 package io.github.summerdez.asmrplayer.presentation
 
-import io.github.summerdez.asmrplayer.R
-import io.github.summerdez.asmrplayer.data.*
-import io.github.summerdez.asmrplayer.data.remote.*
-import io.github.summerdez.asmrplayer.data.download.*
-import io.github.summerdez.asmrplayer.data.files.*
-import io.github.summerdez.asmrplayer.domain.*
-import io.github.summerdez.asmrplayer.domain.model.*
-import io.github.summerdez.asmrplayer.playback.*
-import io.github.summerdez.asmrplayer.presentation.*
-import io.github.summerdez.asmrplayer.ui.*
-import io.github.summerdez.asmrplayer.ui.activity.*
-import io.github.summerdez.asmrplayer.ui.components.*
-import io.github.summerdez.asmrplayer.ui.screens.*
-import io.github.summerdez.asmrplayer.ui.theme.*
-import io.github.summerdez.asmrplayer.ui.util.*
-import io.github.summerdez.asmrplayer.di.*
 import android.app.Application
 import android.net.Uri
 import androidx.lifecycle.AndroidViewModel
 import androidx.lifecycle.viewModelScope
+import io.github.summerdez.asmrplayer.data.LibraryRepository
+import io.github.summerdez.asmrplayer.domain.PlaybackNavigation
+import io.github.summerdez.asmrplayer.domain.PlaybackSelection
+import io.github.summerdez.asmrplayer.domain.PlaylistQueries
+import io.github.summerdez.asmrplayer.domain.model.Playlist
+import io.github.summerdez.asmrplayer.playback.PlaybackCommandClient
+import io.github.summerdez.asmrplayer.playback.PlaybackControllerSnapshot
+import io.github.summerdez.asmrplayer.playback.PlaybackError
+import io.github.summerdez.asmrplayer.playback.PlaybackServiceSnapshot
+import kotlinx.coroutines.flow.MutableStateFlow
+import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.launch
 
@@ -54,16 +49,14 @@ class PlaybackViewModel(
     private val playbackSelection = PlaybackSelection(DEFAULT_AUDIO_TITLE, DEFAULT_SUBTITLE_TITLE)
     private var lastPlaylists: List<Playlist> = emptyList()
     private var lastSelectedPlaylist: Playlist? = null
-    private var serviceSnapshot = PlaybackServiceSnapshot()
     private var controllerSnapshot = PlaybackControllerSnapshot()
-    private val _state = kotlinx.coroutines.flow.MutableStateFlow(PlaybackUiState())
-    val state: kotlinx.coroutines.flow.StateFlow<PlaybackUiState> = _state
+    private val _state = MutableStateFlow(PlaybackUiState())
+    val state: StateFlow<PlaybackUiState> = _state
 
     init {
         playbackCommands.connect()
         observeLibrary()
         observePlaybackController()
-        observePlaybackService()
     }
 
     fun refresh() {
@@ -82,10 +75,11 @@ class PlaybackViewModel(
 
         val audioUri = playbackSelection.audioUri()
         val playbackDurationMs = currentDurationMs()
-        if ((serviceSnapshot.connected || controllerSnapshot.connected)
+        val activeSnapshot = activeServiceSnapshot()
+        if ((activeSnapshot.connected || controllerSnapshot.connected)
             && playbackDurationMs > 0
             && audioUri != null
-            && serviceSnapshot.audioUri == audioUri.toString()
+            && activeSnapshot.audioUri == audioUri.toString()
         ) {
             playbackCommands.togglePlayback(currentIsPlaying())
             return null
@@ -186,17 +180,7 @@ class PlaybackViewModel(
             }.collect { (playlists, selectedId) ->
                 lastPlaylists = playlists
                 lastSelectedPlaylist = PlaylistQueries.findById(playlists, selectedId) ?: playlists.firstOrNull()
-                syncPlaylistStateFromSnapshot(serviceSnapshot)
-                emitState()
-            }
-        }
-    }
-
-    private fun observePlaybackService() {
-        viewModelScope.launch {
-            PlaybackServiceState.snapshots.collect { snapshot ->
-                serviceSnapshot = snapshot
-                syncPlaylistStateFromSnapshot(snapshot)
+                syncPlaylistStateFromSnapshot(activeServiceSnapshot())
                 emitState()
             }
         }
@@ -206,6 +190,7 @@ class PlaybackViewModel(
         viewModelScope.launch {
             playbackCommands.snapshots.collect { snapshot ->
                 controllerSnapshot = snapshot
+                syncPlaylistStateFromSnapshot(activeServiceSnapshot())
                 emitState()
             }
         }
@@ -243,7 +228,7 @@ class PlaybackViewModel(
     }
 
     private fun emitState() {
-        val snapshot = serviceSnapshot
+        val snapshot = activeServiceSnapshot()
         val connected = snapshot.connected || controllerSnapshot.connected
         _state.value = PlaybackUiState(
             audioTitle = playbackSelection.audioTitle(),
@@ -284,16 +269,24 @@ class PlaybackViewModel(
     }
 
     private fun currentIsPlaying(): Boolean {
-        return if (controllerSnapshot.connected) controllerSnapshot.isPlaying else serviceSnapshot.isPlaying
+        return controllerSnapshot.connected && controllerSnapshot.isPlaying
     }
 
     private fun currentDurationMs(): Int {
-        return controllerSnapshot.durationMs.takeIf { controllerSnapshot.connected && it > 0 }
-            ?: serviceSnapshot.durationMs
+        return if (controllerSnapshot.connected) controllerSnapshot.durationMs else 0
     }
 
     private fun currentPositionMs(): Int {
-        return if (controllerSnapshot.connected) controllerSnapshot.positionMs else serviceSnapshot.positionMs
+        return if (controllerSnapshot.connected) controllerSnapshot.positionMs else 0
+    }
+
+    private fun activeServiceSnapshot(): PlaybackServiceSnapshot {
+        val controllerServiceSnapshot = controllerSnapshot.serviceSnapshot
+        return if (controllerSnapshot.connected && controllerServiceSnapshot.connected) {
+            controllerServiceSnapshot
+        } else {
+            PlaybackServiceSnapshot()
+        }
     }
 
     private companion object {

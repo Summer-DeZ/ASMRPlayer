@@ -2,7 +2,7 @@ package io.github.summerdez.asmrplayer
 
 import io.github.summerdez.asmrplayer.data.ai.AiSubtitleVtt
 import io.github.summerdez.asmrplayer.data.ai.AiSubtitleSegmentCache
-import io.github.summerdez.asmrplayer.data.ai.AiSubtitleTaskStateBus
+import io.github.summerdez.asmrplayer.data.ai.AiSubtitleTaskStateStore
 import io.github.summerdez.asmrplayer.data.ai.AiSubtitleTranslationCache
 import io.github.summerdez.asmrplayer.data.ai.OpenAiCompatibleTranslator
 import io.github.summerdez.asmrplayer.data.ai.RemoteWhisperTranscriber
@@ -302,20 +302,21 @@ class AiSubtitlePipelineTest {
             audioUri = "content://audio/katakana-warning",
         )
 
-        AiSubtitleTaskStateBus.publishCompleted(
+        val store = AiSubtitleTaskStateStore()
+
+        store.publishCompleted(
             target = target,
             subtitlePath = "/tmp/katakana.vtt",
             preview = parsed,
             warning = warning,
         )
-        val task = AiSubtitleTaskStateBus.taskFor(target.trackId)
+        val task = store.taskFor(target.trackId)
 
         assertEquals("胸口ドキドキ", parsed.single().translatedText)
         assertTrue(warning.contains("片假名"))
         assertEquals(AiSubtitleStage.COMPLETED, task?.stage)
         assertEquals(warning, task?.warning)
         assertEquals("", task?.error)
-        AiSubtitleTaskStateBus.remove(target.trackId)
     }
 
     @Test
@@ -882,25 +883,26 @@ class AiSubtitlePipelineTest {
             audioUri = "content://audio/progress",
         )
 
-        AiSubtitleTaskStateBus.publish(target, AiSubtitleStage.TRANSCRIBING)
-        AiSubtitleTaskStateBus.publishTranscribing(
+        val store = AiSubtitleTaskStateStore()
+
+        store.publish(target, AiSubtitleStage.TRANSCRIBING)
+        store.publishTranscribing(
             target = target,
             progress = 0.42f,
             preview = listOf(SubtitleLine("1", 0L, 1_000L, "進んだ")),
         )
-        AiSubtitleTaskStateBus.publishTranscribing(
+        store.publishTranscribing(
             target = target,
             progress = 0.02f,
             preview = listOf(SubtitleLine("2", 1_000L, 2_000L, "プレビュー")),
         )
 
-        val task = AiSubtitleTaskStateBus.taskFor(target.trackId)
+        val task = store.taskFor(target.trackId)
         assertEquals(0.42f, task?.transcribeProgress ?: 0f, 0.0001f)
         assertNull(task?.processedMs)
         assertNull(task?.durationMs)
         assertEquals("", task?.detailText)
         assertEquals("プレビュー", task?.previewLines?.last()?.sourceText)
-        AiSubtitleTaskStateBus.remove(target.trackId)
     }
 
     @Test
@@ -917,8 +919,10 @@ class AiSubtitlePipelineTest {
             audioUri = "content://audio/remote-progress",
         )
 
-        AiSubtitleTaskStateBus.publish(target, AiSubtitleStage.TRANSCRIBING)
-        AiSubtitleTaskStateBus.publishTranscribing(
+        val store = AiSubtitleTaskStateStore()
+
+        store.publish(target, AiSubtitleStage.TRANSCRIBING)
+        store.publishTranscribing(
             target = target,
             progress = 0.38f,
             preview = emptyList(),
@@ -927,13 +931,12 @@ class AiSubtitlePipelineTest {
             detailText = "正在语音识别",
         )
 
-        val task = AiSubtitleTaskStateBus.taskFor(target.trackId)
+        val task = store.taskFor(target.trackId)
         assertEquals(115_000L, task?.processedMs)
         assertEquals(302_000L, task?.durationMs)
         assertEquals("正在语音识别", task?.detailText)
         assertEquals("正在语音识别 01:55/05:02", task?.transcriptionDetailLabel())
         assertEquals(115L, task?.let { aiSubtitleNotificationProgressSecond(it) })
-        AiSubtitleTaskStateBus.remove(target.trackId)
     }
 
     @Test

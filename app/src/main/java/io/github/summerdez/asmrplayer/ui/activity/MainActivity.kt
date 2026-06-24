@@ -15,6 +15,7 @@ import androidx.core.app.ActivityCompat
 import androidx.core.content.ContextCompat
 import androidx.core.content.FileProvider
 import io.github.summerdez.asmrplayer.di.AppGraph
+import io.github.summerdez.asmrplayer.presentation.AiSubtitleTaskViewModel
 import io.github.summerdez.asmrplayer.presentation.DlsiteViewModel
 import io.github.summerdez.asmrplayer.presentation.LibraryViewModel
 import io.github.summerdez.asmrplayer.presentation.MainViewModel
@@ -33,6 +34,7 @@ class MainActivity : ComponentActivity() {
     private val settingsViewModel: SettingsViewModel by viewModels { viewModelFactory }
     private val sleepTimerViewModel: SleepTimerViewModel by viewModels { viewModelFactory }
     private val dlsiteViewModel: DlsiteViewModel by viewModels { viewModelFactory }
+    private val aiSubtitleTaskViewModel: AiSubtitleTaskViewModel by viewModels { viewModelFactory }
     private var pendingInstallApkPath: String? = null
 
     override fun onCreate(savedInstanceState: Bundle?) {
@@ -49,6 +51,7 @@ class MainActivity : ComponentActivity() {
                 settingsViewModel = settingsViewModel,
                 sleepTimerViewModel = sleepTimerViewModel,
                 dlsiteViewModel = dlsiteViewModel,
+                aiSubtitleTaskViewModel = aiSubtitleTaskViewModel,
                 onOpenOverlaySettings = ::openOverlaySettings,
                 onToggleOverlay = ::toggleOverlay,
                 onUnlockOverlay = ::unlockOverlay,
