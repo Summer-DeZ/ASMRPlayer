@@ -73,7 +73,8 @@ class PlaybackService : MediaSessionService() {
 
     override fun onCreate() {
         super.onCreate()
-        playbackPlaylistResolver = AppGraph.container(this).playbackPlaylistResolver
+        val serviceDependencies = AppGraph.container(this).playbackServiceDependencies
+        playbackPlaylistResolver = serviceDependencies.playbackPlaylistResolver
         subtitleOverlayWindow = SubtitleOverlayWindow(this, object : SubtitleOverlayWindow.Listener {
             override fun onPrevious() {
                 playRelativeInPlaylist(-1)

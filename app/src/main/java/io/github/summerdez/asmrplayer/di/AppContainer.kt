@@ -52,6 +52,10 @@ data class DlsiteDownloadServiceDependencies(
     val dlsiteDownloadStateStore: DlsiteDownloadStateStore,
 )
 
+data class PlaybackServiceDependencies(
+    val playbackPlaylistResolver: PlaybackPlaylistResolver,
+)
+
 class AppContainer(private val application: Application) {
     val database: AsrmDatabase by lazy {
         AsrmDatabase.get(application)
@@ -119,6 +123,10 @@ class AppContainer(private val application: Application) {
 
     val dlsiteDownloadServiceDependencies: DlsiteDownloadServiceDependencies by lazy {
         DlsiteDownloadServiceDependencies(dlsiteRepository, libraryRepository, dlsiteApi, dlsiteDownloadStateStore)
+    }
+
+    val playbackServiceDependencies: PlaybackServiceDependencies by lazy {
+        PlaybackServiceDependencies(playbackPlaylistResolver)
     }
 
     val viewModelFactory: ViewModelProvider.Factory by lazy {

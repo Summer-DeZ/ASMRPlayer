@@ -21,16 +21,20 @@
 - [x] 需要做：Phase C C4 字幕调度切片：`PlaybackService` 固定 250ms 字幕轮询改为 cue 边界定时，悬浮窗和 `sessionExtras` 字幕状态仍由 Service 维护。
 - [x] 需要做：Phase C/D1 快照去重切片：`PlaybackServiceSnapshot` 不再重复承载 `isPlaying`、`durationMs`、`positionMs`，播放三字段保留在 `PlaybackControllerSnapshot`。
 - [x] 需要做：Phase D/A5 应用更新下载 bus 切片：`AppUpdateDownloadStateStore` 由 `AppContainer` 持有并注入 `SettingsViewModel` 与 `AppUpdateDownloadService`，设置页和前台下载服务共享同一个更新下载状态 store。
-- [x] 需要做：Phase D/A5 AI 字幕任务 bus 切片：`AiSubtitleTaskStateStore` 由 `AppContainer` 持有并注入 `AiSubtitleGenerationService` 与 `AiSubtitleTaskViewModel`，Service 和 UI 按 `target.trackId` 共享任务状态。
+- [x] 需要做：Phase D/A5 AI 字幕任务状态 store 命名收束：文件名、类名和文档概念统一为 `AiSubtitleTaskStateStore`，并继续由 `AppContainer` 注入 `AiSubtitleGenerationService` 与 `AiSubtitleTaskViewModel`。
 - [x] 需要做：Phase D/A5 DLsite 下载状态 bus 切片：`DlsiteDownloadStateStore` 由 `AppContainer` 持有并注入 `RoomDlsiteRepository` 与 `DlsiteDownloadService`，下载页和 Java 前台下载服务共享同一个多任务下载状态 store。
 - [x] 需要做：Phase D/A5 PlaybackService service-locator 切片：新增 `PlaybackPlaylistResolver` 封装播放服务唯一的 `LibraryRepository.getPlaylist()` 读取与异常分类，由 `AppContainer` 构造后注入 Service。
 - [x] 需要做：Phase D/A5 前台 Service dependency bundle 切片：`AppContainer` 为更新下载、AI 字幕生成和 DLsite 下载分别提供只含所需协作者的 Service dependencies，Service 不再逐个从容器挑 repository/store/API。
+- [x] 需要做：Phase D/A5 PlaybackService dependency bundle 切片：`AppContainer` 提供 `PlaybackServiceDependencies`，`PlaybackService` 通过该 bundle 获取 `PlaybackPlaylistResolver`，不再直接从容器挑 resolver。
 - [x] 需要做：Phase E/A7 第一切片：抽出 `DlsiteDownloadQueueRepository` 管理 DLsite 持久下载队列状态机，`RoomDlsiteRepository` 暂时保留队列 API 并委托给新 repository。
 - [x] 需要做：Phase E/A7 远程源切片：抽出 `DlsiteRemoteSource` 承接 DLsite 网络 adapter，`RoomDlsiteRepository` 只依赖远程源接口，并保留 `DlsiteApi` 作为 Java 下载服务/Task 兼容门面。
 - [x] 需要做：Phase E/A7 第二切片：抽出 `DlsiteLocalStore` 承接 DLsite Room/DB/Flow 本地存储职责，`RoomDlsiteRepository` 只保留协调门面并委托本地、远程、队列和下载状态依赖。
 - [x] 需要做：Phase E/D2 文件导入 use-case 第一片：`LibraryFileImportUseCase` 承接音频多选导入和文件夹导入 IO/业务编排，`LibraryViewModel` 保留原 public API 并只负责事件映射。
 - [x] 需要做：Phase E/D2 文件导入 use-case 第二片：字幕绑定 IO 编排已下沉到 `LibraryFileImportUseCase`，`LibraryViewModel` 保留原 public API 并只负责 pending target、选中列表刷新和 `SubtitleBound` 事件映射。
 - [x] 需要做：Phase E/D2 文件导入 use-case 第三片：封面选择的 SAF 读取权限和播放列表封面写入已下沉到 `LibraryFileImportUseCase`，`ASMRPlayerApp` 不再直接持久化封面 URI 权限。
+- [x] 需要做：Phase F 核心 model 小切片：`DlsiteDownloadOption` 迁移为 Kotlin，并通过 `@JvmField` 保持 Java 下载链路的直接字段访问兼容。
+- [x] 需要做：Phase F 核心 model 小切片：`TrackItem` 迁移为 Kotlin，并通过 `@JvmField`、`@JvmOverloads` 和 `@JvmStatic` 保持 Java 字段访问、构造器和 `fromJson` 静态入口兼容。
+- [x] 需要做：Phase F 核心 model 小切片：`Playlist` 迁移为普通 Kotlin `class`（非 data class），构造器参数接受可空 Java 输入并归一化（`coverUri == null` → `""`），默认 `tracks` 仍保留可变 `ArrayList` 兼容旧 Java 字段语义，通过 `@JvmField` 保持 Java 直接字段访问、`@JvmOverloads` + `(id, name, tracks)` 次构造器覆盖原三种构造方式、`@JvmStatic` + `@Throws(JSONException)` 保持 `fromJson`/`toJson` 兼容，并手写 `copy(...)` 让 Kotlin 侧 `copy(name=…)`、`copy(coverUri=…)` 继续可用。
 - [ ] 后续做：Phase C 继续评估 `PlaybackCommandClient` 播放位置 ticker 的收敛方式，并收敛重复快照数据类和手工字段搬运。
 - [ ] 后续做：Phase D 继续处理其它剩余 service-locator 去耦，逐步收敛到注入的仓库/服务边界。
 - [ ] 后续做：Phase E 继续拆分 `ASMRPlayerApp.kt` 组合根和巨型 Screen 文件。

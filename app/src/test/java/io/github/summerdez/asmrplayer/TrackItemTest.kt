@@ -24,12 +24,14 @@ import org.junit.Test
 class TrackItemTest {
     @Test
     fun constructorNormalizesNullableValues() {
-        val track = TrackItem("id", null, null, null, null)
+        val track = TrackItem(null, null, null, null, null, -1L)
 
+        assertEquals("", track.id)
         assertEquals("", track.title)
         assertEquals("", track.uri)
         assertEquals("", track.subtitleUri)
         assertEquals("", track.subtitleTitle)
+        assertEquals(0L, track.durationMs)
         assertFalse(track.hasAudioUri())
     }
 
@@ -49,4 +51,5 @@ class TrackItemTest {
                 TrackItem("id", "title", "content://audio", "content://subtitle", "subtitle.srt")
                         .subtitleTitleOr("fallback"))
     }
+
 }
