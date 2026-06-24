@@ -12,7 +12,13 @@ import java.net.UnknownHostException
 import java.util.concurrent.TimeUnit
 import kotlin.coroutines.resume
 import kotlin.coroutines.resumeWithException
+import kotlin.math.roundToLong
+import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.NonCancellable
+import kotlinx.coroutines.currentCoroutineContext
+import kotlinx.coroutines.delay
+import kotlinx.coroutines.ensureActive
 import kotlinx.coroutines.suspendCancellableCoroutine
 import kotlinx.coroutines.withContext
 import okhttp3.Call
@@ -42,14 +48,56 @@ data class RemoteWhisperHealth(
         ).joinToString(" · ")
 }
 
+data class RemoteTranscriptionJob(
+    val jobId: String,
+)
+
+data class RemoteTranscriptionStatus(
+    val status: String,
+    val stage: String,
+    val processedMs: Long?,
+    val durationMs: Long?,
+    val progress: Float?,
+    val message: String,
+    val updatedAt: String,
+    val previewLines: List<SubtitleLine> = emptyList(),
+) {
+    val normalizedStatus: String
+        get() = status.trim().lowercase()
+
+    val normalizedStage: String
+        get() = stage.trim().lowercase()
+
+    val isCompleted: Boolean
+        get() = normalizedStatus in COMPLETED_REMOTE_STATUSES ||
+            normalizedStage in COMPLETED_REMOTE_STATUSES
+
+    val isFailed: Boolean
+        get() = normalizedStatus in FAILED_REMOTE_STATUSES ||
+            normalizedStage in FAILED_REMOTE_STATUSES
+}
+
+data class RemoteTranscriptionProgress(
+    val processedMs: Long? = null,
+    val durationMs: Long? = null,
+    val detailText: String = "",
+)
+
+private val COMPLETED_REMOTE_STATUSES = setOf("succeeded", "done")
+private val FAILED_REMOTE_STATUSES = setOf("failed", "error", "canceled", "cancelled")
+
 class RemoteWhisperTranscriber(
     private val client: OkHttpClient = OkHttpClient.Builder()
         .connectTimeout(REMOTE_CONNECT_TIMEOUT_SECONDS, TimeUnit.SECONDS)
         .writeTimeout(REMOTE_WRITE_TIMEOUT_SECONDS, TimeUnit.SECONDS)
-        .readTimeout(REMOTE_READ_TIMEOUT_SECONDS, TimeUnit.SECONDS)
-        .callTimeout(REMOTE_CALL_TIMEOUT_SECONDS, TimeUnit.SECONDS)
+        .readTimeout(REMOTE_SHORT_READ_TIMEOUT_SECONDS, TimeUnit.SECONDS)
         .build(),
 ) {
+    private val pollingClient = client.newBuilder()
+        .readTimeout(REMOTE_SHORT_READ_TIMEOUT_SECONDS, TimeUnit.SECONDS)
+        .callTimeout(REMOTE_SHORT_CALL_TIMEOUT_SECONDS, TimeUnit.SECONDS)
+        .build()
+
     suspend fun checkHealth(settings: AiSubtitleSettings): RemoteWhisperHealth = withContext(Dispatchers.IO) {
         val request = Request.Builder()
             .url("${remoteBaseUrl(settings)}/health")
@@ -66,55 +114,231 @@ class RemoteWhisperTranscriber(
         context: Context,
         target: SubtitleGenerationTarget,
         settings: AiSubtitleSettings,
-        onProgress: (progress: Float, preview: List<SubtitleLine>) -> Unit,
+        onProgress: (
+            progress: Float,
+            preview: List<SubtitleLine>,
+            remoteProgress: RemoteTranscriptionProgress?,
+        ) -> Unit,
     ): List<SubtitleLine> = withContext(Dispatchers.IO) {
+        val baseUrl = remoteBaseUrl(settings)
         val uri = Uri.parse(target.audioUri)
         val fileName = audioDisplayName(context, uri).ifBlank { safeUploadFileName(target) }
         val totalBytes = audioSizeBytes(context, uri)
-        onProgress(0.02f, emptyList())
-        val uploadBody = ProgressRequestBody(
-            context = context.applicationContext,
+        var jobId: String? = null
+        try {
+            onProgress(0.02f, emptyList(), RemoteTranscriptionProgress(detailText = "准备上传"))
+            val job = createAsyncJob(
+                context = context,
+                uri = uri,
+                fileName = fileName,
+                totalBytes = totalBytes,
+                baseUrl = baseUrl,
+                settings = settings,
+                onProgress = onProgress,
+            )
+            jobId = job.jobId
+            onProgress(0.35f, emptyList(), RemoteTranscriptionProgress(detailText = "等待远程转写"))
+            val lines = pollAsyncResult(
+                baseUrl = baseUrl,
+                jobId = job.jobId,
+                settings = settings,
+                onProgress = onProgress,
+            )
+            onProgress(1f, lines.takeLast(WHISPER_PREVIEW_LINE_COUNT), RemoteTranscriptionProgress(detailText = "转写完成"))
+            lines
+        } catch (error: CancellationException) {
+            jobId?.let { activeJobId ->
+                withContext(NonCancellable) {
+                    cancelRemoteJob(baseUrl, activeJobId, settings)
+                }
+            }
+            throw error
+        }
+    }
+
+    private suspend fun createAsyncJob(
+        context: Context,
+        uri: Uri,
+        fileName: String,
+        totalBytes: Long,
+        baseUrl: String,
+        settings: AiSubtitleSettings,
+        onProgress: (
+            progress: Float,
+            preview: List<SubtitleLine>,
+            remoteProgress: RemoteTranscriptionProgress?,
+        ) -> Unit,
+    ): RemoteTranscriptionJob {
+        val multipart = buildUploadMultipart(
+            context = context,
             uri = uri,
-            mediaType = "application/octet-stream".toMediaTypeOrNull(),
-            contentLength = totalBytes,
+            fileName = fileName,
+            totalBytes = totalBytes,
+            settings = settings,
         ) { uploaded, total ->
             if (total > 0L) {
                 val uploadProgress = (uploaded.toFloat() / total.toFloat()).coerceIn(0f, 1f)
-                onProgress((0.05f + uploadProgress * 0.3f).coerceIn(0.05f, 0.35f), emptyList())
+                onProgress(
+                    (0.03f + uploadProgress * 0.32f).coerceIn(0.03f, 0.35f),
+                    emptyList(),
+                    RemoteTranscriptionProgress(detailText = "上传音频"),
+                )
             }
         }
-        val multipart = MultipartBody.Builder()
-            .setType(MultipartBody.FORM)
-            .addFormDataPart("file", fileName, uploadBody)
-            .addFormDataPart("language", "ja")
-            .addFormDataPart("task", "transcribe")
-            .addFormDataPart("vad", "auto")
-            .apply {
-                val model = settings.activeRemoteWhisperModel
-                if (model.isNotBlank()) {
-                    addFormDataPart("model", model)
-                }
-            }
-            .build()
         val request = Request.Builder()
-            .url("${remoteBaseUrl(settings)}/transcribe")
+            .url("$baseUrl/transcriptions")
             .header("Accept", "application/json")
             .header("User-Agent", USER_AGENT)
             .applyAuthorization(settings)
             .post(multipart)
             .build()
-        executeJsonRequest(request) { body ->
-            parseTranscribeResponse(body).also { lines ->
-                if (lines.isEmpty()) {
-                    throw IOException("远程 Whisper 未识别到可用语音片段")
-                }
-                onProgress(1f, lines.takeLast(WHISPER_PREVIEW_LINE_COUNT))
+        val response = try {
+            executeCancellable(client.newCall(request))
+        } catch (error: IOException) {
+            throw IOException(remoteNetworkError(error), error)
+        }
+        response.use { activeResponse ->
+            val body = activeResponse.body?.string().orEmpty()
+            if (!activeResponse.isSuccessful) {
+                throw IOException("远程转写服务创建任务失败：HTTP ${activeResponse.code}${remoteErrorHint(body)}")
             }
+            if (body.isBlank()) {
+                throw IOException("远程转写服务创建任务响应为空")
+            }
+            return parseCreateJobResponse(body)
         }
     }
 
-    private suspend fun <T> executeJsonRequest(request: Request, parser: (String) -> T): T {
-        val call = client.newCall(request)
+    private suspend fun pollAsyncResult(
+        baseUrl: String,
+        jobId: String,
+        settings: AiSubtitleSettings,
+        onProgress: (
+            progress: Float,
+            preview: List<SubtitleLine>,
+            remoteProgress: RemoteTranscriptionProgress?,
+        ) -> Unit,
+    ): List<SubtitleLine> {
+        var lastSnapshot: RemoteProgressSnapshot? = null
+        var lastMovementAt = System.nanoTime()
+        while (true) {
+            currentCoroutineContext().ensureActive()
+            val status = try {
+                fetchStatus(baseUrl, jobId, settings)
+            } catch (error: IOException) {
+                if (elapsedMillisSince(lastMovementAt) >= REMOTE_STALL_TIMEOUT_MS) {
+                    throw IOException(
+                        "远程转写进度连续 10 分钟没有更新，请检查服务器任务状态",
+                        error,
+                    )
+                }
+                delay(REMOTE_POLL_INTERVAL_MS)
+                continue
+            }
+            val snapshot = RemoteProgressSnapshot.from(status)
+            if (lastSnapshot == null || snapshot != lastSnapshot) {
+                lastSnapshot = snapshot
+                lastMovementAt = System.nanoTime()
+            } else if (elapsedMillisSince(lastMovementAt) >= REMOTE_STALL_TIMEOUT_MS) {
+                throw IOException("远程转写进度连续 10 分钟没有更新，请检查服务器任务状态")
+            }
+            val progress = remoteStatusProgress(status)
+            onProgress(
+                progress,
+                status.previewLines.takeLast(WHISPER_PREVIEW_LINE_COUNT),
+                RemoteTranscriptionProgress(
+                    processedMs = status.processedMs,
+                    durationMs = status.durationMs,
+                    detailText = remoteStatusDetail(status),
+                ),
+            )
+            if (status.isFailed) {
+                throw IOException(status.message.ifBlank { "远程转写任务失败：${status.status}" })
+            }
+            if (status.isCompleted) {
+                val lines = fetchResult(baseUrl, jobId, settings)
+                if (lines.isEmpty()) {
+                    throw IOException("远程转写服务未识别到可用语音片段")
+                }
+                return lines
+            }
+            delay(REMOTE_POLL_INTERVAL_MS)
+        }
+    }
+
+    private suspend fun fetchStatus(
+        baseUrl: String,
+        jobId: String,
+        settings: AiSubtitleSettings,
+    ): RemoteTranscriptionStatus {
+        val request = Request.Builder()
+            .url("$baseUrl/transcriptions/${Uri.encode(jobId)}")
+            .header("Accept", "application/json")
+            .header("User-Agent", USER_AGENT)
+            .applyAuthorization(settings)
+            .build()
+        return executeJsonRequest(request, pollingClient) { body ->
+            parseTranscriptionStatusResponse(body)
+        }
+    }
+
+    private suspend fun fetchResult(
+        baseUrl: String,
+        jobId: String,
+        settings: AiSubtitleSettings,
+    ): List<SubtitleLine> {
+        val request = Request.Builder()
+            .url("$baseUrl/transcriptions/${Uri.encode(jobId)}/result")
+            .header("Accept", "application/json")
+            .header("User-Agent", USER_AGENT)
+            .applyAuthorization(settings)
+            .build()
+        return executeJsonRequest(request, pollingClient) { body ->
+            parseTranscriptionResultResponse(body)
+        }
+    }
+
+    private fun buildUploadMultipart(
+        context: Context,
+        uri: Uri,
+        fileName: String,
+        totalBytes: Long,
+        settings: AiSubtitleSettings,
+        onUploadProgress: (uploaded: Long, total: Long) -> Unit,
+    ): MultipartBody {
+        val uploadBody = ProgressRequestBody(
+            context = context.applicationContext,
+            uri = uri,
+            mediaType = "application/octet-stream".toMediaTypeOrNull(),
+            contentLength = totalBytes,
+            onProgress = onUploadProgress,
+        )
+        return remoteTranscriptionUploadMultipart(
+            fileName = fileName,
+            uploadBody = uploadBody,
+            model = settings.activeRemoteWhisperModel,
+        )
+    }
+
+    private suspend fun cancelRemoteJob(baseUrl: String, jobId: String, settings: AiSubtitleSettings) {
+        val request = Request.Builder()
+            .url("$baseUrl/transcriptions/${Uri.encode(jobId)}")
+            .header("Accept", "application/json")
+            .header("User-Agent", USER_AGENT)
+            .applyAuthorization(settings)
+            .delete()
+            .build()
+        runCatching {
+            executeCancellable(pollingClient.newCall(request)).close()
+        }
+    }
+
+    private suspend fun <T> executeJsonRequest(
+        request: Request,
+        requestClient: OkHttpClient = client,
+        parser: (String) -> T,
+    ): T {
+        val call = requestClient.newCall(request)
         val response = try {
             executeCancellable(call)
         } catch (error: IOException) {
@@ -123,10 +347,10 @@ class RemoteWhisperTranscriber(
         response.use { activeResponse ->
             val body = activeResponse.body?.string().orEmpty()
             if (!activeResponse.isSuccessful) {
-                throw IOException("远程 Whisper 失败：HTTP ${activeResponse.code}${remoteErrorHint(body)}")
+                throw IOException("远程转写服务失败：HTTP ${activeResponse.code}${remoteErrorHint(body)}")
             }
             if (body.isBlank()) {
-                throw IOException("远程 Whisper 响应为空")
+                throw IOException("远程转写服务响应为空")
             }
             return parser(body)
         }
@@ -143,10 +367,10 @@ class RemoteWhisperTranscriber(
     private fun remoteBaseUrl(settings: AiSubtitleSettings): String {
         val baseUrl = settings.normalizedRemoteWhisperBaseUrl
         if (baseUrl.isBlank()) {
-            throw IOException("请先填写远程 Whisper 服务地址")
+            throw IOException("请先填写远程转写服务地址")
         }
         if (!baseUrl.startsWith("http://") && !baseUrl.startsWith("https://")) {
-            throw IOException("远程 Whisper 服务地址需要以 http:// 或 https:// 开头")
+            throw IOException("远程转写服务地址需要以 http:// 或 https:// 开头")
         }
         return baseUrl
     }
@@ -177,8 +401,10 @@ class RemoteWhisperTranscriber(
     companion object {
         private const val REMOTE_CONNECT_TIMEOUT_SECONDS = 30L
         private const val REMOTE_WRITE_TIMEOUT_SECONDS = 600L
-        private const val REMOTE_READ_TIMEOUT_SECONDS = 3600L
-        private const val REMOTE_CALL_TIMEOUT_SECONDS = 5400L
+        private const val REMOTE_SHORT_READ_TIMEOUT_SECONDS = 45L
+        private const val REMOTE_SHORT_CALL_TIMEOUT_SECONDS = 60L
+        private const val REMOTE_POLL_INTERVAL_MS = 2_000L
+        private const val REMOTE_STALL_TIMEOUT_MS = 10 * 60 * 1_000L
         private const val USER_AGENT = "ASMRPlayer-Android"
 
         fun parseHealthResponse(body: String): RemoteWhisperHealth {
@@ -192,27 +418,118 @@ class RemoteWhisperTranscriber(
             )
         }
 
-        fun parseTranscribeResponse(body: String): List<SubtitleLine> {
+        fun parseCreateJobResponse(body: String): RemoteTranscriptionJob {
+            val jobId = jsonStringField(body, "job_id")
+                ?: jsonStringField(body, "jobId")
+                ?: jsonStringField(body, "task_id")
+                ?: jsonStringField(body, "id")
+                ?: throw IOException("远程转写服务响应缺少 job_id")
+            if (jobId.isBlank()) {
+                throw IOException("远程转写服务返回空 job_id")
+            }
+            return RemoteTranscriptionJob(jobId.trim())
+        }
+
+        fun parseTranscriptionStatusResponse(body: String): RemoteTranscriptionStatus {
+            val progress = jsonFloatField(body, "progress")?.let { value ->
+                if (value > 1f) value / 100f else value
+            }?.coerceIn(0f, 1f)
+            return RemoteTranscriptionStatus(
+                status = jsonStringField(body, "status").orEmpty(),
+                stage = jsonStringField(body, "stage").orEmpty(),
+                processedMs = jsonLongField(body, "processed_ms"),
+                durationMs = jsonLongField(body, "duration_ms"),
+                progress = progress,
+                message = parseErrorMessage(body)
+                    .ifBlank { jsonStringField(body, "message").orEmpty() },
+                updatedAt = jsonStringField(body, "updated_at").orEmpty(),
+                previewLines = parsePreviewSegments(body),
+            )
+        }
+
+        fun parseTranscriptionResultResponse(body: String): List<SubtitleLine> {
+            return parseSegmentsResponse(body, allowWrappedResult = true)
+        }
+
+        private fun parseSegmentsResponse(body: String, allowWrappedResult: Boolean): List<SubtitleLine> {
             val segmentsContent = jsonArrayContent(body, "segments")
-                ?: throw IOException("远程 Whisper 响应缺少 segments")
+                ?: if (allowWrappedResult) {
+                    jsonObjectContent(body, "result")?.let { jsonArrayContent(it, "segments") }
+                } else {
+                    null
+                }
+                ?: throw IOException("远程转写服务响应缺少 segments")
+            return parseSegmentsContent(segmentsContent)
+        }
+
+        fun parseErrorMessage(body: String): String {
+            val nestedError = jsonRawField(body, "error")
+            val nestedCode = nestedError
+                ?.takeIf { it.startsWith('{') }
+                ?.let { jsonStringField(it, "code") ?: jsonStringField(it, "error_code") }
+            val topLevelCode = jsonStringField(body, "code") ?: jsonStringField(body, "error_code")
+            return cleanJsonMessage(jsonRawField(body, "error")?.let { raw ->
+                when {
+                    raw.startsWith('{') ->
+                        jsonStringField(raw, "message")
+                            ?: jsonStringField(raw, "detail")
+                            ?: jsonStringField(raw, "error")
+                            ?: ""
+                    raw.startsWith('"') -> decodeJsonString(raw)
+                    else -> raw
+                }
+            })
+                .ifBlank { cleanJsonMessage(jsonStringField(body, "error_message")) }
+                .ifBlank { cleanJsonMessage(jsonStringField(body, "message")) }
+                .ifBlank { cleanJsonMessage(jsonStringField(body, "detail")) }
+                .ifBlank { remoteErrorCodeMessage(nestedCode ?: topLevelCode) }
+        }
+
+        private fun remoteErrorCodeMessage(code: String?): String {
+            return when (code.orEmpty().trim().uppercase()) {
+                "INVALID_REQUEST" -> "远程转写请求参数无效，请检查音频文件和服务端配置"
+                "UNAUTHORIZED" -> "远程转写服务鉴权失败，请检查 Bearer Token"
+                "QUEUE_FULL" -> "远程转写服务队列已满，请稍后重试"
+                "MODEL_NOT_READY" -> "远程转写模型尚未就绪，请稍后重试"
+                "ASR_FAILED" -> "远程语音识别失败，请检查音频或服务端日志"
+                "ALIGNMENT_FAILED" -> "远程字幕对齐失败，请检查服务端对齐模型"
+                "JOB_NOT_FOUND" -> "远程转写任务不存在或已过期，请重新生成"
+                "JOB_NOT_READY" -> "远程转写结果尚未准备好，请稍后重试"
+                "RESULT_EXPIRED" -> "远程转写结果已过期，请重新生成"
+                else -> ""
+            }
+        }
+
+        private fun parsePreviewSegments(body: String): List<SubtitleLine> {
+            val segmentsContent = jsonArrayContent(body, "preview_segments")
+                ?: jsonArrayContent(body, "segments")
+                ?: return emptyList()
+            return runCatching { parseSegmentsContent(segmentsContent) }.getOrDefault(emptyList())
+        }
+
+        private fun parseSegmentsContent(segmentsContent: String): List<SubtitleLine> {
             val segments = splitJsonObjects(segmentsContent)
             val lines = mutableListOf<SubtitleLine>()
             var lastStart = Long.MIN_VALUE
             segments.forEachIndexed { index, segment ->
-                val startMs = jsonLongField(segment, "start_ms")
-                val endMs = jsonLongField(segment, "end_ms")
+                val startMs = jsonTimeMillisField(segment, "start_ms", "start")
+                val endMs = jsonTimeMillisField(segment, "end_ms", "end")
                 val text = jsonStringField(segment, "text").orEmpty().trim()
                 if (startMs == null || endMs == null || endMs <= startMs) {
-                    throw IOException("远程 Whisper 第 ${index + 1} 段时间轴无效")
+                    throw IOException("远程转写服务第 ${index + 1} 段时间轴无效")
                 }
                 if (startMs < lastStart) {
-                    throw IOException("远程 Whisper segments 未按时间升序返回")
+                    throw IOException("远程转写服务 segments 未按时间升序返回")
                 }
                 if (text.isBlank()) {
-                    throw IOException("远程 Whisper 第 ${index + 1} 段文本为空")
+                    throw IOException("远程转写服务第 ${index + 1} 段文本为空")
                 }
                 lastStart = startMs
-                val rawId = jsonScalarField(segment, "id").orEmpty().trim()
+                val rawId = jsonScalarField(segment, "id")
+                    .orEmpty()
+                    .trim()
+                    .takeUnless { it.equals("null", ignoreCase = true) }
+                    .orEmpty()
                 lines += SubtitleLine(
                     id = rawId.ifBlank { (index + 1).toString() },
                     startMs = startMs,
@@ -223,15 +540,18 @@ class RemoteWhisperTranscriber(
             return lines
         }
 
-        fun parseErrorMessage(body: String): String {
-            return jsonStringField(body, "error").orEmpty()
-        }
-
         private fun jsonArrayContent(json: String, field: String): String? {
             val valueStart = jsonFieldValueRange(json, field)?.first ?: return null
             val arrayStart = skipWhitespace(json, valueStart).takeIf { it < json.length && json[it] == '[' } ?: return null
             val arrayEnd = matchingJsonBoundary(json, arrayStart, '[', ']') ?: return null
             return json.substring(arrayStart + 1, arrayEnd)
+        }
+
+        private fun jsonObjectContent(json: String, field: String): String? {
+            val valueStart = jsonFieldValueRange(json, field)?.first ?: return null
+            val objectStart = skipWhitespace(json, valueStart).takeIf { it < json.length && json[it] == '{' } ?: return null
+            val objectEnd = matchingJsonBoundary(json, objectStart, '{', '}') ?: return null
+            return json.substring(objectStart + 1, objectEnd)
         }
 
         private fun splitJsonObjects(arrayContent: String): List<String> {
@@ -243,10 +563,10 @@ class RemoteWhisperTranscriber(
                     break
                 }
                 if (arrayContent[index] != '{') {
-                    throw IOException("远程 Whisper segments 包含非 object 项")
+                    throw IOException("远程转写服务 segments 包含非 object 项")
                 }
                 val end = matchingJsonBoundary(arrayContent, index, '{', '}')
-                    ?: throw IOException("远程 Whisper segments JSON 不完整")
+                    ?: throw IOException("远程转写服务 segments JSON 不完整")
                 objects += arrayContent.substring(index, end + 1)
                 index = end + 1
             }
@@ -260,6 +580,31 @@ class RemoteWhisperTranscriber(
 
         private fun jsonLongField(json: String, field: String): Long? {
             return jsonScalarField(json, field)?.toLongOrNull()
+        }
+
+        private fun jsonFloatField(json: String, field: String): Float? {
+            return jsonDoubleField(json, field)?.toFloat()
+        }
+
+        private fun jsonDoubleField(json: String, field: String): Double? {
+            return jsonScalarField(json, field)
+                ?.trim()
+                ?.removeSuffix("%")
+                ?.toDoubleOrNull()
+        }
+
+        private fun jsonTimeMillisField(json: String, millisField: String, secondsField: String): Long? {
+            return jsonLongField(json, millisField)
+                ?: jsonDoubleField(json, millisField)?.roundToLong()
+                ?: jsonDoubleField(json, secondsField)?.let { (it * 1_000.0).roundToLong() }
+        }
+
+        private fun cleanJsonMessage(value: String?): String {
+            return value
+                .orEmpty()
+                .trim()
+                .takeUnless { it.equals("null", ignoreCase = true) }
+                .orEmpty()
         }
 
         private fun jsonBooleanField(json: String, field: String): Boolean? {
@@ -424,6 +769,84 @@ class RemoteWhisperTranscriber(
     }
 }
 
+private data class RemoteProgressSnapshot(
+    val status: String,
+    val stage: String,
+    val progress: Float?,
+    val processedMs: Long?,
+    val updatedAt: String,
+) {
+    companion object {
+        fun from(status: RemoteTranscriptionStatus): RemoteProgressSnapshot {
+            return RemoteProgressSnapshot(
+                status = status.normalizedStatus,
+                stage = status.normalizedStage,
+                progress = status.progress,
+                processedMs = status.processedMs,
+                updatedAt = status.updatedAt,
+            )
+        }
+    }
+}
+
+private fun remoteStatusProgress(status: RemoteTranscriptionStatus): Float {
+    val processed = status.processedMs
+    val duration = status.durationMs
+    val remoteProgress = if (processed != null && duration != null && duration > 0L) {
+        (processed.toFloat() / duration.toFloat()).coerceIn(0f, 1f)
+    } else {
+        status.progress
+    }
+    return remoteProgress
+        ?.let { (0.35f + it * 0.6f).coerceIn(0.35f, 0.95f) }
+        ?: 0.35f
+}
+
+private fun remoteStatusDetail(status: RemoteTranscriptionStatus): String {
+    if (status.message.isNotBlank()) {
+        return status.message
+    }
+    if (status.isCompleted) {
+        return "转写完成"
+    }
+    if (status.isFailed) {
+        return "转写失败"
+    }
+    return when (status.normalizedStage) {
+        "queued" -> "等待远程转写"
+        "asr" -> "正在语音识别"
+        "aligning" -> "正在对齐字幕"
+        "finalizing" -> "正在写出结果"
+        else -> when (status.normalizedStatus) {
+            "queued" -> "等待远程转写"
+            else -> "正在语音识别"
+        }
+    }
+}
+
+private fun elapsedMillisSince(startNanoTime: Long): Long {
+    return TimeUnit.NANOSECONDS.toMillis(System.nanoTime() - startNanoTime)
+}
+
+internal fun remoteTranscriptionUploadMultipart(
+    fileName: String,
+    uploadBody: RequestBody,
+    model: String,
+): MultipartBody {
+    return MultipartBody.Builder()
+        .setType(MultipartBody.FORM)
+        .addFormDataPart("file", fileName, uploadBody)
+        .addFormDataPart("language", "ja")
+        .addFormDataPart("task", "transcribe")
+        .apply {
+            val normalizedModel = model.trim()
+            if (normalizedModel.isNotBlank()) {
+                addFormDataPart("model", normalizedModel)
+            }
+        }
+        .build()
+}
+
 private class ProgressRequestBody(
     private val context: Context,
     private val uri: Uri,
@@ -457,11 +880,11 @@ private class ProgressRequestBody(
 private fun remoteNetworkError(error: IOException): String {
     return when (error) {
         is SocketTimeoutException ->
-            "远程 Whisper 请求超时，请检查服务器是否仍在转写、网络是否稳定"
+            "远程转写服务请求超时，请检查服务器是否仍在转写、网络是否稳定"
         is UnknownHostException ->
-            "远程 Whisper 地址无法解析，请检查服务器地址和网络"
+            "远程转写服务地址无法解析，请检查服务器地址和网络"
         else ->
-            "远程 Whisper 请求失败：${error.message ?: "网络异常"}"
+            "远程转写服务请求失败：${error.message ?: "网络异常"}"
     }
 }
 

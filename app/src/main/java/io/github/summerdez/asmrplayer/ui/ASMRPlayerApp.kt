@@ -69,7 +69,8 @@ private enum class AiSettingField {
     DEEPSEEK_BASE_URL,
     DEEPSEEK_MODEL,
     DEEPSEEK_API_KEY,
-    REMOTE_WHISPER_BASE_URL,
+    REMOTE_TRANSCRIPTION_ADDRESS,
+    REMOTE_TRANSCRIPTION_PORT,
     REMOTE_WHISPER_MODEL,
     REMOTE_WHISPER_TOKEN,
 }
@@ -188,6 +189,50 @@ fun ASMRPlayerApp(
         var downloadManagerOpen by remember { mutableStateOf(false) }
         var aiSettingField by remember { mutableStateOf<AiSettingField?>(null) }
         var activeAiSubtitleTrackId by remember { mutableStateOf<String?>(null) }
+        val currentPlaybackTrackId = playbackViewModel.currentTrackId()
+        val currentPlaybackPlaylist = PlaylistQueries.findById(libraryState.playlists, playbackState.playlistId)
+            ?: libraryState.playlists.firstOrNull { playlist ->
+                playlist.tracks.any { track -> track.id == currentPlaybackTrackId }
+            }
+            ?: libraryState.selectedPlaylist
+        val currentPlaybackTrack = PlaylistQueries.trackAt(currentPlaybackPlaylist, playbackState.playlistIndex)
+            ?.takeIf { track -> currentPlaybackTrackId.isBlank() || track.id == currentPlaybackTrackId }
+            ?: currentPlaybackPlaylist?.tracks?.firstOrNull { track -> track.id == currentPlaybackTrackId }
+        val currentAiSubtitleTask = currentPlaybackTrack?.let { track -> aiSubtitleTasks[track.id] }
+        val currentTrackIsLocal = currentPlaybackTrack?.uri?.startsWith("file:") == true
+        val startAiSubtitleForCurrentTrack: () -> Unit = {
+            val playlist = currentPlaybackPlaylist
+            val track = currentPlaybackTrack
+            if (playlist == null || track == null || track.uri.isBlank()) {
+                toast("请先选择音频")
+            } else {
+                val existingTask = aiSubtitleTasks[track.id]
+                if (existingTask != null) {
+                    activeAiSubtitleTrackId = track.id
+                } else {
+                    val target = SubtitleGenerationTarget(
+                        playlistId = playlist.id,
+                        trackId = track.id,
+                        trackTitle = track.title,
+                        audioUri = track.uri,
+                        contextTitle = playlist.name,
+                    )
+                    ContextCompat.startForegroundService(
+                        context,
+                        AiSubtitleGenerationService.startIntent(context, target),
+                    )
+                    activeAiSubtitleTrackId = track.id
+                }
+            }
+        }
+        val openAiSubtitleProgressForCurrentTrack: () -> Unit = {
+            val trackId = currentPlaybackTrack?.id
+            if (trackId != null && aiSubtitleTasks.containsKey(trackId)) {
+                activeAiSubtitleTrackId = trackId
+            } else {
+                toast("当前没有 AI 字幕生成任务")
+            }
+        }
 
         BackHandler(enabled = playerOpen || queueOpen) {
             if (queueOpen) {
@@ -295,7 +340,12 @@ fun ASMRPlayerApp(
                                 onEditAiDeepSeekApiKey = { aiSettingField = AiSettingField.DEEPSEEK_API_KEY },
                                 onAiAdultContentTranslationAllowedChange = settingsViewModel::setAiAdultContentTranslationAllowed,
                                 onAiWhisperModelSelected = settingsViewModel::setAiWhisperModelId,
-                                onEditRemoteWhisperBaseUrl = { aiSettingField = AiSettingField.REMOTE_WHISPER_BASE_URL },
+                                onEditRemoteTranscriptionAddress = {
+                                    aiSettingField = AiSettingField.REMOTE_TRANSCRIPTION_ADDRESS
+                                },
+                                onEditRemoteTranscriptionPort = {
+                                    aiSettingField = AiSettingField.REMOTE_TRANSCRIPTION_PORT
+                                },
                                 onEditRemoteWhisperModel = { aiSettingField = AiSettingField.REMOTE_WHISPER_MODEL },
                                 onEditRemoteWhisperToken = { aiSettingField = AiSettingField.REMOTE_WHISPER_TOKEN },
                                 onTestRemoteWhisperConnection = settingsViewModel::testRemoteWhisperConnection,
@@ -350,13 +400,26 @@ fun ASMRPlayerApp(
             if (playerOpen) {
                 SubtitlePlayerScreen(
                     playbackState = playbackState,
+                    aiSubtitleTask = currentAiSubtitleTask,
+                    currentTrackIsLocal = currentTrackIsLocal,
                     onClose = { playerOpen = false },
                     onPrevious = { playbackViewModel.playRelativeTrack(-1)?.let(toast) },
                     onPlay = { playbackViewModel.onPlayClicked()?.let(toast) },
                     onNext = { playbackViewModel.playRelativeTrack(1)?.let(toast) },
                     onSeek = playbackViewModel::seekTo,
-                    onOverlay = onToggleOverlay,
                     onQueue = { queueOpen = true },
+                    onGenerateAiSubtitle = startAiSubtitleForCurrentTrack,
+                    onOpenAiSubtitleProgress = openAiSubtitleProgressForCurrentTrack,
+                    onSleepTimer = { customSleepDialog = true },
+                    onMixLayers = { toast("混音层叠暂未实现") },
+                    onDownloadTrack = {
+                        if (currentTrackIsLocal) {
+                            toast("当前已在本地")
+                        } else {
+                            toast("下载到本地暂未实现")
+                        }
+                    },
+                    onRemoveFromQueue = { toast("从队列中移除暂未实现") },
                 )
             }
 
@@ -373,6 +436,7 @@ fun ASMRPlayerApp(
                     QueueContent(
                         playlist = queuePlaylist,
                         playbackState = playbackState,
+                        onDismissRequest = { queueOpen = false },
                         onTrackClicked = { playlist, index ->
                             libraryViewModel.selectPlaylist(playlist)
                             playbackViewModel.playPlaylistTrack(playlist, index)
@@ -569,9 +633,10 @@ fun ASMRPlayerApp(
                         AiSettingField.DEEPSEEK_BASE_URL -> "OpenAI 兼容接口地址"
                         AiSettingField.DEEPSEEK_MODEL -> "OpenAI 兼容模型"
                         AiSettingField.DEEPSEEK_API_KEY -> "OpenAI 兼容 API Key"
-                        AiSettingField.REMOTE_WHISPER_BASE_URL -> "远程 Whisper 地址"
-                        AiSettingField.REMOTE_WHISPER_MODEL -> "远程 Whisper 模型"
-                        AiSettingField.REMOTE_WHISPER_TOKEN -> "远程 Whisper Token"
+                        AiSettingField.REMOTE_TRANSCRIPTION_ADDRESS -> "远程转写地址"
+                        AiSettingField.REMOTE_TRANSCRIPTION_PORT -> "远程转写端口"
+                        AiSettingField.REMOTE_WHISPER_MODEL -> "转写模型"
+                        AiSettingField.REMOTE_WHISPER_TOKEN -> "远程转写 Token"
                     },
                     initialValue = when (field) {
                         AiSettingField.OLLAMA_BASE_URL -> aiSettings.ollamaBaseUrl
@@ -579,11 +644,23 @@ fun ASMRPlayerApp(
                         AiSettingField.DEEPSEEK_BASE_URL -> aiSettings.deepSeekBaseUrl
                         AiSettingField.DEEPSEEK_MODEL -> aiSettings.deepSeekModel
                         AiSettingField.DEEPSEEK_API_KEY -> aiSettings.deepSeekApiKey
-                        AiSettingField.REMOTE_WHISPER_BASE_URL -> aiSettings.remoteWhisperBaseUrl
+                        AiSettingField.REMOTE_TRANSCRIPTION_ADDRESS -> aiSettings.remoteTranscriptionAddress
+                        AiSettingField.REMOTE_TRANSCRIPTION_PORT -> aiSettings.remoteTranscriptionPort
                         AiSettingField.REMOTE_WHISPER_MODEL -> aiSettings.activeRemoteWhisperModel
                         AiSettingField.REMOTE_WHISPER_TOKEN -> aiSettings.remoteWhisperToken
                     },
                     confirmText = "保存",
+                    numeric = field == AiSettingField.REMOTE_TRANSCRIPTION_PORT,
+                    required = when (field) {
+                        AiSettingField.REMOTE_TRANSCRIPTION_ADDRESS,
+                        AiSettingField.REMOTE_TRANSCRIPTION_PORT,
+                        AiSettingField.REMOTE_WHISPER_MODEL,
+                        AiSettingField.REMOTE_WHISPER_TOKEN,
+                        AiSettingField.DEEPSEEK_API_KEY,
+                        -> false
+                        else -> true
+                    },
+                    message = "",
                     onDismiss = { aiSettingField = null },
                     onConfirm = { value ->
                         when (field) {
@@ -592,7 +669,10 @@ fun ASMRPlayerApp(
                             AiSettingField.DEEPSEEK_BASE_URL -> settingsViewModel.setAiDeepSeekBaseUrl(value)
                             AiSettingField.DEEPSEEK_MODEL -> settingsViewModel.setAiDeepSeekModel(value)
                             AiSettingField.DEEPSEEK_API_KEY -> settingsViewModel.setAiDeepSeekApiKey(value)
-                            AiSettingField.REMOTE_WHISPER_BASE_URL -> settingsViewModel.setAiRemoteWhisperBaseUrl(value)
+                            AiSettingField.REMOTE_TRANSCRIPTION_ADDRESS ->
+                                settingsViewModel.setAiRemoteTranscriptionAddress(value)
+                            AiSettingField.REMOTE_TRANSCRIPTION_PORT ->
+                                settingsViewModel.setAiRemoteTranscriptionPort(value)
                             AiSettingField.REMOTE_WHISPER_MODEL -> settingsViewModel.setAiRemoteWhisperModel(value)
                             AiSettingField.REMOTE_WHISPER_TOKEN -> settingsViewModel.setAiRemoteWhisperToken(value)
                         }

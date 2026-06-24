@@ -25,6 +25,7 @@ import androidx.activity.compose.BackHandler
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.BorderStroke
+import androidx.compose.foundation.border
 import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
@@ -161,36 +162,62 @@ fun PageHeader(
     onImportFolder: () -> Unit,
 ) {
     val tokens = LocalAmberTokens.current
+    val displayTitle = if (title == "睡眠模式") "睡眠定时" else title
+    val eyebrow = when (title) {
+        "资料库" -> "本地播放"
+        "睡眠模式" -> "温柔入眠"
+        "DLsite" -> "连接账户"
+        else -> ""
+    }
     Row(
         modifier = Modifier
             .fillMaxWidth()
             .statusBarsPadding()
-            .padding(start = 16.dp, top = 14.dp, end = 12.dp, bottom = 8.dp),
-        verticalAlignment = Alignment.CenterVertically,
+            .padding(start = 22.dp, top = 14.dp, end = 16.dp, bottom = 14.dp),
+        verticalAlignment = Alignment.Bottom,
     ) {
-        Text(
-            text = title,
-            color = tokens.label,
-            fontSize = 34.sp,
-            fontWeight = FontWeight.ExtraBold,
-            maxLines = 1,
-            overflow = TextOverflow.Ellipsis,
-            modifier = Modifier.weight(1f),
-        )
+        Column(Modifier.weight(1f)) {
+            if (eyebrow.isNotEmpty()) {
+                Text(
+                    text = eyebrow,
+                    color = tokens.labelFaint,
+                    fontSize = 12.sp,
+                    fontWeight = FontWeight.Medium,
+                    letterSpacing = 2.16.sp,
+                    maxLines = 1,
+                    overflow = TextOverflow.Ellipsis,
+                    modifier = Modifier.padding(bottom = 4.dp),
+                )
+            }
+            Text(
+                text = displayTitle,
+                color = tokens.label,
+                fontSize = 34.sp,
+                lineHeight = 34.sp,
+                fontFamily = androidx.compose.ui.text.font.FontFamily.Serif,
+                fontWeight = FontWeight.Normal,
+                letterSpacing = 0.sp,
+                maxLines = 1,
+                overflow = TextOverflow.Ellipsis,
+            )
+        }
         if (showMenu) {
             Box {
                 Box(
                     modifier = Modifier
-                        .size(40.dp)
+                        .size(42.dp)
+                        .clip(CircleShape)
+                        .background(Brush.linearGradient(listOf(tokens.gray5, tokens.switchOff)))
+                        .border(BorderStroke(1.dp, tokens.separator), CircleShape)
                         .noRippleClickable { onMenuExpandedChange(true) },
                     contentAlignment = Alignment.Center,
                 ) {
-                    Icon(Icons.Default.MoreVert, contentDescription = "菜单", tint = tokens.label, modifier = Modifier.size(24.dp))
+                    Icon(Icons.Default.MoreVert, contentDescription = "菜单", tint = tokens.label, modifier = Modifier.size(22.dp))
                 }
                 DropdownMenu(
                     expanded = menuExpanded,
                     onDismissRequest = { onMenuExpandedChange(false) },
-                    modifier = Modifier.background(tokens.card),
+                    modifier = Modifier.background(tokens.sheet),
                 ) {
                     DropdownMenuItem(
                         text = { Text("新建播放列表", color = tokens.label) },

@@ -39,15 +39,15 @@ class AppThemeModeTest {
 
             assertEquals(AppThemeMode.DARK, AppUi.themeMode())
             assertFalse(AppUi.isLightTheme())
-            assertEquals(0xFF17120E.toInt(), AppUi.BG)
-            assertEquals(0xFFF6F1EA.toInt(), AppUi.LABEL)
+            assertEquals(0xFF0A0A0B.toInt(), AppUi.BG)
+            assertEquals(0xFFF5F5F7.toInt(), AppUi.LABEL)
 
             AppUi.setThemeMode(null, AppThemeMode.LIGHT)
 
             assertEquals(AppThemeMode.LIGHT, AppUi.themeMode())
             assertTrue(AppUi.isLightTheme())
-            assertEquals(0xFFFBF6EF.toInt(), AppUi.BG)
-            assertEquals(0xFF2A2018.toInt(), AppUi.LABEL)
+            assertEquals(0xFFF5F5F7.toInt(), AppUi.BG)
+            assertEquals(0xFF0F0F11.toInt(), AppUi.LABEL)
         } finally {
             AppUi.setThemeMode(null, previousMode)
         }
@@ -61,7 +61,7 @@ class AppThemeModeTest {
 
             assertEquals(AppThemeMode.SYSTEM, AppUi.themeMode())
             assertFalse(AppUi.isLightTheme())
-            assertEquals(0xFF17120E.toInt(), AppUi.BG)
+            assertEquals(0xFF0A0A0B.toInt(), AppUi.BG)
         } finally {
             AppUi.setThemeMode(null, previousMode)
         }

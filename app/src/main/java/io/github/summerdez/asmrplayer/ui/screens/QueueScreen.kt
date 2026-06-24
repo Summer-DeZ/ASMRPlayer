@@ -154,93 +154,146 @@ fun QueueContent(
     playlist: Playlist?,
     playbackState: PlaybackUiState,
     onTrackClicked: (Playlist, Int) -> Unit,
+    onDismissRequest: (() -> Unit)? = null,
 ) {
     val tokens = LocalAmberTokens.current
-    Column(
-        Modifier
-            .fillMaxWidth()
-            .navigationBarsPadding()
-            .padding(start = 16.dp, end = 16.dp, bottom = 24.dp),
+    Surface(
+        modifier = Modifier.fillMaxWidth(),
+        color = tokens.sheet,
+        shape = RoundedCornerShape(topStart = 36.dp, topEnd = 36.dp),
+        border = BorderStroke(1.dp, tokens.separator),
     ) {
-        Box(
+        Column(
             Modifier
-                .padding(top = 2.dp, bottom = 22.dp)
-                .size(width = 44.dp, height = 5.dp)
-                .clip(RoundedCornerShape(3.dp))
-                .background(tokens.label3.copy(alpha = 0.55f))
-                .align(Alignment.CenterHorizontally),
-        )
-        Text(
-            "播放队列",
-            fontSize = 30.sp,
-            fontWeight = FontWeight.ExtraBold,
-            color = tokens.label,
-        )
-        Text(
-            playlist?.name ?: "未选择播放列表",
-            color = tokens.label2,
-            fontSize = 15.sp,
-            modifier = Modifier.padding(top = 6.dp, bottom = 20.dp),
-        )
-        if (playlist == null || playlist.tracks.isEmpty()) {
-            Text("队列为空", color = tokens.label2, modifier = Modifier.padding(vertical = 20.dp))
-            return
-        }
-        val currentIndex = if (playbackState.playlistId == playlist.id) {
-            playbackState.playlistIndex.takeIf { it in playlist.tracks.indices } ?: -1
-        } else {
-            -1
-        }
-        if (currentIndex >= 0) {
-            QueueSectionLabel("正在播放")
-            TrackRow(
-                track = playlist.tracks[currentIndex],
-                subtitle = playlist.name,
-                active = true,
-                onClick = { onTrackClicked(playlist, currentIndex) },
-                onSubtitle = {},
-                onRename = {},
-                onDelete = {},
-                onMove = {},
-                showArtwork = true,
-                showMenu = false,
-                elevated = true,
-                modifier = Modifier.padding(bottom = 20.dp),
+                .fillMaxWidth()
+                .navigationBarsPadding()
+                .padding(bottom = 24.dp),
+        ) {
+            Box(
+                Modifier
+                    .padding(top = 14.dp, bottom = 14.dp)
+                    .size(width = 36.dp, height = 4.dp)
+                    .clip(RoundedCornerShape(999.dp))
+                    .background(tokens.switchOff)
+                    .align(Alignment.CenterHorizontally),
             )
-        }
-        QueueSectionLabel("接下来")
-        val nextIndices = if (currentIndex >= 0) {
-            (currentIndex + 1 until playlist.tracks.size).toList() + (0 until currentIndex).toList()
-        } else {
-            playlist.tracks.indices.toList()
-        }
-        nextIndices.forEach { index ->
-            val track = playlist.tracks[index]
-            TrackRow(
-                track = track,
-                subtitle = formatDuration(track.durationMs),
-                active = false,
-                onClick = { onTrackClicked(playlist, index) },
-                onSubtitle = {},
-                onRename = {},
-                onDelete = {},
-                onMove = {},
-                showArtwork = true,
-                showMenu = false,
-                modifier = Modifier.padding(vertical = 4.dp),
-            )
+            Row(
+                Modifier
+                    .fillMaxWidth()
+                    .padding(start = 22.dp, end = 14.dp, bottom = 10.dp),
+                verticalAlignment = Alignment.CenterVertically,
+            ) {
+                Column(Modifier.weight(1f)) {
+                    Text(
+                        playlist?.name ?: "队列",
+                        fontSize = 17.sp,
+                        fontWeight = FontWeight.Bold,
+                        color = tokens.label,
+                        maxLines = 1,
+                        overflow = TextOverflow.Ellipsis,
+                    )
+                    Text(
+                        if (playlist == null) "0 段" else "${playlist.tracks.size} 段 · 播放队列",
+                        color = tokens.label3,
+                        fontSize = 12.5.sp,
+                        modifier = Modifier.padding(top = 2.dp),
+                    )
+                }
+                if (onDismissRequest != null) {
+                    Box(
+                        modifier = Modifier
+                            .size(40.dp)
+                            .clip(CircleShape)
+                            .noRippleClickable(onClick = onDismissRequest),
+                        contentAlignment = Alignment.Center,
+                    ) {
+                        AsmrIcon(
+                            name = AsmrIconName.Close,
+                            tint = tokens.labelFaint,
+                            modifier = Modifier.size(22.dp),
+                        )
+                    }
+                }
+            }
+            val queuePlaylist = playlist
+            if (queuePlaylist == null || queuePlaylist.tracks.isEmpty()) {
+                Text("队列为空", color = tokens.label2, modifier = Modifier.padding(start = 22.dp, end = 22.dp, top = 16.dp, bottom = 20.dp))
+                return@Column
+            }
+            val currentIndex = if (playbackState.playlistId == queuePlaylist.id) {
+                playbackState.playlistIndex.takeIf { it in queuePlaylist.tracks.indices } ?: -1
+            } else {
+                -1
+            }
+            val orderedIndices = if (currentIndex >= 0) {
+                listOf(currentIndex) + (currentIndex + 1 until queuePlaylist.tracks.size).toList() + (0 until currentIndex).toList()
+            } else {
+                queuePlaylist.tracks.indices.toList()
+            }
+            orderedIndices.forEach { index ->
+                QueueTrackRow(
+                    index = index,
+                    track = queuePlaylist.tracks[index],
+                    active = index == currentIndex,
+                    playing = playbackState.isPlaying,
+                    onClick = { onTrackClicked(queuePlaylist, index) },
+                )
+            }
         }
     }
 }
 
 @Composable
-private fun QueueSectionLabel(text: String) {
+private fun QueueTrackRow(
+    index: Int,
+    track: TrackItem,
+    active: Boolean,
+    playing: Boolean,
+    onClick: () -> Unit,
+) {
     val tokens = LocalAmberTokens.current
-    Text(
-        text,
-        color = tokens.label2,
-        fontSize = 18.sp,
-        fontWeight = FontWeight.Bold,
-        modifier = Modifier.padding(start = 2.dp, bottom = 12.dp),
-    )
+    Row(
+        modifier = Modifier
+            .fillMaxWidth()
+            .background(if (active) tokens.accentSoft.copy(alpha = 0.50f) else Color.Transparent)
+            .noRippleClickable(onClick = onClick)
+            .padding(start = 22.dp, end = 22.dp, top = 11.dp, bottom = 11.dp),
+        verticalAlignment = Alignment.CenterVertically,
+    ) {
+        Box(
+            modifier = Modifier.width(28.dp),
+            contentAlignment = Alignment.Center,
+        ) {
+            if (active) {
+                WaveBars(
+                    modifier = Modifier.size(width = 22.dp, height = 16.dp),
+                    playing = playing,
+                )
+            } else {
+                Text(
+                    (index + 1).toString().padStart(2, '0'),
+                    color = tokens.labelFaint,
+                    fontSize = 12.sp,
+                    fontFamily = androidx.compose.ui.text.font.FontFamily.Monospace,
+                )
+            }
+        }
+        Spacer(Modifier.width(14.dp))
+        Text(
+            track.title,
+            modifier = Modifier.weight(1f),
+            maxLines = 1,
+            overflow = TextOverflow.Ellipsis,
+            fontSize = 15.sp,
+            fontWeight = if (active) FontWeight.SemiBold else FontWeight.Normal,
+            color = if (active) tokens.accent else tokens.label2,
+        )
+        Spacer(Modifier.width(12.dp))
+        Text(
+            formatDuration(track.durationMs),
+            color = tokens.labelFaint,
+            fontSize = 12.sp,
+            fontFamily = androidx.compose.ui.text.font.FontFamily.Monospace,
+        )
+    }
 }

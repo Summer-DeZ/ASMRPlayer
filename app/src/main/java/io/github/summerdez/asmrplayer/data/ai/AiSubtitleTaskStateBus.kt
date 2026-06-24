@@ -25,14 +25,28 @@ object AiSubtitleTaskStateBus {
         }
     }
 
-    fun publishTranscribing(target: SubtitleGenerationTarget, progress: Float, preview: List<SubtitleLine>) {
+    fun publishTranscribing(
+        target: SubtitleGenerationTarget,
+        progress: Float,
+        preview: List<SubtitleLine>,
+        processedMs: Long? = null,
+        durationMs: Long? = null,
+        detailText: String = "",
+    ) {
         publish(
             taskFor(target.trackId) ?: AiSubtitleTaskState(target = target),
         ) {
             val nextProgress = progress.coerceIn(0f, 1f)
+            val nextProcessedMs = processedMs
+                ?.coerceAtLeast(0L)
+                ?.let { value -> maxOf(it.processedMs ?: 0L, value) }
+                ?: it.processedMs
             it.copy(
                 stage = AiSubtitleStage.TRANSCRIBING,
                 transcribeProgress = maxOf(it.transcribeProgress, nextProgress),
+                processedMs = nextProcessedMs,
+                durationMs = durationMs?.takeIf { value -> value > 0L } ?: it.durationMs,
+                detailText = detailText.ifBlank { it.detailText },
                 previewLines = preview.takeLast(PREVIEW_LIMIT),
                 error = "",
             )

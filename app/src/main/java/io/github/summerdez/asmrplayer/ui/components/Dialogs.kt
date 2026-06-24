@@ -46,6 +46,8 @@ fun TextInputDialog(
     initialValue: String,
     confirmText: String,
     numeric: Boolean = false,
+    required: Boolean = true,
+    message: String = if (numeric) "输入睡眠定时的分钟数" else "输入新的名称",
     onDismiss: () -> Unit,
     onConfirm: (String) -> Unit,
 ) {
@@ -54,7 +56,9 @@ fun TextInputDialog(
     IosDialog(onDismiss = onDismiss) {
         Column(Modifier.padding(start = 16.dp, end = 16.dp, top = 20.dp, bottom = 16.dp), horizontalAlignment = Alignment.CenterHorizontally) {
             Text(title, color = tokens.label, fontSize = 17.sp, fontWeight = FontWeight.SemiBold, textAlign = TextAlign.Center)
-            Text(if (numeric) "输入睡眠定时的分钟数" else "输入新的名称", color = tokens.label2, fontSize = 13.sp, modifier = Modifier.padding(top = 3.dp))
+            if (message.isNotBlank()) {
+                Text(message, color = tokens.label2, fontSize = 13.sp, modifier = Modifier.padding(top = 3.dp))
+            }
             OutlinedTextField(
                 value = value,
                 onValueChange = { next ->
@@ -77,7 +81,7 @@ fun TextInputDialog(
         DialogButtons(
             cancelText = "取消",
             confirmText = confirmText,
-            confirmEnabled = value.trim().isNotEmpty(),
+            confirmEnabled = !required || value.trim().isNotEmpty(),
             destructive = false,
             onCancel = onDismiss,
             onConfirm = { onConfirm(value.trim()) },

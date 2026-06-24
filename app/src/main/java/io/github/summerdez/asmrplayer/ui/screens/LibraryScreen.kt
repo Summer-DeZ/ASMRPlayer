@@ -25,6 +25,7 @@ import androidx.activity.compose.BackHandler
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.BorderStroke
+import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.gestures.detectDragGestures
@@ -69,6 +70,7 @@ import androidx.compose.material.icons.filled.Delete
 import androidx.compose.material.icons.filled.Download
 import androidx.compose.material.icons.filled.Edit
 import androidx.compose.material.icons.filled.FolderOpen
+import androidx.compose.material.icons.filled.KeyboardArrowDown
 import androidx.compose.material.icons.filled.LibraryMusic
 import androidx.compose.material.icons.filled.LockOpen
 import androidx.compose.material.icons.filled.MoreVert
@@ -76,6 +78,7 @@ import androidx.compose.material.icons.filled.MusicNote
 import androidx.compose.material.icons.filled.Notifications
 import androidx.compose.material.icons.filled.Pause
 import androidx.compose.material.icons.filled.PlayArrow
+import androidx.compose.material.icons.filled.Search
 import androidx.compose.material.icons.filled.Settings
 import androidx.compose.material.icons.filled.SkipNext
 import androidx.compose.material.icons.filled.SkipPrevious
@@ -109,6 +112,7 @@ import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.runtime.staticCompositionLocalOf
+import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.geometry.Size
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -130,7 +134,11 @@ import androidx.compose.ui.viewinterop.AndroidView
 import androidx.compose.animation.AnimatedContent
 import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.animation.animateColorAsState
+import androidx.compose.animation.core.RepeatMode
+import androidx.compose.animation.core.animateFloat
 import androidx.compose.animation.core.animateFloatAsState
+import androidx.compose.animation.core.infiniteRepeatable
+import androidx.compose.animation.core.rememberInfiniteTransition
 import androidx.compose.animation.core.tween
 import androidx.compose.animation.expandVertically
 import androidx.compose.animation.fadeIn
@@ -144,6 +152,7 @@ import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import java.text.DateFormat
 import java.util.Date
 import kotlin.math.max
+import kotlin.math.sin
 
 @Composable
 fun LibraryTab(
@@ -162,52 +171,210 @@ fun LibraryTab(
     onMoveTrack: (Playlist, TrackItem) -> Unit,
     subtitleTasks: Map<String, AiSubtitleTaskState> = emptyMap(),
 ) {
-    val listeningPlaylist = state.playlists.firstOrNull { it.id == playbackState.playlistId }
-    val listeningIndex = playbackState.playlistIndex
-    val listeningTrack = listeningPlaylist?.tracks?.getOrNull(listeningIndex)
-    LazyColumn(
-        modifier = Modifier.fillMaxSize(),
-        contentPadding = PaddingValues(start = 16.dp, end = 16.dp, top = 4.dp, bottom = 28.dp),
-        verticalArrangement = Arrangement.spacedBy(0.dp),
-    ) {
-        if (listeningPlaylist != null && listeningTrack != null) {
-            item(key = "continue-listening") {
-                ContinueListeningCard(
-                    playlist = listeningPlaylist,
-                    track = listeningTrack,
-                    trackIndex = listeningIndex,
-                    playbackState = playbackState,
-                    onClick = { onTrackClicked(listeningPlaylist, listeningIndex) },
-                    modifier = Modifier.padding(bottom = 26.dp),
-                )
+    var query by remember { mutableStateOf("") }
+    val visiblePlaylists = remember(state.playlists, query) {
+        val q = query.trim()
+        if (q.isEmpty()) {
+            state.playlists
+        } else {
+            state.playlists.filter { playlist ->
+                playlist.name.contains(q, ignoreCase = true) ||
+                playlist.tracks.any { it.title.contains(q, ignoreCase = true) }
             }
         }
-        item(key = "playlist-section") {
-            SectionTitle(
-                text = "播放列表",
-                modifier = Modifier.padding(bottom = 10.dp),
+    }
+    val initialExpandedId = state.selectedPlaylist?.id
+        ?: playbackState.playlistId.takeIf { it.isNotEmpty() }
+        ?: state.playlists.firstOrNull()?.id
+    var expandedPlaylistId by remember { mutableStateOf(initialExpandedId) }
+    LaunchedEffect(state.selectedPlaylist?.id) {
+        state.selectedPlaylist?.id?.let { expandedPlaylistId = it }
+    }
+    LaunchedEffect(playbackState.playlistId) {
+        if (playbackState.playlistId.isNotEmpty()) {
+            expandedPlaylistId = playbackState.playlistId
+        }
+    }
+    LaunchedEffect(visiblePlaylists.map { it.id }) {
+        if (expandedPlaylistId != null && visiblePlaylists.none { it.id == expandedPlaylistId }) {
+            expandedPlaylistId = visiblePlaylists.firstOrNull()?.id
+        }
+    }
+    LazyColumn(
+        modifier = Modifier.fillMaxSize(),
+        contentPadding = PaddingValues(start = 16.dp, end = 16.dp, top = 0.dp, bottom = 28.dp),
+        verticalArrangement = Arrangement.spacedBy(8.dp),
+    ) {
+        item(key = "library-search") {
+            LibrarySearchField(
+                value = query,
+                onValueChange = { query = it },
+                modifier = Modifier.padding(start = 6.dp, end = 6.dp, bottom = 6.dp),
             )
         }
-        items(state.playlists, key = { it.id }) { playlist ->
-            val selected = state.selectedPlaylist?.id == playlist.id
-            val expanded = selected && state.collapsedSelectedPlaylistId != playlist.id
-            PlaylistRow(
-                playlist = playlist,
-                selected = selected,
-                expanded = expanded,
-                playbackState = playbackState,
-                onPlaylistClicked = { onPlaylistClicked(playlist) },
-                onCoverClicked = { onCoverClicked(playlist) },
-                onRenamePlaylist = { onRenamePlaylist(playlist) },
-                onDeletePlaylist = { onDeletePlaylist(playlist) },
-                onTrackClicked = { index -> onTrackClicked(playlist, index) },
-                onTrackSubtitleClicked = { track -> onTrackSubtitleClicked(playlist, track) },
-                onGenerateSubtitle = { track -> onGenerateSubtitle(playlist, track) },
-                onOpenSubtitleGeneration = onOpenSubtitleGeneration,
-                onRenameTrack = { track -> onRenameTrack(playlist, track) },
-                onDeleteTrack = { track, index -> onDeleteTrack(playlist, track, index) },
-                onMoveTrack = { track -> onMoveTrack(playlist, track) },
-                subtitleTasks = subtitleTasks,
+        if (state.playlists.isEmpty()) {
+            item(key = "library-dlsite-empty") {
+                LibraryDlsiteEmptyState()
+            }
+        } else {
+            items(visiblePlaylists, key = { it.id }) { playlist ->
+                val selected = state.selectedPlaylist?.id == playlist.id
+                val expanded = expandedPlaylistId == playlist.id
+                PlaylistRow(
+                    playlist = playlist,
+                    selected = selected,
+                    expanded = expanded,
+                    playbackState = playbackState,
+                    onPlaylistClicked = {
+                        expandedPlaylistId = if (expandedPlaylistId == playlist.id) null else playlist.id
+                        onPlaylistClicked(playlist)
+                    },
+                    onCoverClicked = { onCoverClicked(playlist) },
+                    onRenamePlaylist = { onRenamePlaylist(playlist) },
+                    onDeletePlaylist = { onDeletePlaylist(playlist) },
+                    onTrackClicked = { index -> onTrackClicked(playlist, index) },
+                    onTrackSubtitleClicked = { track -> onTrackSubtitleClicked(playlist, track) },
+                    onGenerateSubtitle = { track -> onGenerateSubtitle(playlist, track) },
+                    onOpenSubtitleGeneration = onOpenSubtitleGeneration,
+                    onRenameTrack = { track -> onRenameTrack(playlist, track) },
+                    onDeleteTrack = { track, index -> onDeleteTrack(playlist, track, index) },
+                    onMoveTrack = { track -> onMoveTrack(playlist, track) },
+                    subtitleTasks = subtitleTasks,
+                )
+            }
+            if (visiblePlaylists.isEmpty()) {
+                item(key = "library-empty-search") {
+                    Text(
+                        "没有找到匹配的作品",
+                        color = LocalAmberTokens.current.label3,
+                        fontSize = 14.sp,
+                        textAlign = TextAlign.Center,
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .padding(top = 28.dp),
+                    )
+                }
+            }
+        }
+    }
+}
+
+@Composable
+private fun LibrarySearchField(value: String, onValueChange: (String) -> Unit, modifier: Modifier = Modifier) {
+    val tokens = LocalAmberTokens.current
+    OutlinedTextField(
+        value = value,
+        onValueChange = onValueChange,
+        modifier = modifier.fillMaxWidth(),
+        singleLine = true,
+        shape = RoundedCornerShape(20.dp),
+        leadingIcon = {
+            Icon(Icons.Default.Search, contentDescription = null, tint = tokens.label3, modifier = Modifier.size(18.dp))
+        },
+        placeholder = { Text("搜索作品名...", color = tokens.label3, fontSize = 14.sp) },
+        colors = androidx.compose.material3.OutlinedTextFieldDefaults.colors(
+            focusedTextColor = tokens.label,
+            unfocusedTextColor = tokens.label,
+            cursorColor = tokens.accent,
+            focusedBorderColor = tokens.separator,
+            unfocusedBorderColor = tokens.separator,
+            focusedContainerColor = tokens.card,
+            unfocusedContainerColor = tokens.card,
+        ),
+    )
+}
+
+@Composable
+private fun LibraryDlsiteEmptyState() {
+    val tokens = LocalAmberTokens.current
+    val context = LocalContext.current
+    Surface(
+        modifier = Modifier
+            .fillMaxWidth()
+            .padding(start = 6.dp, end = 6.dp, top = 10.dp),
+        shape = RoundedCornerShape(28.dp),
+        color = tokens.card,
+        border = BorderStroke(1.dp, tokens.separator),
+    ) {
+        Column(
+            modifier = Modifier.padding(horizontal = 26.dp, vertical = 36.dp),
+            horizontalAlignment = Alignment.CenterHorizontally,
+            verticalArrangement = Arrangement.spacedBy(14.dp),
+        ) {
+            Surface(
+                modifier = Modifier.size(72.dp),
+                shape = CircleShape,
+                color = tokens.accent2Soft,
+                border = BorderStroke(1.dp, tokens.accent2.copy(alpha = 0.20f)),
+            ) {
+                Box(contentAlignment = Alignment.Center) {
+                    Icon(
+                        Icons.Default.LibraryMusic,
+                        contentDescription = null,
+                        tint = tokens.accent2,
+                        modifier = Modifier.size(32.dp),
+                    )
+                }
+            }
+            Text(
+                "资料库还是空的",
+                color = tokens.label,
+                fontSize = 26.sp,
+                lineHeight = 28.sp,
+                fontFamily = androidx.compose.ui.text.font.FontFamily.Serif,
+                fontWeight = FontWeight.Normal,
+                textAlign = TextAlign.Center,
+            )
+            Text(
+                "连接你的 DLsite 账户，把已购买的音声作品同步到这里；也可以继续用右上角菜单导入本地音频。",
+                color = tokens.label2,
+                fontSize = 14.5.sp,
+                lineHeight = 21.sp,
+                textAlign = TextAlign.Center,
+                modifier = Modifier.fillMaxWidth(0.90f),
+            )
+            Button(
+                onClick = {
+                    Toast.makeText(context, "请切换到底部 DLsite 页连接账户", Toast.LENGTH_SHORT).show()
+                },
+                modifier = Modifier
+                    .padding(top = 6.dp)
+                    .height(48.dp),
+            ) {
+                Icon(Icons.Default.Download, contentDescription = null, modifier = Modifier.size(18.dp))
+                Spacer(Modifier.width(8.dp))
+                Text("连接 DLsite", fontWeight = FontWeight.SemiBold)
+            }
+        }
+    }
+}
+
+@Composable
+private fun LibraryAnimatedAudioLines(modifier: Modifier = Modifier) {
+    val tokens = LocalAmberTokens.current
+    val transition = rememberInfiniteTransition(label = "libraryAudioLines")
+    val phase by transition.animateFloat(
+        initialValue = 0f,
+        targetValue = 1f,
+        animationSpec = infiniteRepeatable(
+            animation = tween(durationMillis = 820),
+            repeatMode = RepeatMode.Restart,
+        ),
+        label = "libraryAudioPhase",
+    )
+    Canvas(modifier) {
+        val barCount = 4
+        val gap = size.width * 0.10f
+        val barWidth = (size.width - gap * (barCount - 1)) / barCount
+        repeat(barCount) { index ->
+            val pulse = ((sin((phase * 6.28318f + index * 1.35f).toDouble()).toFloat() + 1f) / 2f)
+            val height = size.height * (0.34f + pulse * 0.58f)
+            val x = index * (barWidth + gap)
+            drawRoundRect(
+                color = tokens.accent,
+                topLeft = Offset(x, size.height - height),
+                size = Size(barWidth, height),
+                cornerRadius = androidx.compose.ui.geometry.CornerRadius(barWidth / 2f, barWidth / 2f),
             )
         }
     }
@@ -218,9 +385,9 @@ private fun SectionTitle(text: String, modifier: Modifier = Modifier) {
     val tokens = LocalAmberTokens.current
     Text(
         text = text,
-        fontSize = 22.sp,
+        fontSize = 18.sp,
         fontWeight = FontWeight.Bold,
-        color = tokens.label2,
+        color = tokens.label,
         modifier = modifier,
     )
 }
@@ -235,11 +402,11 @@ private fun ContinueListeningCard(
     modifier: Modifier = Modifier,
 ) {
     val tokens = LocalAmberTokens.current
-    val shape = RoundedCornerShape(24.dp)
+    val shape = RoundedCornerShape(28.dp)
     Surface(
         modifier = modifier
             .fillMaxWidth()
-            .height(154.dp)
+            .height(150.dp)
             .clickable(onClick = onClick),
         shape = shape,
         color = Color.Transparent,
@@ -265,15 +432,16 @@ private fun ContinueListeningCard(
                     Text(
                         playlist.name,
                         color = tokens.label,
-                        fontSize = 22.sp,
-                        lineHeight = 28.sp,
-                        fontWeight = FontWeight.ExtraBold,
+                        fontSize = 26.sp,
+                        lineHeight = 29.sp,
+                        fontFamily = androidx.compose.ui.text.font.FontFamily.Serif,
+                        fontWeight = FontWeight.Normal,
                         maxLines = 2,
                         overflow = TextOverflow.Ellipsis,
                         modifier = Modifier.padding(top = 6.dp),
                     )
                     Row(verticalAlignment = Alignment.CenterVertically, modifier = Modifier.padding(top = 9.dp)) {
-                        EqualizerIcon(Modifier.size(width = 24.dp, height = 18.dp))
+                        LibraryAnimatedAudioLines(Modifier.size(width = 24.dp, height = 18.dp))
                         Spacer(Modifier.width(8.dp))
                         Text(
                             "第 ${trackIndex + 1} 首 · ${formatDuration(track.durationMs)}",
@@ -326,13 +494,27 @@ fun PlaylistRow(
 ) {
     var menuExpanded by remember { mutableStateOf(false) }
     val tokens = LocalAmberTokens.current
-    val shape = RoundedCornerShape(22.dp)
+    val shape = RoundedCornerShape(18.dp)
+    val workActive = playbackState.playlistId == playlist.id &&
+        playbackState.playlistIndex in playlist.tracks.indices
+    val chevronRotation by animateFloatAsState(
+        targetValue = if (expanded) 180f else 0f,
+        animationSpec = tween(220),
+        label = "playlistChevron",
+    )
     Surface(
-        modifier = Modifier.padding(bottom = 12.dp),
+        modifier = Modifier.fillMaxWidth(),
         color = Color.Transparent,
         shape = shape,
-        border = BorderStroke(1.dp, tokens.separator),
-        shadowElevation = if (selected) 4.dp else 1.dp,
+        border = BorderStroke(
+            1.dp,
+            when {
+                workActive -> tokens.accent.copy(alpha = 0.35f)
+                selected -> tokens.accent.copy(alpha = 0.18f)
+                else -> tokens.separator
+            },
+        ),
+        shadowElevation = if (workActive) 6.dp else 0.dp,
     ) {
         Column(
             Modifier
@@ -343,35 +525,59 @@ fun PlaylistRow(
                 modifier = Modifier
                     .fillMaxWidth()
                     .clickable(onClick = onPlaylistClicked)
-                    .padding(start = 16.dp, end = 8.dp, top = 14.dp, bottom = 14.dp),
+                    .padding(start = 14.dp, end = 8.dp, top = 13.dp, bottom = 13.dp),
                 verticalAlignment = Alignment.CenterVertically,
             ) {
-                CoverBox(playlist.coverUri, Modifier.size(70.dp).clickable(onClick = onCoverClicked))
-                Spacer(Modifier.width(16.dp))
+                CoverBox(playlist.coverUri, Modifier.size(52.dp).clickable(onClick = onCoverClicked))
+                Spacer(Modifier.width(13.dp))
                 Column(Modifier.weight(1f)) {
-                    Text(
-                        playlist.name,
-                        fontSize = 19.sp,
-                        lineHeight = 24.sp,
-                        fontWeight = FontWeight.Bold,
-                        color = animateColorAsState(
-                            targetValue = if (selected && expanded) tokens.accent else tokens.label,
-                            animationSpec = tween(220),
-                            label = "playlistName",
-                        ).value,
-                        maxLines = 1,
-                        overflow = TextOverflow.Ellipsis,
-                    )
-                    Text(
-                        "${playlist.tracks.size} 首" + if (selected && playbackState.playlistId == playlist.id) " · 正在播放" else "",
-                        color = tokens.label2,
-                        fontSize = 15.sp,
-                        modifier = Modifier.padding(top = 4.dp),
-                    )
+                    Row(verticalAlignment = Alignment.CenterVertically) {
+                        Text(
+                            playlist.name,
+                            fontSize = 15.sp,
+                            lineHeight = 19.sp,
+                            fontWeight = FontWeight.SemiBold,
+                            color = animateColorAsState(
+                                targetValue = if (workActive) tokens.accent else tokens.label,
+                                animationSpec = tween(220),
+                                label = "playlistName",
+                            ).value,
+                            maxLines = 1,
+                            overflow = TextOverflow.Ellipsis,
+                            modifier = Modifier.weight(1f, fill = false),
+                        )
+                        if (workActive) {
+                            Spacer(Modifier.width(7.dp))
+                            LibraryAnimatedAudioLines(Modifier.size(width = 18.dp, height = 14.dp))
+                        }
+                    }
+                    Row(verticalAlignment = Alignment.CenterVertically, modifier = Modifier.padding(top = 4.dp)) {
+                        Text(
+                            "播放列表",
+                            color = tokens.label2,
+                            fontSize = 12.sp,
+                            maxLines = 1,
+                        )
+                        Text(
+                            " · ${playlist.tracks.size} 段",
+                            color = tokens.label2,
+                            fontSize = 12.sp,
+                            maxLines = 1,
+                        )
+                        if (workActive) {
+                            Text(
+                                " · 正在播放",
+                                color = tokens.accent,
+                                fontSize = 12.sp,
+                                fontWeight = FontWeight.SemiBold,
+                                maxLines = 1,
+                            )
+                        }
+                    }
                 }
                 Box {
-                    IconButton(onClick = { menuExpanded = true }) {
-                        Icon(Icons.Default.MoreVert, contentDescription = "播放列表操作")
+                    IconButton(onClick = { menuExpanded = true }, modifier = Modifier.size(38.dp)) {
+                        Icon(Icons.Default.MoreVert, contentDescription = "播放列表操作", tint = tokens.label3, modifier = Modifier.size(20.dp))
                     }
                     DropdownMenu(expanded = menuExpanded, onDismissRequest = { menuExpanded = false }) {
                         DropdownMenuItem(
@@ -400,6 +606,14 @@ fun PlaylistRow(
                         )
                     }
                 }
+                Box(
+                    modifier = Modifier
+                        .size(26.dp)
+                        .graphicsLayer { rotationZ = chevronRotation },
+                    contentAlignment = Alignment.Center,
+                ) {
+                    Icon(Icons.Default.KeyboardArrowDown, contentDescription = null, tint = tokens.label3, modifier = Modifier.size(18.dp))
+                }
             }
             AnimatedVisibility(
                 visible = expanded,
@@ -407,18 +621,18 @@ fun PlaylistRow(
                 exit = shrinkVertically(animationSpec = tween(220)) + fadeOut(animationSpec = tween(150)),
             ) {
                 Column {
-                    HorizontalDivider(color = tokens.separator, modifier = Modifier.padding(start = 102.dp))
+                    HorizontalDivider(color = tokens.separator)
                     if (playlist.tracks.isEmpty()) {
                         Text(
-                            "这个播放列表还没有音频",
+                            "这个作品还没有音频段",
                             color = tokens.label2,
                             modifier = Modifier.padding(start = 18.dp, top = 16.dp, bottom = 16.dp),
                         )
                     } else {
                         playlist.tracks.forEachIndexed { index, track ->
-                            TrackRow(
+                            LibrarySegmentRow(
                                 track = track,
-                                subtitle = formatDuration(track.durationMs),
+                                index = index,
                                 active = playbackState.playlistId == playlist.id && playbackState.playlistIndex == index,
                                 onClick = { onTrackClicked(index) },
                                 onSubtitle = { onTrackSubtitleClicked(track) },
@@ -428,13 +642,135 @@ fun PlaylistRow(
                                 onDelete = { onDeleteTrack(track, index) },
                                 onMove = { onMoveTrack(track) },
                                 aiSubtitleTask = subtitleTasks[track.id],
-                                modifier = Modifier.padding(start = 6.dp, end = 4.dp),
+                                isLast = index == playlist.tracks.lastIndex,
                             )
                         }
-                        Spacer(Modifier.height(6.dp))
                     }
                 }
             }
+        }
+    }
+}
+
+@Composable
+private fun LibrarySegmentRow(
+    track: TrackItem,
+    index: Int,
+    active: Boolean,
+    onClick: () -> Unit,
+    onSubtitle: () -> Unit,
+    onGenerateSubtitle: () -> Unit,
+    onOpenSubtitleGeneration: () -> Unit,
+    onRename: () -> Unit,
+    onDelete: () -> Unit,
+    onMove: () -> Unit,
+    aiSubtitleTask: AiSubtitleTaskState?,
+    isLast: Boolean,
+) {
+    var menuExpanded by remember { mutableStateOf(false) }
+    val tokens = LocalAmberTokens.current
+    Column(
+        modifier = Modifier
+            .fillMaxWidth()
+            .background(if (active) tokens.accentSoft.copy(alpha = 0.38f) else Color.Transparent),
+    ) {
+        Row(
+            modifier = Modifier
+                .fillMaxWidth()
+                .clickable(onClick = onClick)
+                .padding(start = 18.dp, end = 6.dp, top = 11.dp, bottom = 11.dp),
+            verticalAlignment = Alignment.CenterVertically,
+        ) {
+            Box(modifier = Modifier.width(26.dp), contentAlignment = Alignment.Center) {
+                if (active) {
+                    LibraryAnimatedAudioLines(Modifier.size(width = 17.dp, height = 14.dp))
+                } else {
+                    Text(
+                        "%02d".format(index + 1),
+                        color = tokens.label3,
+                        fontSize = 12.sp,
+                        fontWeight = FontWeight.Medium,
+                    )
+                }
+            }
+            Spacer(Modifier.width(13.dp))
+            Column(Modifier.weight(1f)) {
+                Text(
+                    track.title,
+                    maxLines = 1,
+                    overflow = TextOverflow.Ellipsis,
+                    fontSize = 14.5.sp,
+                    lineHeight = 20.sp,
+                    fontWeight = if (active) FontWeight.SemiBold else FontWeight.Normal,
+                    color = if (active) tokens.accent else tokens.label,
+                )
+                aiSubtitleTask?.let { task ->
+                    Text(
+                        aiSubtitleStatusText(task),
+                        color = if (task.stage == AiSubtitleStage.FAILED) tokens.accent2 else tokens.label3,
+                        maxLines = 1,
+                        overflow = TextOverflow.Ellipsis,
+                        fontSize = 11.5.sp,
+                        modifier = Modifier.padding(top = 2.dp),
+                    )
+                }
+            }
+            Spacer(Modifier.width(10.dp))
+            Text(
+                formatDuration(track.durationMs),
+                color = tokens.label3,
+                fontSize = 12.sp,
+                maxLines = 1,
+            )
+            IconButton(onClick = onSubtitle, modifier = Modifier.size(36.dp)) {
+                Icon(Icons.Default.Subtitles, contentDescription = "字幕", tint = tokens.label3, modifier = Modifier.size(18.dp))
+            }
+            Box {
+                IconButton(onClick = { menuExpanded = true }, modifier = Modifier.size(36.dp)) {
+                    Icon(Icons.Default.MoreVert, contentDescription = "曲目操作", tint = tokens.label3, modifier = Modifier.size(18.dp))
+                }
+                DropdownMenu(expanded = menuExpanded, onDismissRequest = { menuExpanded = false }) {
+                    DropdownMenuItem(
+                        text = { Text(if (aiSubtitleTask == null) "自动生成字幕" else "查看生成进度") },
+                        leadingIcon = { Icon(Icons.Default.Subtitles, null) },
+                        onClick = {
+                            menuExpanded = false
+                            if (aiSubtitleTask == null) {
+                                onGenerateSubtitle()
+                            } else {
+                                onOpenSubtitleGeneration()
+                            }
+                        },
+                    )
+                    DropdownMenuItem(
+                        text = { Text("重命名") },
+                        leadingIcon = { Icon(Icons.Default.Edit, null) },
+                        onClick = {
+                            menuExpanded = false
+                            onRename()
+                        },
+                    )
+                    DropdownMenuItem(
+                        text = { Text("移动到...") },
+                        leadingIcon = { Icon(Icons.AutoMirrored.Filled.QueueMusic, null) },
+                        onClick = {
+                            menuExpanded = false
+                            onMove()
+                        },
+                    )
+                    DropdownMenuItem(
+                        text = { Text("删除") },
+                        leadingIcon = { Icon(Icons.Default.Delete, null) },
+                        onClick = {
+                            menuExpanded = false
+                            onDelete()
+                        },
+                    )
+                }
+            }
+        }
+        if (!isLast) {
+            HorizontalDivider(color = tokens.separator, modifier = Modifier.padding(start = 57.dp))
         }
     }
 }
@@ -520,7 +856,7 @@ fun TrackRow(
                 }
             }
             if (active) {
-                EqualizerIcon(Modifier.size(width = 24.dp, height = 18.dp))
+                LibraryAnimatedAudioLines(Modifier.size(width = 24.dp, height = 18.dp))
                 Spacer(Modifier.width(8.dp))
             }
             IconButton(onClick = onSubtitle) {
@@ -637,6 +973,7 @@ fun AiSubtitleGenerationSheet(
         AiSubtitleStageCard(
             index = 1,
             title = task.transcriptionTitle,
+            detail = task.transcriptionDetailLabel(),
             active = task.stage == AiSubtitleStage.TRANSCRIBING,
             done = task.transcribeProgress >= 1f,
             failed = task.stage == AiSubtitleStage.FAILED && task.transcribeProgress < 1f,
@@ -727,6 +1064,7 @@ fun AiSubtitleGenerationSheet(
 private fun AiSubtitleStageCard(
     index: Int,
     title: String,
+    detail: String = "",
     active: Boolean,
     done: Boolean,
     failed: Boolean,
@@ -766,7 +1104,27 @@ private fun AiSubtitleStageCard(
                     )
                 }
                 Spacer(Modifier.width(16.dp))
-                Text(title, color = tokens.label, fontSize = 22.sp, fontWeight = FontWeight.Bold, modifier = Modifier.weight(1f))
+                Column(Modifier.weight(1f)) {
+                    Text(
+                        title,
+                        color = tokens.label,
+                        fontSize = 22.sp,
+                        fontWeight = FontWeight.Bold,
+                        maxLines = 1,
+                        overflow = TextOverflow.Ellipsis,
+                    )
+                    if (detail.isNotBlank()) {
+                        Text(
+                            detail,
+                            color = tokens.label2,
+                            fontSize = 15.sp,
+                            fontWeight = FontWeight.Medium,
+                            maxLines = 1,
+                            overflow = TextOverflow.Ellipsis,
+                            modifier = Modifier.padding(top = 3.dp),
+                        )
+                    }
+                }
                 Text(
                     when {
                         failed -> "失败"
@@ -819,7 +1177,14 @@ private fun PrimarySheetAction(text: String, onClick: () -> Unit) {
 
 private fun aiSubtitleStatusText(task: AiSubtitleTaskState): String {
     return when (task.stage) {
-        AiSubtitleStage.TRANSCRIBING -> "AI 字幕 · ${task.transcriptionTitle} ${(task.transcribeProgress * 100).toInt()}%"
+        AiSubtitleStage.TRANSCRIBING -> {
+            val detail = task.transcriptionDetailLabel()
+            if (detail.isBlank()) {
+                "AI 字幕 · ${task.transcriptionTitle} ${(task.transcribeProgress * 100).toInt()}%"
+            } else {
+                "AI 字幕 · $detail"
+            }
+        }
         AiSubtitleStage.TRANSLATING -> "AI 字幕 · 翻译 ${(task.translateProgress * 100).toInt()}%"
         AiSubtitleStage.BINDING -> "AI 字幕 · 正在绑定"
         AiSubtitleStage.COMPLETED -> "AI 字幕已生成"

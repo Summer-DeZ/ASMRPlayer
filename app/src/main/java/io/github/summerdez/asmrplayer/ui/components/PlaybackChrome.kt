@@ -163,38 +163,37 @@ fun BottomPlaybackArea(
     Column(
         modifier = Modifier
             .fillMaxWidth()
-            .background(Brush.verticalGradient(listOf(tokens.glass, tokens.solidBar)))
+            .background(tokens.bar)
             .navigationBarsPadding(),
     ) {
-        val miniPlayerShape = RoundedCornerShape(20.dp)
+        val miniPlayerShape = RoundedCornerShape(28.dp)
         Surface(
             modifier = Modifier
                 .fillMaxWidth()
-                .padding(start = 12.dp, end = 12.dp, top = 8.dp, bottom = 7.dp)
-                .height(66.dp)
+                .padding(start = 10.dp, end = 10.dp, top = 8.dp, bottom = 7.dp)
+                .height(64.dp)
                 .noRippleClickable(onClick = onOpenPlayer),
             shape = miniPlayerShape,
-            color = Color.Transparent,
-            border = BorderStroke(0.5.dp, tokens.separator),
+            color = tokens.glass,
+            border = BorderStroke(1.dp, tokens.separator),
             tonalElevation = 0.dp,
-            shadowElevation = 6.dp,
+            shadowElevation = 18.dp,
         ) {
             Row(
                 modifier = Modifier
                     .fillMaxSize()
                     .clip(miniPlayerShape)
-                    .background(Brush.linearGradient(listOf(tokens.cardTop, tokens.cardBottom)))
                     .padding(start = 12.dp, end = 10.dp),
                 verticalAlignment = Alignment.CenterVertically,
             ) {
-                CoverBox(playbackState.coverUri, Modifier.size(50.dp))
+                CoverBox(playbackState.coverUri, Modifier.size(44.dp))
                 Spacer(Modifier.width(12.dp))
                 Column(Modifier.weight(1f)) {
                     Text(
                         playbackState.audioTitle,
                         maxLines = 1,
                         overflow = TextOverflow.Ellipsis,
-                        fontSize = 15.sp,
+                        fontSize = 14.sp,
                         fontWeight = FontWeight.SemiBold,
                         color = tokens.label,
                     )
@@ -203,26 +202,25 @@ fun BottomPlaybackArea(
                         maxLines = 1,
                         overflow = TextOverflow.Ellipsis,
                         fontSize = 12.sp,
-                        color = tokens.label2,
+                        color = tokens.label3,
                     )
                 }
                 Row(
-                    modifier = Modifier.width(96.dp),
-                    horizontalArrangement = Arrangement.SpaceBetween,
+                    horizontalArrangement = Arrangement.End,
                     verticalAlignment = Alignment.CenterVertically,
                 ) {
+                    if (playbackState.isPlaying) {
+                        WaveBars(
+                            modifier = Modifier.size(width = 24.dp, height = 16.dp),
+                            playing = true,
+                        )
+                        Spacer(Modifier.width(8.dp))
+                    }
                     MiniPlayerIconButton(
-                        icon = if (playbackState.isPlaying) Icons.Default.Pause else Icons.Default.PlayArrow,
+                        icon = if (playbackState.isPlaying) AsmrIconName.Pause else AsmrIconName.Play,
                         contentDescription = "播放",
                         tint = tokens.label,
                         onClick = onPlayClicked,
-                    )
-                    MiniPlayerIconButton(
-                        icon = Icons.Default.SkipNext,
-                        contentDescription = "下一首",
-                        tint = if (playbackState.canPlayNext) tokens.label else tokens.label3,
-                        enabled = playbackState.canPlayNext,
-                        onClick = onNextClicked,
                     )
                 }
             }
@@ -230,22 +228,22 @@ fun BottomPlaybackArea(
         HorizontalDivider(color = tokens.separator)
         Row(
             modifier = Modifier
-                .height(78.dp)
+                .height(84.dp)
                 .fillMaxWidth(),
             horizontalArrangement = Arrangement.SpaceAround,
             verticalAlignment = Alignment.CenterVertically,
         ) {
-            DockButton(MainTab.MEDIA, Icons.Default.LibraryMusic, selectedTab, onTabSelected)
-            DockButton(MainTab.SLEEP, Icons.Default.Bedtime, selectedTab, onTabSelected)
-            DockButton(MainTab.DLSITE, Icons.Default.MusicNote, selectedTab, onTabSelected)
-            DockButton(MainTab.SETTINGS, Icons.Default.Settings, selectedTab, onTabSelected)
+            DockButton(MainTab.MEDIA, AsmrIconName.Library, selectedTab, onTabSelected)
+            DockButton(MainTab.SLEEP, AsmrIconName.Moon, selectedTab, onTabSelected)
+            DockButton(MainTab.DLSITE, AsmrIconName.CloudDownload, selectedTab, onTabSelected)
+            DockButton(MainTab.SETTINGS, AsmrIconName.Settings, selectedTab, onTabSelected)
         }
     }
 }
 
 @Composable
 fun MiniPlayerIconButton(
-    icon: ImageVector,
+    icon: AsmrIconName,
     contentDescription: String,
     tint: Color,
     enabled: Boolean = true,
@@ -253,35 +251,42 @@ fun MiniPlayerIconButton(
 ) {
     Box(
         modifier = Modifier
-            .size(42.dp)
+            .size(40.dp)
+            .clip(CircleShape)
             .noRippleClickable(enabled = enabled, onClick = onClick),
         contentAlignment = Alignment.Center,
     ) {
-        Icon(icon, contentDescription = contentDescription, tint = tint, modifier = Modifier.size(26.dp))
+        AsmrIcon(
+            name = icon,
+            tint = tint,
+            strokeWidth = 1.85f,
+            modifier = Modifier.size(23.dp),
+        )
     }
 }
 
 @Composable
-fun DockButton(tab: MainTab, icon: ImageVector, selectedTab: MainTab, onTabSelected: (MainTab) -> Unit) {
+fun DockButton(tab: MainTab, icon: AsmrIconName, selectedTab: MainTab, onTabSelected: (MainTab) -> Unit) {
     val tokens = LocalAmberTokens.current
     val selected = tab == selectedTab
+    val contentColor = if (selected) tokens.accent else tokens.labelFaint
     Column(
         horizontalAlignment = Alignment.CenterHorizontally,
         modifier = Modifier
-            .width(78.dp)
+            .width(84.dp)
             .noRippleClickable { onTabSelected(tab) }
             .padding(vertical = 6.dp),
     ) {
-        Icon(
-            icon,
-            contentDescription = tab.title,
-            tint = if (selected) tokens.accent else tokens.label3,
-            modifier = Modifier.size(26.dp),
+        AsmrIcon(
+            name = icon,
+            tint = contentColor,
+            strokeWidth = if (selected) 2.2f else 1.75f,
+            modifier = Modifier.size(23.dp),
         )
         Text(
-            tab.title,
+            if (tab == MainTab.SLEEP) "睡眠定时" else tab.title,
             fontSize = 11.sp,
-            color = if (selected) tokens.accent else tokens.label3,
+            color = contentColor,
             maxLines = 1,
             overflow = TextOverflow.Ellipsis,
             fontWeight = if (selected) FontWeight.SemiBold else FontWeight.Medium,

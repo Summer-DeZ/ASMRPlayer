@@ -169,8 +169,7 @@ class AppSettingsRepository(
             whisperModelId = WhisperModelSpec.byId(values.getOrNull(6)).id,
             allowAdultContentTranslation = values.getOrNull(7)?.toBooleanStrictOrNull() ?: false,
             remoteWhisperBaseUrl = values.getOrNull(9).orEmpty(),
-            remoteWhisperModel = values.getOrNull(10).orEmpty()
-                .ifBlank { AiSubtitleSettings.DEFAULT_REMOTE_WHISPER_MODEL },
+            remoteWhisperModel = values.getOrNull(10).orEmpty(),
             remoteWhisperToken = values.getOrNull(11).orEmpty(),
         )
     }

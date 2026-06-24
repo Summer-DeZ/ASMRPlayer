@@ -154,11 +154,11 @@ import kotlin.math.max
 @Composable
 fun CoverBox(uri: String, modifier: Modifier) {
     val tokens = LocalAmberTokens.current
-    val shape = RoundedCornerShape(10.dp)
+    val shape = RoundedCornerShape(14.dp)
     Box(
         modifier = modifier
             .clip(shape)
-            .background(Brush.linearGradient(listOf(tokens.coverTop, tokens.coverBottom)))
+            .background(Brush.linearGradient(listOf(tokens.coverTop, tokens.coverBottom, tokens.accent.copy(alpha = 0.24f))))
             .border(BorderStroke(0.5.dp, tokens.separator), shape),
         contentAlignment = Alignment.Center,
     ) {
@@ -190,22 +190,9 @@ fun CoverBox(uri: String, modifier: Modifier) {
 }
 
 @Composable
-fun EqualizerIcon(modifier: Modifier = Modifier) {
-    val tokens = LocalAmberTokens.current
-    Canvas(modifier) {
-        val barWidth = size.width / 7f
-        val gap = barWidth * 0.65f
-        val heights = listOf(0.45f, 0.95f, 0.62f, 0.80f)
-        var x = 0f
-        heights.forEach { fraction ->
-            val h = size.height * fraction
-            drawRoundRect(
-                color = tokens.accent,
-                topLeft = Offset(x, size.height - h),
-                size = Size(barWidth, h),
-                cornerRadius = androidx.compose.ui.geometry.CornerRadius(barWidth / 2f, barWidth / 2f),
-            )
-            x += barWidth + gap
-        }
-    }
+fun EqualizerIcon(modifier: Modifier = Modifier, playing: Boolean = true) {
+    WaveBars(
+        modifier = modifier,
+        playing = playing,
+    )
 }

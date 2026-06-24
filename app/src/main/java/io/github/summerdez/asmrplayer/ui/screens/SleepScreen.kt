@@ -70,6 +70,7 @@ import androidx.compose.material.icons.filled.Delete
 import androidx.compose.material.icons.filled.Download
 import androidx.compose.material.icons.filled.Edit
 import androidx.compose.material.icons.filled.FolderOpen
+import androidx.compose.material.icons.filled.GraphicEq
 import androidx.compose.material.icons.filled.LibraryMusic
 import androidx.compose.material.icons.filled.LockOpen
 import androidx.compose.material.icons.filled.MoreVert
@@ -83,6 +84,7 @@ import androidx.compose.material.icons.filled.SkipPrevious
 import androidx.compose.material.icons.filled.Subtitles
 import androidx.compose.material.icons.filled.Timer
 import androidx.compose.material.icons.filled.UploadFile
+import androidx.compose.material.icons.filled.VolumeUp
 import androidx.compose.material3.Button
 import androidx.compose.material3.DropdownMenu
 import androidx.compose.material3.DropdownMenuItem
@@ -94,6 +96,8 @@ import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.ModalBottomSheet
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Scaffold
+import androidx.compose.material3.Slider
+import androidx.compose.material3.SliderDefaults
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Switch
 import androidx.compose.material3.SwitchDefaults
@@ -159,46 +163,94 @@ fun SleepTab(
     onCancel: () -> Unit,
 ) {
     val tokens = LocalAmberTokens.current
+    var selectedMinutes by remember {
+        mutableIntStateOf(if (state.minutes > 0) state.minutes else 45)
+    }
+    var fadeEnabled by remember { mutableStateOf(true) }
+    var stopAfterCurrent by remember { mutableStateOf(state.active && state.atEndOfTrack) }
+    var sleepVolume by remember { mutableIntStateOf(64) }
+    val context = LocalContext.current
+    LaunchedEffect(state.active, state.atEndOfTrack, state.minutes) {
+        if (state.active && !state.atEndOfTrack && state.minutes > 0) {
+            selectedMinutes = state.minutes
+        }
+        if (state.active) {
+            stopAfterCurrent = state.atEndOfTrack
+        }
+    }
     Column(
         Modifier
             .fillMaxSize()
             .verticalScroll(rememberScrollState())
-            .padding(start = 16.dp, end = 16.dp, top = 10.dp, bottom = 32.dp),
+            .padding(start = 22.dp, end = 22.dp, top = 4.dp, bottom = 32.dp),
         horizontalAlignment = Alignment.CenterHorizontally,
     ) {
-        SleepRing(state)
-        Spacer(Modifier.height(30.dp))
-        listOf(15, 30, 45, 60).chunked(2).forEach { row ->
-            Row(horizontalArrangement = Arrangement.spacedBy(12.dp), modifier = Modifier.fillMaxWidth()) {
-                row.forEach { minutes ->
-                    SleepChip(
-                        minutes = minutes,
-                        selected = state.active && !state.atEndOfTrack && state.minutes == minutes,
-                        modifier = Modifier.weight(1f),
-                        onClick = { onSetMinutes(minutes) },
-                    )
-                }
+        SleepRing(state, selectedMinutes)
+        Spacer(Modifier.height(22.dp))
+        Row(horizontalArrangement = Arrangement.spacedBy(9.dp), modifier = Modifier.fillMaxWidth()) {
+            listOf(15, 30, 45, 60, 90).forEach { minutes ->
+                SleepChip(
+                    minutes = minutes,
+                    selected = !state.atEndOfTrack &&
+                        if (state.active) state.minutes == minutes else selectedMinutes == minutes,
+                    modifier = Modifier.weight(1f),
+                    onClick = {
+                        selectedMinutes = minutes
+                        stopAfterCurrent = false
+                    },
+                )
             }
-            Spacer(Modifier.height(12.dp))
         }
-        Spacer(Modifier.height(12.dp))
+        Spacer(Modifier.height(22.dp))
         GroupedCard {
-            SleepOptionRow(
-                icon = Icons.Default.MusicNote,
-                title = "播完当前音频后停止",
-                selected = state.active && state.atEndOfTrack,
-                onClick = onSetEndOfTrack,
+            SleepSwitchSettingRow(
+                icon = Icons.Default.GraphicEq,
+                title = "结束前淡出",
+                subtitle = "临近结束时缓缓降低音量",
+                checked = fadeEnabled,
+                onCheckedChange = {
+                    fadeEnabled = !fadeEnabled
+                    Toast.makeText(context, if (fadeEnabled) "已开启结束前淡出" else "已关闭结束前淡出", Toast.LENGTH_SHORT).show()
+                },
             )
             HorizontalDivider(color = tokens.separator, modifier = Modifier.padding(start = 48.dp))
-            SleepOptionRow(
-                icon = Icons.Default.Timer,
-                title = "自定义时间",
-                selected = false,
-                onClick = onCustom,
+            SleepSwitchSettingRow(
+                icon = Icons.Default.MusicNote,
+                title = "播完当前作品后停止",
+                subtitle = "忽略计时，听完整段",
+                checked = stopAfterCurrent,
+                onCheckedChange = {
+                    val next = !stopAfterCurrent
+                    stopAfterCurrent = next
+                    if (next) {
+                        onSetEndOfTrack()
+                    } else if (state.active && state.atEndOfTrack) {
+                        onCancel()
+                    }
+                },
+            )
+            HorizontalDivider(color = tokens.separator, modifier = Modifier.padding(start = 48.dp))
+            SleepVolumeSettingRow(
+                volume = sleepVolume,
+                onVolumeChange = { sleepVolume = it },
             )
         }
+        Spacer(Modifier.height(22.dp))
+        SleepPrimaryButton(
+            text = "开始睡眠定时",
+            icon = Icons.Default.Bedtime,
+            onClick = {
+                if (stopAfterCurrent) {
+                    onSetEndOfTrack()
+                } else {
+                    onSetMinutes(selectedMinutes)
+                }
+            },
+        )
+        TextButton(onClick = onCustom, modifier = Modifier.height(44.dp)) {
+            Text("自定义分钟数", color = tokens.label3, fontSize = 13.sp, fontWeight = FontWeight.SemiBold)
+        }
         if (state.active) {
-            Spacer(Modifier.height(18.dp))
             TextButton(onClick = onCancel, modifier = Modifier.height(54.dp)) {
                 Text("取消睡眠定时", color = tokens.accent2, fontSize = 17.sp, fontWeight = FontWeight.Bold)
             }
@@ -207,35 +259,46 @@ fun SleepTab(
 }
 
 @Composable
-fun SleepRing(state: SleepTimerUiState) {
+fun SleepRing(state: SleepTimerUiState, displayMinutes: Int) {
     val tokens = LocalAmberTokens.current
     val progress = when {
         state.atEndOfTrack -> 1f
         state.active && state.minutes > 0 -> {
             (state.remainingMs.toFloat() / (state.minutes * 60_000f)).coerceIn(0f, 1f)
         }
-        else -> 0f
+        else -> (displayMinutes.toFloat() / 90f).coerceIn(0f, 1f)
     }
     Column(horizontalAlignment = Alignment.CenterHorizontally, modifier = Modifier.padding(top = 6.dp)) {
-        Box(contentAlignment = Alignment.Center, modifier = Modifier.size(224.dp)) {
+        Box(
+            contentAlignment = Alignment.Center,
+            modifier = Modifier
+                .size(210.dp)
+                .clip(CircleShape)
+                .background(
+                    Brush.radialGradient(
+                        listOf(tokens.label.copy(alpha = 0.05f), Color.Transparent),
+                    ),
+                ),
+        ) {
             Canvas(Modifier.fillMaxSize()) {
-                val stroke = 9.dp.toPx()
-                val arcSize = Size(size.width - stroke, size.height - stroke)
-                val topLeft = Offset(stroke / 2f, stroke / 2f)
+                val stroke = 3.dp.toPx()
+                val inset = 18.dp.toPx()
+                val arcSize = Size(size.width - inset * 2, size.height - inset * 2)
+                val topLeft = Offset(inset, inset)
                 drawArc(
                     color = tokens.gray5,
-                    startAngle = -90f,
+                    startAngle = -45f,
                     sweepAngle = 360f,
                     useCenter = false,
                     topLeft = topLeft,
                     size = arcSize,
-                    style = Stroke(width = stroke, cap = StrokeCap.Round),
+                    style = Stroke(width = 1.dp.toPx(), cap = StrokeCap.Round),
                 )
                 if (progress > 0f) {
                     drawArc(
                         color = tokens.accent,
-                        startAngle = -90f,
-                        sweepAngle = 360f * progress,
+                        startAngle = -45f,
+                        sweepAngle = 320f * progress,
                         useCenter = false,
                         topLeft = topLeft,
                         size = arcSize,
@@ -245,23 +308,27 @@ fun SleepRing(state: SleepTimerUiState) {
             }
             when {
                 state.atEndOfTrack -> Icon(Icons.Default.MusicNote, contentDescription = null, tint = tokens.accent, modifier = Modifier.size(58.dp))
-                state.active -> Column(horizontalAlignment = Alignment.CenterHorizontally) {
+                else -> Column(horizontalAlignment = Alignment.CenterHorizontally) {
                     Text(
-                        text = ((state.remainingMs + 59_999L) / 60_000L).coerceAtLeast(0L).toString(),
+                        text = if (state.active) {
+                            ((state.remainingMs + 59_999L) / 60_000L).coerceAtLeast(0L).toString()
+                        } else {
+                            displayMinutes.toString()
+                        },
                         color = tokens.label,
-                        fontSize = 60.sp,
-                        fontWeight = FontWeight.Bold,
+                        fontSize = 58.sp,
+                        fontFamily = androidx.compose.ui.text.font.FontFamily.Serif,
+                        fontWeight = FontWeight.Normal,
                         lineHeight = 60.sp,
                     )
-                    Text("分钟后停止", color = tokens.label2, fontSize = 14.sp)
+                    Text("分钟", color = tokens.label3, fontSize = 13.sp, letterSpacing = 1.6.sp)
                 }
-                else -> Icon(Icons.Default.Bedtime, contentDescription = null, tint = tokens.accent, modifier = Modifier.size(58.dp))
             }
         }
         Text(
             sleepStatusText(state),
             color = if (state.active) tokens.label else tokens.label2,
-            fontSize = 17.sp,
+            fontSize = 15.sp,
             modifier = Modifier.padding(top = 16.dp),
         )
     }
@@ -270,59 +337,164 @@ fun SleepRing(state: SleepTimerUiState) {
 @Composable
 fun SleepChip(minutes: Int, selected: Boolean, modifier: Modifier, onClick: () -> Unit) {
     val tokens = LocalAmberTokens.current
-    val shape = RoundedCornerShape(20.dp)
-    val background = if (selected) {
-        Brush.verticalGradient(
-            listOf(
-                tokens.accent.copy(alpha = 0.24f).compositeOver(tokens.cardTop),
-                tokens.accent.copy(alpha = 0.18f).compositeOver(tokens.cardBottom),
-            ),
-        )
-    } else {
-        Brush.verticalGradient(listOf(tokens.cardTop, tokens.cardBottom))
-    }
+    val shape = CircleShape
     Surface(
-        modifier = modifier.height(96.dp).noRippleClickable(onClick = onClick),
+        modifier = modifier.height(40.dp).noRippleClickable(onClick = onClick),
         shape = shape,
-        color = Color.Transparent,
-        border = BorderStroke(1.dp, if (selected) tokens.accent else tokens.separator),
-        shadowElevation = if (selected) 3.dp else 1.dp,
+        color = if (selected) tokens.accent else tokens.label.copy(alpha = 0.06f),
+        border = BorderStroke(1.dp, if (selected) Color.Transparent else tokens.separator),
+        shadowElevation = 0.dp,
     ) {
         Box(
             modifier = Modifier
                 .fillMaxSize()
-                .clip(shape)
-                .background(background),
+                .clip(shape),
             contentAlignment = Alignment.Center,
         ) {
-            Column(horizontalAlignment = Alignment.CenterHorizontally, verticalArrangement = Arrangement.Center) {
-                Text(
-                    minutes.toString(),
-                    color = if (selected) tokens.accent else tokens.label,
-                    fontSize = 36.sp,
-                    fontWeight = FontWeight.Bold,
-                    lineHeight = 38.sp,
-                )
-                Text("分钟", color = if (selected) tokens.accent else tokens.label2, fontSize = 16.sp, modifier = Modifier.padding(top = 4.dp))
-            }
+            Text(
+                "${minutes}分",
+                color = if (selected) tokens.bg else tokens.label2,
+                fontSize = 14.sp,
+                fontWeight = FontWeight.SemiBold,
+                maxLines = 1,
+            )
         }
     }
 }
 
 @Composable
-fun SleepOptionRow(icon: ImageVector, title: String, selected: Boolean, onClick: () -> Unit) {
+private fun SleepSwitchSettingRow(
+    icon: ImageVector,
+    title: String,
+    subtitle: String,
+    checked: Boolean,
+    onCheckedChange: () -> Unit,
+) {
     val tokens = LocalAmberTokens.current
     Row(
         modifier = Modifier
             .fillMaxWidth()
-            .height(68.dp)
+            .height(76.dp)
+            .clickable(onClick = onCheckedChange)
+            .padding(horizontal = 18.dp),
+        verticalAlignment = Alignment.CenterVertically,
+    ) {
+        Icon(icon, contentDescription = null, tint = tokens.label2, modifier = Modifier.size(20.dp))
+        Spacer(Modifier.width(14.dp))
+        Column(Modifier.weight(1f)) {
+            Text(
+                title,
+                color = tokens.label,
+                fontSize = 15.sp,
+                fontWeight = FontWeight.SemiBold,
+                maxLines = 1,
+                overflow = TextOverflow.Ellipsis,
+            )
+            Text(
+                subtitle,
+                color = tokens.label2,
+                fontSize = 12.5.sp,
+                maxLines = 1,
+                overflow = TextOverflow.Ellipsis,
+                modifier = Modifier.padding(top = 2.dp),
+            )
+        }
+        Switch(
+            checked = checked,
+            onCheckedChange = { onCheckedChange() },
+            colors = SwitchDefaults.colors(
+                checkedTrackColor = tokens.switchOn,
+                uncheckedTrackColor = tokens.label.copy(alpha = 0.10f),
+                checkedThumbColor = Color(0xFF0A0A0B),
+                uncheckedThumbColor = tokens.label2,
+                uncheckedBorderColor = Color.Transparent,
+                checkedBorderColor = Color.Transparent,
+            ),
+        )
+    }
+}
+
+@Composable
+private fun SleepVolumeSettingRow(volume: Int, onVolumeChange: (Int) -> Unit) {
+    val tokens = LocalAmberTokens.current
+    Column(
+        modifier = Modifier
+            .fillMaxWidth()
+            .padding(horizontal = 18.dp, vertical = 16.dp),
+    ) {
+        Row(verticalAlignment = Alignment.CenterVertically) {
+            Icon(Icons.Default.VolumeUp, contentDescription = null, tint = tokens.label2, modifier = Modifier.size(20.dp))
+            Spacer(Modifier.width(14.dp))
+            Text(
+                "入睡音量",
+                color = tokens.label,
+                fontSize = 15.sp,
+                fontWeight = FontWeight.SemiBold,
+                modifier = Modifier.weight(1f),
+            )
+            Text(
+                "$volume%",
+                color = tokens.label2,
+                fontSize = 13.sp,
+                fontWeight = FontWeight.Medium,
+            )
+        }
+        Slider(
+            value = volume.toFloat(),
+            onValueChange = { onVolumeChange(it.toInt().coerceIn(0, 100)) },
+            valueRange = 0f..100f,
+            colors = SliderDefaults.colors(
+                thumbColor = tokens.accent2,
+                activeTrackColor = tokens.accent2,
+                inactiveTrackColor = tokens.label.copy(alpha = 0.10f),
+            ),
+            modifier = Modifier.padding(start = 34.dp, top = 8.dp),
+        )
+    }
+}
+
+@Composable
+private fun SleepPrimaryButton(
+    text: String,
+    icon: ImageVector,
+    onClick: () -> Unit,
+) {
+    val tokens = LocalAmberTokens.current
+    Surface(
+        modifier = Modifier
+            .fillMaxWidth()
+            .height(52.dp)
+            .noRippleClickable(onClick = onClick),
+        shape = CircleShape,
+        color = tokens.accent,
+        shadowElevation = 0.dp,
+    ) {
+        Row(
+            modifier = Modifier.fillMaxSize(),
+            horizontalArrangement = Arrangement.Center,
+            verticalAlignment = Alignment.CenterVertically,
+        ) {
+            Icon(icon, contentDescription = null, tint = tokens.bg, modifier = Modifier.size(18.dp))
+            Spacer(Modifier.width(8.dp))
+            Text(text, color = tokens.bg, fontSize = 15.sp, fontWeight = FontWeight.Bold)
+        }
+    }
+}
+
+@Composable
+fun SleepOptionRow(icon: ImageVector, title: String, subtitle: String, selected: Boolean, onClick: () -> Unit) {
+    val tokens = LocalAmberTokens.current
+    Row(
+        modifier = Modifier
+            .fillMaxWidth()
+            .height(76.dp)
             .clickable(onClick = onClick)
             .padding(horizontal = 16.dp),
         verticalAlignment = Alignment.CenterVertically,
     ) {
         Surface(
-            modifier = Modifier.size(42.dp),
-            shape = RoundedCornerShape(13.dp),
+            modifier = Modifier.size(40.dp),
+            shape = RoundedCornerShape(14.dp),
             color = if (selected) tokens.accentSoft else tokens.label3.copy(alpha = 0.12f),
         ) {
             Box(contentAlignment = Alignment.Center) {
@@ -330,7 +502,24 @@ fun SleepOptionRow(icon: ImageVector, title: String, selected: Boolean, onClick:
             }
         }
         Spacer(Modifier.width(14.dp))
-        Text(title, color = if (selected) tokens.accent else tokens.label, fontSize = 19.sp, fontWeight = FontWeight.Medium, modifier = Modifier.weight(1f))
+        Column(Modifier.weight(1f)) {
+            Text(
+                title,
+                color = if (selected) tokens.accent else tokens.label,
+                fontSize = 15.sp,
+                fontWeight = FontWeight.SemiBold,
+                maxLines = 1,
+                overflow = TextOverflow.Ellipsis,
+            )
+            Text(
+                subtitle,
+                color = tokens.label2,
+                fontSize = 12.5.sp,
+                maxLines = 1,
+                overflow = TextOverflow.Ellipsis,
+                modifier = Modifier.padding(top = 3.dp),
+            )
+        }
         if (selected) {
             Text("✓", color = tokens.accent, fontSize = 18.sp, fontWeight = FontWeight.Bold)
         } else {

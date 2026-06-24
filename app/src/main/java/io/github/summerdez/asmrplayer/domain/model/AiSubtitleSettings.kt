@@ -1,5 +1,7 @@
 package io.github.summerdez.asmrplayer.domain.model
 
+import java.net.URI
+
 enum class AiTranslationEngine(
     val label: String,
     val defaultBaseUrl: String,
@@ -37,7 +39,7 @@ data class AiSubtitleSettings(
     val deepSeekApiKey: String = "",
     val whisperModelId: String = WhisperModelSpec.DEFAULT_ID,
     val remoteWhisperBaseUrl: String = "",
-    val remoteWhisperModel: String = DEFAULT_REMOTE_WHISPER_MODEL,
+    val remoteWhisperModel: String = "",
     val remoteWhisperToken: String = "",
     val allowAdultContentTranslation: Boolean = false,
 ) {
@@ -62,8 +64,14 @@ data class AiSubtitleSettings(
     val normalizedRemoteWhisperBaseUrl: String
         get() = remoteWhisperBaseUrl.trim().trimEnd('/')
 
+    val remoteTranscriptionAddress: String
+        get() = remoteTranscriptionEndpointFromBaseUrl(remoteWhisperBaseUrl).address
+
+    val remoteTranscriptionPort: String
+        get() = remoteTranscriptionEndpointFromBaseUrl(remoteWhisperBaseUrl).port
+
     val activeRemoteWhisperModel: String
-        get() = remoteWhisperModel.trim().ifBlank { DEFAULT_REMOTE_WHISPER_MODEL }
+        get() = remoteWhisperModel.trim()
 
     val transcriptionCacheKey: String
         get() = when (transcriptionBackend) {
@@ -71,10 +79,70 @@ data class AiSubtitleSettings(
             AiTranscriptionBackend.REMOTE ->
                 "remote:${normalizedRemoteWhisperBaseUrl}|${activeRemoteWhisperModel}"
         }
+}
 
-    companion object {
-        const val DEFAULT_REMOTE_WHISPER_MODEL = "large-v3"
+data class RemoteTranscriptionEndpoint(
+    val address: String = "",
+    val port: String = "",
+)
+
+internal fun remoteTranscriptionEndpointFromBaseUrl(baseUrl: String): RemoteTranscriptionEndpoint {
+    val normalized = baseUrl.trim().trimEnd('/')
+    if (normalized.isBlank()) {
+        return RemoteTranscriptionEndpoint()
     }
+    val candidate = normalized.withDefaultHttpScheme()
+    val uri = runCatching { URI(candidate) }.getOrNull()
+    val scheme = uri?.scheme?.takeIf { it.isNotBlank() } ?: "http"
+    val host = uri?.host?.takeIf { it.isNotBlank() }
+        ?: candidate.removePrefix("$scheme://")
+            .substringBefore('/')
+            .substringBefore(':')
+            .trim()
+    val port = uri?.port
+        ?.takeIf { it > 0 }
+        ?.toString()
+        .orEmpty()
+    return RemoteTranscriptionEndpoint(
+        address = if (host.isBlank()) normalized else "$scheme://$host",
+        port = port,
+    )
+}
+
+internal fun remoteTranscriptionBaseUrl(address: String, port: String): String {
+    val normalizedAddress = address.trim().trimEnd('/')
+    if (normalizedAddress.isBlank()) {
+        return ""
+    }
+    val candidate = normalizedAddress.withDefaultHttpScheme()
+    val uri = runCatching { URI(candidate) }.getOrNull()
+    val scheme = uri?.scheme?.takeIf { it.isNotBlank() } ?: "http"
+    val host = uri?.host?.takeIf { it.isNotBlank() }
+        ?: candidate.removePrefix("$scheme://")
+            .substringBefore('/')
+            .substringBefore(':')
+            .trim()
+    if (host.isBlank()) {
+        return ""
+    }
+    val addressPort = uri?.port
+        ?.takeIf { it > 0 }
+        ?.toString()
+        .orEmpty()
+    val normalizedPort = port.trim().filter { it.isDigit() }.take(5).ifBlank { addressPort }
+    return buildString {
+        append(scheme)
+        append("://")
+        append(host)
+        if (normalizedPort.isNotBlank()) {
+            append(':')
+            append(normalizedPort)
+        }
+    }
+}
+
+private fun String.withDefaultHttpScheme(): String {
+    return if (contains("://")) this else "http://$this"
 }
 
 data class WhisperModelSpec(

@@ -24,6 +24,7 @@ import io.github.summerdez.asmrplayer.domain.model.AiSubtitleSettings
 import io.github.summerdez.asmrplayer.domain.model.AiTranscriptionBackend
 import io.github.summerdez.asmrplayer.domain.model.AiTranslationEngine
 import io.github.summerdez.asmrplayer.domain.model.WhisperModelSpec
+import io.github.summerdez.asmrplayer.domain.model.remoteTranscriptionBaseUrl
 import io.github.summerdez.asmrplayer.playback.PlaybackCommandClient
 import io.github.summerdez.asmrplayer.playback.PlaybackServiceSnapshot
 import io.github.summerdez.asmrplayer.playback.PlaybackServiceState
@@ -343,6 +344,22 @@ class SettingsViewModel(
         resetRemoteWhisperTestStatus()
     }
 
+    fun setAiRemoteTranscriptionAddress(value: String) {
+        val current = _state.value.aiSubtitleSettings
+        settingsRepository.setAiRemoteWhisperBaseUrl(
+            remoteTranscriptionBaseUrl(value, current.remoteTranscriptionPort),
+        )
+        resetRemoteWhisperTestStatus()
+    }
+
+    fun setAiRemoteTranscriptionPort(value: String) {
+        val current = _state.value.aiSubtitleSettings
+        settingsRepository.setAiRemoteWhisperBaseUrl(
+            remoteTranscriptionBaseUrl(current.remoteTranscriptionAddress, value),
+        )
+        resetRemoteWhisperTestStatus()
+    }
+
     fun setAiRemoteWhisperModel(value: String) {
         settingsRepository.setAiRemoteWhisperModel(value)
         resetRemoteWhisperTestStatus()
@@ -362,11 +379,13 @@ class SettingsViewModel(
             _state.update { it.copy(remoteWhisperTestStatus = RemoteWhisperTestStatus.Checking) }
             try {
                 val health = remoteWhisperTranscriber.checkHealth(settings)
-                val message = if (health.modelsReady) {
-                    "可用：${health.displaySummary}"
-                } else {
-                    "服务可达，模型未就绪：${health.displaySummary}"
+                if (!health.modelsReady) {
+                    val message = "服务可达，模型未就绪：${health.displaySummary}"
+                    _state.update { it.copy(remoteWhisperTestStatus = RemoteWhisperTestStatus.Failed(message)) }
+                    _events.emit(SettingsEvent.Message(message))
+                    return@launch
                 }
+                val message = "OK"
                 _state.update { it.copy(remoteWhisperTestStatus = RemoteWhisperTestStatus.Success(message)) }
                 _events.emit(SettingsEvent.Message(message))
             } catch (error: Throwable) {
@@ -374,7 +393,7 @@ class SettingsViewModel(
                     _state.update { it.copy(remoteWhisperTestStatus = RemoteWhisperTestStatus.Idle) }
                     throw error
                 }
-                val message = error.message ?: "远程 Whisper 连接失败"
+                val message = error.message ?: "远程转写服务连接失败"
                 _state.update { it.copy(remoteWhisperTestStatus = RemoteWhisperTestStatus.Failed(message)) }
                 _events.emit(SettingsEvent.Message(message))
             }

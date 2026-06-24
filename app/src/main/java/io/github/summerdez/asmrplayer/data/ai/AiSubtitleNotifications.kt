@@ -9,6 +9,7 @@ import androidx.core.app.NotificationCompat
 import io.github.summerdez.asmrplayer.R
 import io.github.summerdez.asmrplayer.domain.model.AiSubtitleStage
 import io.github.summerdez.asmrplayer.domain.model.AiSubtitleTaskState
+import io.github.summerdez.asmrplayer.domain.model.transcriptionDetailLabel
 
 object AiSubtitleNotifications {
     const val CHANNEL_ID = "ai_subtitles"
@@ -42,7 +43,7 @@ object AiSubtitleNotifications {
 
     private fun stageText(state: AiSubtitleTaskState): String {
         return when (state.stage) {
-            AiSubtitleStage.TRANSCRIBING -> state.transcriptionTitle
+            AiSubtitleStage.TRANSCRIBING -> state.transcriptionDetailLabel().ifBlank { state.transcriptionTitle }
             AiSubtitleStage.TRANSLATING -> "翻译"
             AiSubtitleStage.BINDING -> "绑定字幕"
             AiSubtitleStage.COMPLETED -> "已完成"

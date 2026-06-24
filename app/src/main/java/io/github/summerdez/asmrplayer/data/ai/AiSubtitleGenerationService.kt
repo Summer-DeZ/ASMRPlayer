@@ -9,6 +9,7 @@ import android.os.SystemClock
 import io.github.summerdez.asmrplayer.di.AppGraph
 import io.github.summerdez.asmrplayer.domain.model.AiSubtitleSettings
 import io.github.summerdez.asmrplayer.domain.model.AiSubtitleStage
+import io.github.summerdez.asmrplayer.domain.model.AiSubtitleTaskState
 import io.github.summerdez.asmrplayer.domain.model.AiTranscriptionBackend
 import io.github.summerdez.asmrplayer.domain.model.SubtitleGenerationTarget
 import io.github.summerdez.asmrplayer.domain.model.SubtitleLine
@@ -33,6 +34,7 @@ class AiSubtitleGenerationService : Service() {
     private val jobs = mutableMapOf<String, Job>()
     private val lastNotificationAt = ConcurrentHashMap<String, Long>()
     private val lastNotificationProgress = ConcurrentHashMap<String, Int>()
+    private val lastNotificationProgressSecond = ConcurrentHashMap<String, Long>()
     private val lastNotificationStage = ConcurrentHashMap<String, AiSubtitleStage>()
     private val translator = OpenAiCompatibleTranslator()
 
@@ -180,8 +182,15 @@ class AiSubtitleGenerationService : Service() {
                     context = this,
                     target = target,
                     settings = settings,
-                ) { progress, preview ->
-                    AiSubtitleTaskStateBus.publishTranscribing(target, progress, preview)
+                ) { progress, preview, remoteProgress ->
+                    AiSubtitleTaskStateBus.publishTranscribing(
+                        target = target,
+                        progress = progress,
+                        preview = preview,
+                        processedMs = remoteProgress?.processedMs,
+                        durationMs = remoteProgress?.durationMs,
+                        detailText = remoteProgress?.detailText.orEmpty(),
+                    )
                     updateNotification(target)
                 }
             }
@@ -302,21 +311,23 @@ class AiSubtitleGenerationService : Service() {
 
     private fun updateNotification(target: SubtitleGenerationTarget, force: Boolean = false) {
         val state = AiSubtitleTaskStateBus.taskFor(target.trackId) ?: return
-        if (!force && shouldSkipNotification(target.trackId, state.stage, state.overallProgress)) {
+        if (!force && shouldSkipNotification(target.trackId, state)) {
             return
         }
-        rememberNotificationState(target.trackId, state.stage, state.overallProgress)
+        rememberNotificationState(target.trackId, state)
         val manager = getSystemService(android.app.NotificationManager::class.java)
         manager.notify(AiSubtitleNotifications.NOTIFICATION_ID, AiSubtitleNotifications.build(this, state))
     }
 
-    private fun shouldSkipNotification(trackId: String, stage: AiSubtitleStage, progress: Float): Boolean {
-        val progressPercent = progressPercent(progress)
+    private fun shouldSkipNotification(trackId: String, state: AiSubtitleTaskState): Boolean {
+        val progressPercent = progressPercent(state.overallProgress)
+        val progressSecond = aiSubtitleNotificationProgressSecond(state)
         val now = SystemClock.elapsedRealtime()
         val lastAt = lastNotificationAt[trackId] ?: 0L
-        val stageChanged = lastNotificationStage[trackId] != stage
-        val progressChanged = lastNotificationProgress[trackId] != progressPercent
-        if (stageChanged || isTerminalStage(stage)) {
+        val stageChanged = lastNotificationStage[trackId] != state.stage
+        val progressChanged = lastNotificationProgress[trackId] != progressPercent ||
+            lastNotificationProgressSecond[trackId] != progressSecond
+        if (stageChanged || isTerminalStage(state.stage)) {
             return false
         }
         if (!progressChanged && now - lastAt < NOTIFICATION_STALE_INTERVAL_MS) {
@@ -325,15 +336,19 @@ class AiSubtitleGenerationService : Service() {
         return now - lastAt < NOTIFICATION_MIN_INTERVAL_MS
     }
 
-    private fun rememberNotificationState(trackId: String, stage: AiSubtitleStage, progress: Float) {
+    private fun rememberNotificationState(trackId: String, state: AiSubtitleTaskState) {
         lastNotificationAt[trackId] = SystemClock.elapsedRealtime()
-        lastNotificationProgress[trackId] = progressPercent(progress)
-        lastNotificationStage[trackId] = stage
+        lastNotificationProgress[trackId] = progressPercent(state.overallProgress)
+        aiSubtitleNotificationProgressSecond(state)?.let { second ->
+            lastNotificationProgressSecond[trackId] = second
+        } ?: lastNotificationProgressSecond.remove(trackId)
+        lastNotificationStage[trackId] = state.stage
     }
 
     private fun clearNotificationState(trackId: String) {
         lastNotificationAt.remove(trackId)
         lastNotificationProgress.remove(trackId)
+        lastNotificationProgressSecond.remove(trackId)
         lastNotificationStage.remove(trackId)
     }
 
@@ -375,13 +390,7 @@ class AiSubtitleGenerationService : Service() {
 
     private fun writeSubtitleFile(target: SubtitleGenerationTarget, suffix: String, body: String): File {
         val dir = File(filesDir, "ai-subtitles/generated").apply { mkdirs() }
-        val safeTitle = target.trackTitle
-            .lowercase(Locale.US)
-            .replace(Regex("[^a-z0-9._-]+"), "-")
-            .trim('-')
-            .ifBlank { target.trackId }
-            .take(48)
-        val file = File(dir, "$safeTitle-$suffix.vtt")
+        val file = File(dir, generatedSubtitleFileName(target, suffix))
         file.writeText(body, Charsets.UTF_8)
         return file
     }
@@ -429,6 +438,33 @@ class AiSubtitleGenerationService : Service() {
                 .putExtra(EXTRA_TRACK_ID, trackId)
         }
     }
+}
+
+internal fun generatedSubtitleFileName(target: SubtitleGenerationTarget, suffix: String): String {
+    val safeTrackId = subtitleFileSegment(target.trackId)
+        .ifBlank { "track" }
+        .take(64)
+    val safeTitle = subtitleFileSegment(target.trackTitle)
+        .ifBlank { "audio" }
+        .take(48)
+    val safeSuffix = subtitleFileSegment(suffix)
+        .ifBlank { "subtitle" }
+        .take(16)
+    return "$safeTrackId-$safeTitle-$safeSuffix.vtt"
+}
+
+internal fun aiSubtitleNotificationProgressSecond(state: AiSubtitleTaskState): Long? {
+    if (state.stage != AiSubtitleStage.TRANSCRIBING) {
+        return null
+    }
+    return state.processedMs?.coerceAtLeast(0L)?.div(1_000L)
+}
+
+private fun subtitleFileSegment(value: String): String {
+    return value
+        .lowercase(Locale.US)
+        .replace(Regex("[^a-z0-9._-]+"), "-")
+        .trim('-', '.', '_')
 }
 
 internal fun buildTranslationBatch(

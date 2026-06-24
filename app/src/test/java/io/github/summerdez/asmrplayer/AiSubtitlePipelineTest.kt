@@ -17,17 +17,24 @@ import io.github.summerdez.asmrplayer.data.ai.TranslationResponse
 import io.github.summerdez.asmrplayer.data.ai.VadMergeConfig
 import io.github.summerdez.asmrplayer.data.ai.VadSpeechSegment
 import io.github.summerdez.asmrplayer.data.ai.WhisperRecognitionConcurrency
+import io.github.summerdez.asmrplayer.data.ai.aiSubtitleNotificationProgressSecond
 import io.github.summerdez.asmrplayer.data.ai.buildTranslationBatch
+import io.github.summerdez.asmrplayer.data.ai.generatedSubtitleFileName
 import io.github.summerdez.asmrplayer.data.ai.mergeVadSpeechSegments
 import io.github.summerdez.asmrplayer.data.ai.planWhisperRecognitionConcurrency
 import io.github.summerdez.asmrplayer.data.normalizedOpenAiCompatibleModel
 import io.github.summerdez.asmrplayer.domain.model.AiSubtitleSettings
+import io.github.summerdez.asmrplayer.domain.model.AiSubtitleTaskState
 import io.github.summerdez.asmrplayer.domain.model.AiSubtitleStage
 import io.github.summerdez.asmrplayer.domain.model.AiTranscriptionBackend
 import io.github.summerdez.asmrplayer.domain.model.AiTranslationEngine
 import io.github.summerdez.asmrplayer.domain.model.SubtitleGenerationTarget
 import io.github.summerdez.asmrplayer.domain.model.SubtitleLine
 import io.github.summerdez.asmrplayer.domain.model.WhisperModelSpec
+import io.github.summerdez.asmrplayer.domain.model.formatAiSubtitleProgressTime
+import io.github.summerdez.asmrplayer.domain.model.remoteTranscriptionBaseUrl
+import io.github.summerdez.asmrplayer.domain.model.remoteTranscriptionEndpointFromBaseUrl
+import io.github.summerdez.asmrplayer.domain.model.transcriptionDetailLabel
 import java.io.IOException
 import java.nio.file.Files
 import kotlinx.coroutines.runBlocking
@@ -52,6 +59,34 @@ class AiSubtitlePipelineTest {
         assertTrue(vtt.contains("轻轻地低语哦"))
         assertTrue(!vtt.contains("そっと囁くね"))
         assertTrue(vtt.contains("00:01:01.000 --> 00:01:02.250"))
+    }
+
+    @Test
+    fun generatedSubtitleFileNameUsesTrackIdToAvoidSanitizedTitleCollision() {
+        val misaki = SubtitleGenerationTarget(
+            playlistId = "blue-archive",
+            trackId = "21b6c595-8ce6-4f3d-8145-39673dd886f0",
+            trackTitle = "戒野美咲ASMR「一心只希望你有健康生活」.mp3",
+            audioUri = "content://audio/misaki",
+            contextTitle = "蔚蓝档案",
+        )
+        val noah = SubtitleGenerationTarget(
+            playlistId = "blue-archive",
+            trackId = "74319e8a-b39b-4a7b-b68f-c5af175b446e",
+            trackTitle = "生盐诺亚ASMR ～めげないあなたのすぐ横で～.mp3",
+            audioUri = "content://audio/noah",
+            contextTitle = "蔚蓝档案",
+        )
+
+        assertEquals(
+            "21b6c595-8ce6-4f3d-8145-39673dd886f0-asmr-.mp3-zh.vtt",
+            generatedSubtitleFileName(misaki, "zh"),
+        )
+        assertEquals(
+            "74319e8a-b39b-4a7b-b68f-c5af175b446e-asmr-.mp3-zh.vtt",
+            generatedSubtitleFileName(noah, "zh"),
+        )
+        assertTrue(generatedSubtitleFileName(misaki, "zh") != generatedSubtitleFileName(noah, "zh"))
     }
 
     @Test
@@ -552,8 +587,8 @@ class AiSubtitlePipelineTest {
     }
 
     @Test
-    fun remoteWhisperResponseParsesSegmentsToSubtitleLines() {
-        val parsed = RemoteWhisperTranscriber.parseTranscribeResponse(
+    fun remoteTranscriptionResultParsesSegmentsToSubtitleLines() {
+        val parsed = RemoteWhisperTranscriber.parseTranscriptionResultResponse(
             """
                 {
                   "model":"large-v3",
@@ -573,9 +608,9 @@ class AiSubtitlePipelineTest {
     }
 
     @Test
-    fun remoteWhisperResponseRejectsInvalidSegments() {
+    fun remoteTranscriptionResultRejectsInvalidSegments() {
         val error = assertThrows(IOException::class.java) {
-            RemoteWhisperTranscriber.parseTranscribeResponse(
+            RemoteWhisperTranscriber.parseTranscriptionResultResponse(
                 """{"segments":[{"id":"1","start_ms":1000,"end_ms":900,"text":"だめ"}]}""",
             )
         }
@@ -597,6 +632,42 @@ class AiSubtitlePipelineTest {
 
         assertEquals("local:base", local.transcriptionCacheKey)
         assertEquals("remote:http://192.168.1.10:8000|large-v3", remote.transcriptionCacheKey)
+    }
+
+    @Test
+    fun remoteTranscriptionEndpointSplitsLegacyBaseUrl() {
+        val endpoint = remoteTranscriptionEndpointFromBaseUrl("http://192.168.1.10:8000/")
+
+        assertEquals("http://192.168.1.10", endpoint.address)
+        assertEquals("8000", endpoint.port)
+    }
+
+    @Test
+    fun remoteTranscriptionBaseUrlCombinesAddressAndPort() {
+        assertEquals(
+            "http://192.168.1.10:8000",
+            remoteTranscriptionBaseUrl("192.168.1.10", "8000"),
+        )
+        assertEquals(
+            "https://asr.example.com:443",
+            remoteTranscriptionBaseUrl("https://asr.example.com", "443"),
+        )
+        assertEquals(
+            "http://192.168.1.10:8000",
+            remoteTranscriptionBaseUrl("http://192.168.1.10:8000", ""),
+        )
+    }
+
+    @Test
+    fun remoteTranscriptionModelCanBeBlank() {
+        val settings = aiSettings().copy(
+            transcriptionBackend = AiTranscriptionBackend.REMOTE,
+            remoteWhisperBaseUrl = "http://192.168.1.10:8000",
+            remoteWhisperModel = "",
+        )
+
+        assertEquals("", settings.activeRemoteWhisperModel)
+        assertEquals("remote:http://192.168.1.10:8000|", settings.transcriptionCacheKey)
     }
 
     @Test
@@ -792,8 +863,62 @@ class AiSubtitlePipelineTest {
 
         val task = AiSubtitleTaskStateBus.taskFor(target.trackId)
         assertEquals(0.42f, task?.transcribeProgress ?: 0f, 0.0001f)
+        assertNull(task?.processedMs)
+        assertNull(task?.durationMs)
+        assertEquals("", task?.detailText)
         assertEquals("プレビュー", task?.previewLines?.last()?.sourceText)
         AiSubtitleTaskStateBus.remove(target.trackId)
+    }
+
+    @Test
+    fun aiSubtitleRemoteTranscriptionFormatsTimeProgress() {
+        assertEquals("01:55/05:02", formatAiSubtitleProgressTime(115_000L, 302_000L))
+    }
+
+    @Test
+    fun aiSubtitleTaskStoresRemoteTranscriptionProgressDetail() {
+        val target = SubtitleGenerationTarget(
+            playlistId = "playlist-remote-progress",
+            trackId = "track-remote-progress",
+            trackTitle = "remote track",
+            audioUri = "content://audio/remote-progress",
+        )
+
+        AiSubtitleTaskStateBus.publish(target, AiSubtitleStage.TRANSCRIBING)
+        AiSubtitleTaskStateBus.publishTranscribing(
+            target = target,
+            progress = 0.38f,
+            preview = emptyList(),
+            processedMs = 115_000L,
+            durationMs = 302_000L,
+            detailText = "正在语音识别",
+        )
+
+        val task = AiSubtitleTaskStateBus.taskFor(target.trackId)
+        assertEquals(115_000L, task?.processedMs)
+        assertEquals(302_000L, task?.durationMs)
+        assertEquals("正在语音识别", task?.detailText)
+        assertEquals("正在语音识别 01:55/05:02", task?.transcriptionDetailLabel())
+        assertEquals(115L, task?.let { aiSubtitleNotificationProgressSecond(it) })
+        AiSubtitleTaskStateBus.remove(target.trackId)
+    }
+
+    @Test
+    fun aiSubtitleNotificationProgressSecondOnlyTracksTranscribingState() {
+        val target = SubtitleGenerationTarget(
+            playlistId = "playlist-notification-second",
+            trackId = "track-notification-second",
+            trackTitle = "notification track",
+            audioUri = "content://audio/notification-second",
+        )
+        val translating = AiSubtitleTaskState(
+            target = target,
+            stage = AiSubtitleStage.TRANSLATING,
+            processedMs = 115_000L,
+            durationMs = 302_000L,
+        )
+
+        assertNull(aiSubtitleNotificationProgressSecond(translating))
     }
 
     @Test

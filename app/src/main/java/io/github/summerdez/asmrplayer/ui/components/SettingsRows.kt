@@ -154,11 +154,11 @@ import kotlin.math.max
 fun GroupedCard(content: @Composable ColumnScope.() -> Unit) {
     val tokens = LocalAmberTokens.current
     Surface(
-        shape = RoundedCornerShape(16.dp),
-        color = tokens.cardTop,
-        border = BorderStroke(0.5.dp, tokens.separator),
+        shape = RoundedCornerShape(28.dp),
+        color = tokens.card,
+        border = BorderStroke(1.dp, tokens.separator),
         tonalElevation = 0.dp,
-        shadowElevation = 2.dp,
+        shadowElevation = 0.dp,
         modifier = Modifier.fillMaxWidth(),
     ) {
         Column(content = content)
@@ -182,16 +182,17 @@ fun SettingsSwitchRow(title: String, checked: Boolean, onClick: () -> Unit) {
     Row(
         modifier = Modifier
             .fillMaxWidth()
-            .height(64.dp)
+            .height(66.dp)
             .clickable(onClick = onClick)
-            .padding(start = 15.dp, end = 14.dp),
+            .padding(start = 16.dp, end = 16.dp),
         verticalAlignment = Alignment.CenterVertically,
     ) {
         SettingLeadingIcon(icon = settingIconFor(title), alt = title.contains("成人"))
-        Spacer(Modifier.width(13.dp))
+        Spacer(Modifier.width(14.dp))
         Text(
             title,
-            fontSize = 16.sp,
+            fontSize = 15.sp,
+            fontWeight = FontWeight.SemiBold,
             color = tokens.label,
             maxLines = 1,
             overflow = TextOverflow.Ellipsis,
@@ -202,9 +203,9 @@ fun SettingsSwitchRow(title: String, checked: Boolean, onClick: () -> Unit) {
             onCheckedChange = { onClick() },
             colors = SwitchDefaults.colors(
                 checkedTrackColor = tokens.switchOn,
-                uncheckedTrackColor = tokens.switchOff,
-                checkedThumbColor = Color.White,
-                uncheckedThumbColor = Color.White,
+                uncheckedTrackColor = tokens.label.copy(alpha = 0.10f),
+                checkedThumbColor = Color(0xFF0A0A0B),
+                uncheckedThumbColor = tokens.label2,
                 uncheckedBorderColor = Color.Transparent,
                 checkedBorderColor = Color.Transparent,
             ),
@@ -223,16 +224,17 @@ fun SettingsPermissionRow(
     Row(
         modifier = Modifier
             .fillMaxWidth()
-            .height(64.dp)
+            .height(66.dp)
             .clickable(onClick = onClick)
-            .padding(start = 15.dp, end = 14.dp),
+            .padding(start = 16.dp, end = 16.dp),
         verticalAlignment = Alignment.CenterVertically,
     ) {
         SettingLeadingIcon(icon = settingIconFor(title))
-        Spacer(Modifier.width(13.dp))
+        Spacer(Modifier.width(14.dp))
         Text(
             title,
-            fontSize = 16.sp,
+            fontSize = 15.sp,
+            fontWeight = FontWeight.SemiBold,
             color = tokens.label,
             maxLines = 1,
             overflow = TextOverflow.Ellipsis,
@@ -240,8 +242,8 @@ fun SettingsPermissionRow(
         )
         Text(
             value,
-            fontSize = 15.sp,
-            color = if (valueAccent) tokens.accent else tokens.accent,
+            fontSize = 13.sp,
+            color = if (valueAccent) tokens.accent else tokens.label3,
             maxLines = 1,
             overflow = TextOverflow.Ellipsis,
         )
@@ -255,13 +257,13 @@ fun ThemeChip(text: String, selected: Boolean, onClick: () -> Unit) {
     val tokens = LocalAmberTokens.current
     Surface(
         modifier = Modifier
-            .height(44.dp)
+            .height(38.dp)
             .noRippleClickable(onClick = onClick),
-        shape = RoundedCornerShape(13.dp),
-        color = if (selected) tokens.cardTop else Color.Transparent,
-        border = BorderStroke(0.5.dp, if (selected) tokens.separator else tokens.separator.copy(alpha = 0.75f)),
+        shape = RoundedCornerShape(22.dp),
+        color = if (selected) tokens.accent else tokens.label.copy(alpha = 0.06f),
+        border = BorderStroke(1.dp, if (selected) tokens.accent else tokens.separator),
         tonalElevation = 0.dp,
-        shadowElevation = if (selected) 2.dp else 0.dp,
+        shadowElevation = 0.dp,
     ) {
         Box(
             modifier = Modifier
@@ -271,8 +273,8 @@ fun ThemeChip(text: String, selected: Boolean, onClick: () -> Unit) {
         ) {
             Text(
                 text,
-                color = if (selected) tokens.accent else tokens.label2,
-                fontSize = 14.sp,
+                color = if (selected) Color(0xFF0A0A0B) else tokens.label2,
+                fontSize = 13.sp,
                 fontWeight = if (selected) FontWeight.SemiBold else FontWeight.Medium,
                 maxLines = 1,
                 overflow = TextOverflow.Ellipsis,
@@ -285,15 +287,18 @@ fun ThemeChip(text: String, selected: Boolean, onClick: () -> Unit) {
 private fun SettingLeadingIcon(icon: ImageVector, alt: Boolean = false) {
     val tokens = LocalAmberTokens.current
     Surface(
-        modifier = Modifier.size(32.dp),
-        shape = RoundedCornerShape(9.dp),
-        color = if (alt) tokens.accent2Soft else tokens.accentSoft,
+        modifier = Modifier.size(34.dp),
+        shape = RoundedCornerShape(12.dp),
+        color = if (alt) tokens.accent2Soft else tokens.label.copy(alpha = 0.06f),
+        border = BorderStroke(1.dp, if (alt) tokens.accent2.copy(alpha = 0.28f) else tokens.separator),
+        tonalElevation = 0.dp,
+        shadowElevation = 0.dp,
     ) {
         Box(contentAlignment = Alignment.Center) {
             Icon(
                 icon,
                 contentDescription = null,
-                tint = if (alt) tokens.accent2 else tokens.accent,
+                tint = if (alt) tokens.accent2 else tokens.label2,
                 modifier = Modifier.size(18.dp),
             )
         }
