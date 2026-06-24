@@ -37,6 +37,7 @@ data class AiSubtitleTaskState(
     val translateProgress: Float = 0f,
     val previewLines: List<SubtitleLine> = emptyList(),
     val subtitlePath: String = "",
+    val warning: String = "",
     val error: String = "",
 ) {
     val overallProgress: Float

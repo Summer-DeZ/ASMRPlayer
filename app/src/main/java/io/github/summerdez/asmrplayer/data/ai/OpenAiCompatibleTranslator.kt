@@ -437,8 +437,8 @@ class OpenAiCompatibleTranslator(
                 if (translatedText.isBlank()) {
                     throw IllegalArgumentException("翻译响应第 ${source.id} 句为空")
                 }
-                if (containsJapaneseKana(translatedText)) {
-                    throw IllegalArgumentException("翻译响应第 ${source.id} 句仍含日文假名")
+                if (containsJapaneseHiragana(translatedText)) {
+                    throw IllegalArgumentException("翻译响应第 ${source.id} 句仍含平假名")
                 }
                 source.copy(translatedText = translatedText)
             }
@@ -624,9 +624,25 @@ class OpenAiCompatibleTranslator(
             }
         }
 
-        private fun containsJapaneseKana(value: String): Boolean {
+        fun translationQualityWarning(lines: List<SubtitleLine>): String {
+            return if (lines.any { containsJapaneseKatakana(it.translatedText) }) {
+                "AI 字幕已生成，但译文中仍有片假名，建议人工检查。"
+            } else {
+                ""
+            }
+        }
+
+        private fun containsJapaneseHiragana(value: String): Boolean {
             return value.any { char ->
-                char in '\u3040'..'\u309f' || char in '\u30a0'..'\u30ff'
+                char in '\u3040'..'\u309f'
+            }
+        }
+
+        private fun containsJapaneseKatakana(value: String): Boolean {
+            return value.any { char ->
+                char in '\u30a0'..'\u30ff' ||
+                    char in '\u31f0'..'\u31ff' ||
+                    char in '\uff66'..'\uff9d'
             }
         }
 

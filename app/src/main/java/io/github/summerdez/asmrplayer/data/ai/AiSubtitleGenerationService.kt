@@ -138,7 +138,12 @@ class AiSubtitleGenerationService : Service() {
                     translatedFile.name,
                 )
             }
-            AiSubtitleTaskStateBus.publishCompleted(target, translatedFile.absolutePath, translatedLines)
+            AiSubtitleTaskStateBus.publishCompleted(
+                target = target,
+                subtitlePath = translatedFile.absolutePath,
+                preview = translatedLines,
+                warning = OpenAiCompatibleTranslator.translationQualityWarning(translatedLines),
+            )
             updateNotification(target, force = true)
         } catch (error: Throwable) {
             if (error is CancellationException) {

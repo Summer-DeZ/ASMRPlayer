@@ -1,4 +1,4 @@
-> 当前软件版本：1.6.0（versionCode 21）
+> 当前软件版本：1.6.1（versionCode 22）
 > 文档更新日期：2026-06-24
 
 # ASMRPlayer AI 架构速览
@@ -19,7 +19,7 @@
 
 - Android 应用模块：`:app`
 - 包名：`io.github.summerdez.asmrplayer`
-- 版本：`versionName 1.6.0`，`versionCode 21`
+- 版本：`versionName 1.6.1`，`versionCode 22`
 - SDK：`minSdk 26`，`compileSdk 36`，`targetSdk 36`
 - UI：Jetpack Compose + Material 3，自定义暖夜琥珀主题
 - 状态层：ViewModel + `StateFlow` / `SharedFlow`

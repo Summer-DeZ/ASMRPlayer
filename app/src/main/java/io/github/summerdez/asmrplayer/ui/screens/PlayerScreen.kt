@@ -487,7 +487,7 @@ private fun PlayerMoreMenuSheet(
         else -> "AI 识别生成字幕"
     }
     val aiSub = when {
-        hasActiveAiTask -> aiSubtitleTask?.let(::playerAiSubtitleStatusText).orEmpty()
+        hasActiveAiTask -> aiSubtitleTask.let(::playerAiSubtitleStatusText)
         subtitlesEnabled -> "点击关闭字幕"
         hasSubtitle -> "点击重新显示字幕"
         else -> "使用 Whisper 实时识别语音"
@@ -727,7 +727,7 @@ private fun playerAiSubtitleStatusText(task: AiSubtitleTaskState): String {
         }
         AiSubtitleStage.TRANSLATING -> "正在翻译 ${(task.translateProgress * 100).toInt()}%"
         AiSubtitleStage.BINDING -> "正在绑定字幕"
-        AiSubtitleStage.COMPLETED -> "AI 字幕已生成"
+        AiSubtitleStage.COMPLETED -> if (task.warning.isBlank()) "AI 字幕已生成" else "AI 字幕已生成，需检查片假名"
         AiSubtitleStage.PAUSED -> "AI 字幕已暂停，点击查看"
         AiSubtitleStage.FAILED -> "AI 字幕生成失败，点击查看"
         AiSubtitleStage.CANCELED -> "AI 字幕已取消"

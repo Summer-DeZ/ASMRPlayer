@@ -271,7 +271,7 @@ class AiSubtitlePipelineTest {
     }
 
     @Test
-    fun orderedTranslationContentRejectsJapaneseKanaInTranslation() {
+    fun orderedTranslationContentRejectsJapaneseHiraganaInTranslation() {
         val source = listOf(SubtitleLine("1", 0L, 1_000L, "ん…"))
 
         val error = assertThrows(IllegalArgumentException::class.java) {
@@ -282,7 +282,40 @@ class AiSubtitlePipelineTest {
             )
         }
 
-        assertTrue(error.message.orEmpty().contains("日文假名"))
+        assertTrue(error.message.orEmpty().contains("平假名"))
+    }
+
+    @Test
+    fun orderedTranslationContentAcceptsKatakanaAndStoresWarning() {
+        val source = listOf(SubtitleLine("1", 0L, 1_000L, "胸がドキドキする"))
+
+        val parsed = OpenAiCompatibleTranslator.parseCompleteTranslationContent(
+            content = """{"lines":[{"id":"1","zh":"胸口ドキドキ"}]}""",
+            finishReason = "stop",
+            sourceLines = source,
+        )
+        val warning = OpenAiCompatibleTranslator.translationQualityWarning(parsed)
+        val target = SubtitleGenerationTarget(
+            playlistId = "playlist-katakana-warning",
+            trackId = "track-katakana-warning",
+            trackTitle = "katakana track",
+            audioUri = "content://audio/katakana-warning",
+        )
+
+        AiSubtitleTaskStateBus.publishCompleted(
+            target = target,
+            subtitlePath = "/tmp/katakana.vtt",
+            preview = parsed,
+            warning = warning,
+        )
+        val task = AiSubtitleTaskStateBus.taskFor(target.trackId)
+
+        assertEquals("胸口ドキドキ", parsed.single().translatedText)
+        assertTrue(warning.contains("片假名"))
+        assertEquals(AiSubtitleStage.COMPLETED, task?.stage)
+        assertEquals(warning, task?.warning)
+        assertEquals("", task?.error)
+        AiSubtitleTaskStateBus.remove(target.trackId)
     }
 
     @Test

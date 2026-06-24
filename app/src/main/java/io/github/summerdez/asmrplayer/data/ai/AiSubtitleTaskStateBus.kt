@@ -48,6 +48,7 @@ object AiSubtitleTaskStateBus {
                 durationMs = durationMs?.takeIf { value -> value > 0L } ?: it.durationMs,
                 detailText = detailText.ifBlank { it.detailText },
                 previewLines = preview.takeLast(PREVIEW_LIMIT),
+                warning = "",
                 error = "",
             )
         }
@@ -70,12 +71,18 @@ object AiSubtitleTaskStateBus {
                 stage = AiSubtitleStage.TRANSLATING,
                 translateProgress = maxOf(it.translateProgress, nextProgress),
                 previewLines = preview.takeLast(PREVIEW_LIMIT),
+                warning = "",
                 error = "",
             )
         }
     }
 
-    fun publishCompleted(target: SubtitleGenerationTarget, subtitlePath: String, preview: List<SubtitleLine>) {
+    fun publishCompleted(
+        target: SubtitleGenerationTarget,
+        subtitlePath: String,
+        preview: List<SubtitleLine>,
+        warning: String = "",
+    ) {
         publish(
             taskFor(target.trackId) ?: AiSubtitleTaskState(target = target),
         ) {
@@ -85,6 +92,7 @@ object AiSubtitleTaskStateBus {
                 translateProgress = 1f,
                 subtitlePath = subtitlePath,
                 previewLines = preview.takeLast(PREVIEW_LIMIT),
+                warning = warning,
                 error = "",
             )
         }
@@ -94,7 +102,7 @@ object AiSubtitleTaskStateBus {
         publish(
             taskFor(target.trackId) ?: AiSubtitleTaskState(target = target),
         ) {
-            it.copy(stage = AiSubtitleStage.FAILED, error = message)
+            it.copy(stage = AiSubtitleStage.FAILED, warning = "", error = message)
         }
     }
 

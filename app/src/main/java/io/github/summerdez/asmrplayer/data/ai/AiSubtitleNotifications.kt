@@ -46,7 +46,7 @@ object AiSubtitleNotifications {
             AiSubtitleStage.TRANSCRIBING -> state.transcriptionDetailLabel().ifBlank { state.transcriptionTitle }
             AiSubtitleStage.TRANSLATING -> "翻译"
             AiSubtitleStage.BINDING -> "绑定字幕"
-            AiSubtitleStage.COMPLETED -> "已完成"
+            AiSubtitleStage.COMPLETED -> if (state.warning.isBlank()) "已完成" else "已完成 · ${state.warning}"
             AiSubtitleStage.PAUSED -> "已暂停"
             AiSubtitleStage.FAILED -> "失败"
             AiSubtitleStage.CANCELED -> "已取消"

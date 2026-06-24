@@ -1000,6 +1000,18 @@ fun AiSubtitleGenerationSheet(
                 )
             }
         }
+        if (task.warning.isNotBlank()) {
+            Spacer(Modifier.height(12.dp))
+            Surface(color = tokens.accentSoft, shape = RoundedCornerShape(16.dp), modifier = Modifier.fillMaxWidth()) {
+                Text(
+                    task.warning,
+                    color = tokens.accent,
+                    fontSize = 15.sp,
+                    fontWeight = FontWeight.Medium,
+                    modifier = Modifier.padding(14.dp),
+                )
+            }
+        }
         if (task.previewLines.isNotEmpty()) {
             Spacer(Modifier.height(14.dp))
             Surface(color = tokens.card, shape = RoundedCornerShape(16.dp), modifier = Modifier.fillMaxWidth()) {
@@ -1187,7 +1199,7 @@ private fun aiSubtitleStatusText(task: AiSubtitleTaskState): String {
         }
         AiSubtitleStage.TRANSLATING -> "AI 字幕 · 翻译 ${(task.translateProgress * 100).toInt()}%"
         AiSubtitleStage.BINDING -> "AI 字幕 · 正在绑定"
-        AiSubtitleStage.COMPLETED -> "AI 字幕已生成"
+        AiSubtitleStage.COMPLETED -> if (task.warning.isBlank()) "AI 字幕已生成" else "AI 字幕已生成 · 需检查片假名"
         AiSubtitleStage.PAUSED -> "AI 字幕已暂停"
         AiSubtitleStage.FAILED -> "AI 字幕失败"
         AiSubtitleStage.CANCELED -> "AI 字幕已取消"
