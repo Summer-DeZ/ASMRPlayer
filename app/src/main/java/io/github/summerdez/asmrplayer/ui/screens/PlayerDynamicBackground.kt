@@ -23,6 +23,7 @@ import kotlin.math.roundToInt
 
 internal data class PlayerBackgroundColors(
     val base: Color,
+    val baseBottom: Color,
     val glowPrimary: Color,
     val glowSecondary: Color,
     val fromCover: Boolean,
@@ -39,6 +40,7 @@ internal fun rememberPlayerBackgroundColors(
     var extractedColors by remember(coverUri) { mutableStateOf<PlayerBackgroundColors?>(null) }
     val fallback = PlayerBackgroundColors(
         base = defaultBase,
+        baseBottom = defaultBase,
         glowPrimary = defaultPrimaryGlow,
         glowSecondary = defaultSecondaryGlow,
         fromCover = false,
@@ -89,6 +91,7 @@ private suspend fun extractPlayerBackgroundColors(
         } else {
             PlayerBackgroundColors(
                 base = dominant.toPlayerBase(defaultBase),
+                baseBottom = secondary.toPlayerBottomBase(defaultBase),
                 glowPrimary = primary.toPlayerGlow(defaultPrimaryGlow),
                 glowSecondary = secondary.toPlayerGlow(defaultSecondaryGlow),
                 fromCover = true,
@@ -134,11 +137,26 @@ private fun Palette.Swatch?.toPlayerBase(fallback: Color): Color {
     val hsl = hsl.copyOf()
     val darkSurface = fallback.luminance() < 0.5f
     hsl[1] = if (darkSurface) {
-        (hsl[1] * 0.62f).coerceIn(0.16f, 0.54f)
+        (hsl[1] * 0.72f).coerceIn(0.20f, 0.58f)
     } else {
-        (hsl[1] * 0.22f).coerceIn(0.04f, 0.18f)
+        (hsl[1] * 0.30f).coerceIn(0.06f, 0.22f)
     }
-    hsl[2] = if (darkSurface) 0.11f else 0.94f
+    hsl[2] = if (darkSurface) 0.16f else 0.90f
+    return Color(ColorUtils.HSLToColor(hsl))
+}
+
+private fun Palette.Swatch?.toPlayerBottomBase(fallback: Color): Color {
+    if (this == null) {
+        return fallback
+    }
+    val hsl = hsl.copyOf()
+    val darkSurface = fallback.luminance() < 0.5f
+    hsl[1] = if (darkSurface) {
+        (hsl[1] * 0.68f).coerceIn(0.18f, 0.52f)
+    } else {
+        (hsl[1] * 0.26f).coerceIn(0.05f, 0.20f)
+    }
+    hsl[2] = if (darkSurface) 0.20f else 0.86f
     return Color(ColorUtils.HSLToColor(hsl))
 }
 

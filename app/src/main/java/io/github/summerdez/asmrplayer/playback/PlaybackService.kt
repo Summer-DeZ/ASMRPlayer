@@ -1,11 +1,13 @@
 package io.github.summerdez.asmrplayer.playback
 
 import android.content.Intent
+import android.media.audiofx.Virtualizer
 import android.net.Uri
 import android.os.Bundle
 import android.os.Handler
 import android.os.Looper
 import android.os.SystemClock
+import android.util.Log
 import androidx.media3.common.AudioAttributes
 import androidx.media3.common.C
 import androidx.media3.common.MediaItem
@@ -30,7 +32,15 @@ class PlaybackService : MediaSessionService() {
     private val sleepTimer = SleepTimerState()
     private val sleepTimerRunnable = Runnable {
         sleepTimer.cancel()
+        handler.removeCallbacks(sleepFadeRunnable)
         pausePlayback()
+        restoreSleepFadeVolume()
+    }
+    private val sleepFadeRunnable = Runnable {
+        updateSleepFade()
+    }
+    private val transitionFadeRunnable = Runnable {
+        updateTransitionFadeIn()
     }
     private val playlistLoadGate = PlaybackPlaylistLoadGate()
     private val playerListener = PlaybackPlayerListener(
@@ -41,6 +51,8 @@ class PlaybackService : MediaSessionService() {
         ensureOverlay = ::ensureOverlay,
         updateOverlayPlaybackState = ::updateOverlayPlaybackState,
         consumeSleepAtEndOfTrack = ::consumeSleepAtEndOfTrack,
+        handleAudioSessionIdChanged = ::onAudioSessionIdChanged,
+        startTransitionFadeIn = ::startTransitionFadeIn,
         syncCurrentTrack = ::syncCurrentTrack,
         updateSubtitleForCurrentPositionAndSchedule = ::updateSubtitleForCurrentPositionAndSchedule,
         markPlayerError = ::markPlayerError,
@@ -65,6 +77,16 @@ class PlaybackService : MediaSessionService() {
     private var subtitleCues: List<SubtitleCue> = emptyList()
     private var overlayRequested: Boolean = false
     private var overlayLocked: Boolean = false
+    private var sleepFadeBeforeEndEnabled: Boolean = true
+    private var sleepFadeActive: Boolean = false
+    private var sleepFadeStartVolume: Float = 1f
+    private var binauralEnhancedEnabled: Boolean = true
+    private var crossfadeEnabled: Boolean = true
+    private var transitionFadeActive: Boolean = false
+    private var transitionFadeStartElapsedMs: Long = 0L
+    private var currentAudioSessionId: Int = C.AUDIO_SESSION_ID_UNSET
+    private var virtualizer: Virtualizer? = null
+    private var virtualizerAudioSessionId: Int = C.AUDIO_SESSION_ID_UNSET
 
     override fun onCreate() {
         super.onCreate()
@@ -124,6 +146,23 @@ class PlaybackService : MediaSessionService() {
             .setCallback(PlaybackSessionCallback(::handleCommand))
             .setSessionExtras(PlaybackServiceSnapshot().toSessionExtras())
             .build()
+        serviceScope.launch {
+            serviceDependencies.settingsRepository.appBehaviorSettingsFlow.collect { settings ->
+                binauralEnhancedEnabled = settings.binauralEnhanced
+                applyBinauralEnhancement()
+                crossfadeEnabled = settings.crossfadeEnabled
+                if (!crossfadeEnabled) {
+                    finishTransitionFadeIn()
+                }
+                sleepFadeBeforeEndEnabled = settings.sleepFadeBeforeEndEnabled
+                if (sleepFadeBeforeEndEnabled) {
+                    scheduleSleepFade()
+                } else {
+                    handler.removeCallbacks(sleepFadeRunnable)
+                    restoreSleepFadeVolume()
+                }
+            }
+        }
         publishState()
     }
 
@@ -140,6 +179,8 @@ class PlaybackService : MediaSessionService() {
     override fun onDestroy() {
         serviceScope.cancel()
         handler.removeCallbacksAndMessages(null)
+        restoreSleepFadeVolume()
+        releaseVirtualizer()
         removeOverlay()
         mediaSession?.run {
             player.release()
@@ -237,6 +278,7 @@ class PlaybackService : MediaSessionService() {
             )
         }
         player.prepare()
+        startTransitionFadeIn()
         player.play()
         startSubtitleTicker()
         if (overlayRequested) {
@@ -265,6 +307,7 @@ class PlaybackService : MediaSessionService() {
     }
 
     private fun pausePlayback() {
+        finishTransitionFadeIn()
         player.pause()
         stopSubtitleTicker()
         updateOverlayPlaybackState()
@@ -298,22 +341,144 @@ class PlaybackService : MediaSessionService() {
     }
 
     private fun setSleepTimer(minutes: Int) {
+        restoreSleepFadeVolume()
         val durationMs = sleepTimer.setMinutes(minutes, SystemClock.elapsedRealtime())
         handler.removeCallbacks(sleepTimerRunnable)
+        handler.removeCallbacks(sleepFadeRunnable)
         handler.postDelayed(sleepTimerRunnable, durationMs)
+        scheduleSleepFade()
         publishState()
     }
 
     private fun setSleepTimerAtEndOfTrack() {
+        restoreSleepFadeVolume()
         sleepTimer.setAtEndOfTrack()
         handler.removeCallbacks(sleepTimerRunnable)
+        handler.removeCallbacks(sleepFadeRunnable)
         publishState()
     }
 
     private fun cancelSleepTimer() {
         sleepTimer.cancel()
         handler.removeCallbacks(sleepTimerRunnable)
+        handler.removeCallbacks(sleepFadeRunnable)
+        restoreSleepFadeVolume()
         publishState()
+    }
+
+    private fun startTransitionFadeIn() {
+        handler.removeCallbacks(transitionFadeRunnable)
+        if (!crossfadeEnabled || sleepFadeActive || !::player.isInitialized || player.mediaItemCount == 0) {
+            return
+        }
+        transitionFadeActive = true
+        transitionFadeStartElapsedMs = SystemClock.elapsedRealtime()
+        player.volume = 0f
+        handler.post(transitionFadeRunnable)
+    }
+
+    private fun updateTransitionFadeIn() {
+        if (!transitionFadeActive) {
+            return
+        }
+        if (!crossfadeEnabled || sleepFadeActive || !::player.isInitialized) {
+            finishTransitionFadeIn()
+            return
+        }
+        val elapsedMs = SystemClock.elapsedRealtime() - transitionFadeStartElapsedMs
+        val progress = (elapsedMs.toFloat() / TRANSITION_FADE_DURATION_MS.toFloat()).coerceIn(0f, 1f)
+        player.volume = progress
+        if (progress >= 1f) {
+            transitionFadeActive = false
+            player.volume = 1f
+        } else {
+            handler.postDelayed(transitionFadeRunnable, TRANSITION_FADE_TICK_MS)
+        }
+    }
+
+    private fun finishTransitionFadeIn() {
+        handler.removeCallbacks(transitionFadeRunnable)
+        if (::player.isInitialized && transitionFadeActive && !sleepFadeActive) {
+            player.volume = 1f
+        }
+        transitionFadeActive = false
+    }
+
+    private fun onAudioSessionIdChanged(audioSessionId: Int) {
+        currentAudioSessionId = audioSessionId
+        applyBinauralEnhancement()
+    }
+
+    private fun applyBinauralEnhancement() {
+        val sessionId = currentAudioSessionId
+        if (!binauralEnhancedEnabled || sessionId == C.AUDIO_SESSION_ID_UNSET) {
+            releaseVirtualizer()
+            return
+        }
+        if (virtualizerAudioSessionId == sessionId && virtualizer != null) {
+            virtualizer?.enabled = true
+            return
+        }
+        releaseVirtualizer()
+        virtualizer = runCatching {
+            Virtualizer(0, sessionId).apply {
+                if (strengthSupported) {
+                    setStrength(BINAURAL_VIRTUALIZER_STRENGTH)
+                }
+                enabled = true
+            }
+        }.onFailure { exception ->
+            Log.w(TAG, "Failed to enable binaural virtualizer for audio session=$sessionId", exception)
+        }.getOrNull()
+        virtualizerAudioSessionId = if (virtualizer != null) sessionId else C.AUDIO_SESSION_ID_UNSET
+    }
+
+    private fun releaseVirtualizer() {
+        virtualizer?.let { effect ->
+            runCatching { effect.enabled = false }
+            runCatching { effect.release() }
+        }
+        virtualizer = null
+        virtualizerAudioSessionId = C.AUDIO_SESSION_ID_UNSET
+    }
+
+    private fun scheduleSleepFade() {
+        handler.removeCallbacks(sleepFadeRunnable)
+        if (!sleepFadeBeforeEndEnabled || sleepTimer.isAtEndOfTrack()) {
+            return
+        }
+        val remainingMs = getSleepTimerRemainingMs()
+        if (remainingMs <= 0L) {
+            return
+        }
+        val delayMs = (remainingMs - SLEEP_FADE_DURATION_MS).coerceAtLeast(0L)
+        handler.postDelayed(sleepFadeRunnable, delayMs)
+    }
+
+    private fun updateSleepFade() {
+        if (!sleepFadeBeforeEndEnabled || sleepTimer.isAtEndOfTrack()) {
+            restoreSleepFadeVolume()
+            return
+        }
+        val remainingMs = getSleepTimerRemainingMs()
+        if (remainingMs <= 0L) {
+            return
+        }
+        if (!sleepFadeActive) {
+            sleepFadeActive = true
+            sleepFadeStartVolume = player.volume.coerceIn(0f, 1f)
+        }
+        val progress = (remainingMs.toFloat() / SLEEP_FADE_DURATION_MS.toFloat()).coerceIn(0f, 1f)
+        player.volume = (sleepFadeStartVolume * progress).coerceIn(0f, 1f)
+        handler.postDelayed(sleepFadeRunnable, SLEEP_FADE_TICK_MS)
+    }
+
+    private fun restoreSleepFadeVolume() {
+        if (!::player.isInitialized || !sleepFadeActive) {
+            return
+        }
+        player.volume = sleepFadeStartVolume.coerceIn(0f, 1f)
+        sleepFadeActive = false
     }
 
     private fun playRelativeInPlaylist(delta: Int) {
@@ -364,6 +529,8 @@ class PlaybackService : MediaSessionService() {
 
     private fun stopPlaybackAndService() {
         stopSubtitleTicker()
+        finishTransitionFadeIn()
+        restoreSleepFadeVolume()
         removeOverlay()
         player.stop()
         player.clearMediaItems()
@@ -472,6 +639,13 @@ class PlaybackService : MediaSessionService() {
         const val COMMAND_SET_SLEEP_MINUTES = ACTION_SET_SLEEP_MINUTES
         const val COMMAND_SET_SLEEP_AT_END = ACTION_SET_SLEEP_AT_END
         const val COMMAND_CANCEL_SLEEP = ACTION_CANCEL_SLEEP
+
+        private const val SLEEP_FADE_DURATION_MS = 30_000L
+        private const val SLEEP_FADE_TICK_MS = 500L
+        private const val TRANSITION_FADE_DURATION_MS = 1_200L
+        private const val TRANSITION_FADE_TICK_MS = 8L
+        private const val BINAURAL_VIRTUALIZER_STRENGTH: Short = 700
+        private const val TAG = "PlaybackService"
 
         const val EXTRA_AUDIO_URI = "extra_audio_uri"
         const val EXTRA_SUBTITLE_URI = "extra_subtitle_uri"

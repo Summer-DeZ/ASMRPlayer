@@ -29,7 +29,10 @@ import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asSharedFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.update
+import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.withContext
+import java.io.File
 
 data class SettingsUiState(
     val overlayPermissionGranted: Boolean = false,
@@ -38,6 +41,10 @@ data class SettingsUiState(
     val notificationGranted: Boolean = false,
     val themeMode: AppThemeMode = AppThemeMode.DARK,
     val currentVersionName: String = "未知",
+    val binauralEnhanced: Boolean = true,
+    val crossfadeEnabled: Boolean = true,
+    val wifiOnlyDownloads: Boolean = true,
+    val storageUsedText: String = "计算中",
     val updateStatus: AppUpdateStatus = AppUpdateStatus.Idle,
     val updateDownloadStatus: AppUpdateDownloadStatus = AppUpdateDownloadStatus.Idle,
     val updateDialogRelease: AppUpdateRelease? = null,
@@ -145,6 +152,17 @@ class SettingsViewModel(
             }
         }
         viewModelScope.launch {
+            settingsRepository.appBehaviorSettingsFlow.collect { settings ->
+                _state.update {
+                    it.copy(
+                        binauralEnhanced = settings.binauralEnhanced,
+                        crossfadeEnabled = settings.crossfadeEnabled,
+                        wifiOnlyDownloads = settings.wifiOnlyDownloads,
+                    )
+                }
+            }
+        }
+        viewModelScope.launch {
             playbackCommands.snapshots.collect { snapshot ->
                 updateState(snapshot)
             }
@@ -164,6 +182,7 @@ class SettingsViewModel(
                 updateHandler.applyDownloadState(downloadState)
             }
         }
+        refreshStorageUsage()
     }
 
     fun refresh() {
@@ -207,6 +226,40 @@ class SettingsViewModel(
         _state.update { it.copy(themeMode = mode) }
         viewModelScope.launch {
             settingsRepository.setThemeMode(mode)
+        }
+    }
+
+    fun setBinauralEnhanced(value: Boolean) {
+        _state.update { it.copy(binauralEnhanced = value) }
+        viewModelScope.launch {
+            settingsRepository.setBinauralEnhanced(value)
+        }
+    }
+
+    fun setCrossfadeEnabled(value: Boolean) {
+        _state.update { it.copy(crossfadeEnabled = value) }
+        viewModelScope.launch {
+            settingsRepository.setCrossfadeEnabled(value)
+        }
+    }
+
+    fun setWifiOnlyDownloads(value: Boolean) {
+        _state.update { it.copy(wifiOnlyDownloads = value) }
+        viewModelScope.launch {
+            settingsRepository.setWifiOnlyDownloads(value)
+        }
+    }
+
+    fun refreshStorageUsage(showMessage: Boolean = false) {
+        viewModelScope.launch {
+            val bytes = withContext(Dispatchers.IO) {
+                appCacheStorageRoots(getApplication()).sumOf { it.sizeBytes() }
+            }
+            val text = formatStorageBytes(bytes)
+            _state.update { it.copy(storageUsedText = text) }
+            if (showMessage) {
+                _events.emit(SettingsEvent.Message("已重新计算存储：$text"))
+            }
         }
     }
 
@@ -312,5 +365,34 @@ class SettingsViewModel(
 
     fun deleteWhisperModel() {
         whisperModelActions.deleteWhisperModel()
+    }
+}
+
+private fun appCacheStorageRoots(context: Application): List<File> {
+    return listOf(
+        File(context.filesDir, "dlsite"),
+        File(context.filesDir, "ai-subtitles"),
+        File(context.cacheDir, "updates"),
+    )
+}
+
+private fun File.sizeBytes(): Long {
+    if (!exists()) return 0L
+    if (isFile) return length()
+    return listFiles().orEmpty().sumOf { it.sizeBytes() }
+}
+
+private fun formatStorageBytes(bytes: Long): String {
+    val units = listOf("B", "KB", "MB", "GB")
+    var value = bytes.toDouble()
+    var unitIndex = 0
+    while (value >= 1024.0 && unitIndex < units.lastIndex) {
+        value /= 1024.0
+        unitIndex++
+    }
+    return if (unitIndex == 0) {
+        "${bytes.coerceAtLeast(0L)} ${units[unitIndex]}"
+    } else {
+        "%.1f %s".format(value, units[unitIndex])
     }
 }

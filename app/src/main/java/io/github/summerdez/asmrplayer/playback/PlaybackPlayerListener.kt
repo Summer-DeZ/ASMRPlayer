@@ -12,6 +12,8 @@ internal class PlaybackPlayerListener(
     private val ensureOverlay: () -> Boolean,
     private val updateOverlayPlaybackState: () -> Unit,
     private val consumeSleepAtEndOfTrack: () -> Boolean,
+    private val handleAudioSessionIdChanged: (Int) -> Unit,
+    private val startTransitionFadeIn: () -> Unit,
     private val syncCurrentTrack: (MediaItem?) -> Unit,
     private val updateSubtitleForCurrentPositionAndSchedule: () -> Unit,
     private val markPlayerError: () -> Unit,
@@ -46,8 +48,15 @@ internal class PlaybackPlayerListener(
         if (reason == Player.MEDIA_ITEM_TRANSITION_REASON_AUTO && consumeSleepAtEndOfTrack()) {
             return
         }
+        if (reason != Player.MEDIA_ITEM_TRANSITION_REASON_PLAYLIST_CHANGED) {
+            startTransitionFadeIn()
+        }
         updateSubtitleForCurrentPositionAndSchedule()
         publishState()
+    }
+
+    override fun onAudioSessionIdChanged(audioSessionId: Int) {
+        handleAudioSessionIdChanged(audioSessionId)
     }
 
     override fun onPlayerError(error: PlaybackException) {

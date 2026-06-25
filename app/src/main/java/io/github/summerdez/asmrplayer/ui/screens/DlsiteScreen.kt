@@ -31,8 +31,6 @@ fun DlsiteTab(
     onPause: (DlsiteWork) -> Unit,
     onResume: (DlsiteWork) -> Unit,
     onDelete: (DlsiteWork) -> Unit,
-    onPauseAll: () -> Unit,
-    onResumeAll: () -> Unit,
     onOpenDownloadManager: () -> Unit,
 ) {
     val offlineWorkCount = state.works.count { work ->
@@ -70,8 +68,6 @@ fun DlsiteTab(
                 onLogin = onLogin,
                 onLogout = onLogout,
                 onSync = onSync,
-                onPauseAll = onPauseAll,
-                onResumeAll = onResumeAll,
                 onOpenDownloadManager = onOpenDownloadManager,
             )
         }

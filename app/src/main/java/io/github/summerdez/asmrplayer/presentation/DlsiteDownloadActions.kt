@@ -7,6 +7,8 @@ import androidx.core.content.ContextCompat
 import io.github.summerdez.asmrplayer.data.DlsiteDownloadState
 import io.github.summerdez.asmrplayer.data.DlsiteRepository
 import io.github.summerdez.asmrplayer.data.LibraryRepository
+import io.github.summerdez.asmrplayer.data.SettingsRepository
+import io.github.summerdez.asmrplayer.data.download.canStartDlsiteDownload
 import io.github.summerdez.asmrplayer.data.download.DlsiteDownloadQueueRepository
 import io.github.summerdez.asmrplayer.data.download.DlsiteDownloadService
 import io.github.summerdez.asmrplayer.data.download.DlsiteDownloadTask
@@ -28,6 +30,7 @@ internal class DlsiteDownloadActions(
     private val dlsiteRepository: DlsiteRepository,
     private val downloadQueueRepository: DlsiteDownloadQueueRepository,
     private val libraryRepository: LibraryRepository,
+    private val settingsRepository: SettingsRepository,
     private val stateProvider: () -> DlsiteUiState,
     private val downloadStateProvider: () -> DlsiteDownloadState,
     private val isBusy: () -> Boolean,
@@ -96,6 +99,11 @@ internal class DlsiteDownloadActions(
         scope.launch {
             var queuedTask: DlsiteDownloadQueueTask? = null
             try {
+                if (!settingsRepository.canStartDlsiteDownload(application)) {
+                    setBusy(false)
+                    showMessage("仅 Wi-Fi 下载已开启，请连接 Wi-Fi 后再下载")
+                    return@launch
+                }
                 queuedTask = withContext(Dispatchers.IO) {
                     downloadQueueRepository.enqueueDownload(work, optionIds, optionTitle)
                 }

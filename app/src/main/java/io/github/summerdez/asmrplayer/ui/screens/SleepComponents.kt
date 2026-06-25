@@ -51,7 +51,12 @@ fun SleepRing(state: SleepTimerUiState, displayMinutes: Int?) {
     val timerAccent = if (lightTheme) tokens.label else Color.White
     val timerTrack = if (lightTheme) tokens.label.copy(alpha = 0.16f) else tokens.gray5
     val timerGlow = timerAccent.copy(alpha = if (lightTheme) 0.05f else 0.10f)
-    val countdownMs = if (state.active) state.remainingMs else displayMinutes?.let { it * 60_000L }
+    val countdownMs = when {
+        state.atEndOfTrack -> null
+        state.active -> state.remainingMs
+        displayMinutes != null -> displayMinutes * 60_000L
+        else -> 0L
+    }
     val progress = when {
         state.atEndOfTrack -> 1f
         state.active && state.minutes > 0 -> {

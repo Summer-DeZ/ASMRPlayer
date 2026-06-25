@@ -212,11 +212,7 @@ fun LibraryTab(
                 modifier = Modifier.padding(start = 6.dp, end = 6.dp, bottom = 6.dp),
             )
         }
-        if (state.playlists.isEmpty()) {
-            item(key = "library-dlsite-empty") {
-                LibraryDlsiteEmptyState()
-            }
-        } else {
+        if (state.playlists.isNotEmpty()) {
             items(visiblePlaylists, key = { it.id }) { playlist ->
                 val selected = state.selectedPlaylist?.id == playlist.id
                 val expanded = expandedPlaylistId == playlist.id

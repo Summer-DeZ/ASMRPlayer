@@ -74,7 +74,15 @@ fun SubtitlePlayerScreen(
                     "dynamicBackground" to backgroundColors.fromCover.toString(),
                 ),
             )
-            .background(backgroundColors.base)
+            .background(
+                Brush.verticalGradient(
+                    colors = listOf(
+                        backgroundColors.base,
+                        backgroundColors.base,
+                        backgroundColors.baseBottom,
+                    ),
+                ),
+            )
             .background(
                 Brush.radialGradient(
                     colors = listOf(backgroundColors.glowPrimary.copy(alpha = 0.24f), Color.Transparent),
@@ -87,6 +95,13 @@ fun SubtitlePlayerScreen(
                     colors = listOf(backgroundColors.glowSecondary.copy(alpha = 0.22f), Color.Transparent),
                     center = Offset(880f, 260f),
                     radius = 640f,
+                ),
+            )
+            .background(
+                Brush.radialGradient(
+                    colors = listOf(backgroundColors.glowSecondary.copy(alpha = 0.20f), Color.Transparent),
+                    center = Offset(540f, 1960f),
+                    radius = 980f,
                 ),
             )
     ) {

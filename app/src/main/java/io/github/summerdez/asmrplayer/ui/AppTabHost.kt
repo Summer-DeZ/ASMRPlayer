@@ -44,6 +44,10 @@ fun AppTabHost(
     onUnlockOverlay: () -> Unit,
     onOpenOverlaySettings: () -> Unit,
     onRequestNotificationPermission: () -> Unit,
+    onBinauralEnhancedChange: (Boolean) -> Unit,
+    onCrossfadeEnabledChange: (Boolean) -> Unit,
+    onWifiOnlyDownloadsChange: (Boolean) -> Unit,
+    onRefreshStorageUsage: () -> Unit,
     onThemeSelected: (AppThemeMode) -> Unit,
     onCheckForUpdates: () -> Unit,
     onShowUpdateDetails: () -> Unit,
@@ -72,6 +76,7 @@ fun AppTabHost(
     onSetEndOfTrack: () -> Unit,
     onCustom: () -> Unit,
     onCancel: () -> Unit,
+    onFadeBeforeEndChange: (Boolean) -> Unit,
     onLogin: () -> Unit,
     onLogout: () -> Unit,
     onSync: () -> Unit,
@@ -81,8 +86,6 @@ fun AppTabHost(
     onPause: (DlsiteWork) -> Unit,
     onResume: (DlsiteWork) -> Unit,
     onDelete: (DlsiteWork) -> Unit,
-    onPauseAll: () -> Unit,
-    onResumeAll: () -> Unit,
     onOpenDownloadManager: () -> Unit,
 ) {
     when (selectedTab) {
@@ -108,6 +111,10 @@ fun AppTabHost(
             onUnlockOverlay = onUnlockOverlay,
             onOpenOverlaySettings = onOpenOverlaySettings,
             onRequestNotificationPermission = onRequestNotificationPermission,
+            onBinauralEnhancedChange = onBinauralEnhancedChange,
+            onCrossfadeEnabledChange = onCrossfadeEnabledChange,
+            onWifiOnlyDownloadsChange = onWifiOnlyDownloadsChange,
+            onRefreshStorageUsage = onRefreshStorageUsage,
             onThemeSelected = onThemeSelected,
             onCheckForUpdates = onCheckForUpdates,
             onShowUpdateDetails = onShowUpdateDetails,
@@ -139,6 +146,7 @@ fun AppTabHost(
             onSetEndOfTrack = onSetEndOfTrack,
             onCustom = onCustom,
             onCancel = onCancel,
+            onFadeBeforeEndChange = onFadeBeforeEndChange,
         )
         MainTab.DLSITE -> DlsiteTab(
             state = dlsiteState,
@@ -151,8 +159,6 @@ fun AppTabHost(
             onPause = onPause,
             onResume = onResume,
             onDelete = onDelete,
-            onPauseAll = onPauseAll,
-            onResumeAll = onResumeAll,
             onOpenDownloadManager = onOpenDownloadManager,
         )
     }

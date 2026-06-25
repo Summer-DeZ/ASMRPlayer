@@ -9,6 +9,7 @@ import android.util.Log
 import io.github.summerdez.asmrplayer.data.DlsiteApi
 import io.github.summerdez.asmrplayer.data.DlsiteDownloadStateStore
 import io.github.summerdez.asmrplayer.data.DlsiteDownloadTaskStatus
+import io.github.summerdez.asmrplayer.data.SettingsRepository
 import io.github.summerdez.asmrplayer.data.remote.DlsiteJsonParser
 import io.github.summerdez.asmrplayer.di.AppGraph
 import io.github.summerdez.asmrplayer.domain.model.DlsiteContentFile
@@ -29,6 +30,7 @@ class DlsiteDownloadService : Service() {
     private lateinit var downloadRepository: DlsiteDownloadBlockingAdapter
     private lateinit var dlsiteApi: DlsiteApi
     private lateinit var dlsiteDownloadStateStore: DlsiteDownloadStateStore
+    private lateinit var settingsRepository: SettingsRepository
     private var latestStartId = 0
     private var destroying = false
 
@@ -43,6 +45,7 @@ class DlsiteDownloadService : Service() {
         )
         dlsiteApi = dependencies.dlsiteApi
         dlsiteDownloadStateStore = dependencies.dlsiteDownloadStateStore
+        settingsRepository = dependencies.settingsRepository
         DlsiteDownloadNotifications.ensureChannel(this)
         dispatchToScheduler({ downloadRepository.resetRunningDownloadQueue() }, 0)
     }
@@ -116,6 +119,10 @@ class DlsiteDownloadService : Service() {
             stopSelf(startId)
             return
         }
+        if (!settingsRepository.canStartDlsiteDownloadBlocking(this)) {
+            stopSelf(startId)
+            return
+        }
         enqueueDownload(work, optionIds)
     }
 
@@ -143,6 +150,15 @@ class DlsiteDownloadService : Service() {
             return
         }
         if (hasPendingDownloadsLocked()) {
+            if (!settingsRepository.canStartDlsiteDownloadBlocking(this)) {
+                publishQueuePositions(downloadRepository, dlsiteDownloadStateStore)
+                updateDlsiteDownloadNotification(dlsiteDownloadStateStore)
+                if (runningWorkers.isEmpty()) {
+                    stopDlsiteDownloadForegroundSafely()
+                    stopSelf(latestStartId)
+                }
+                return
+            }
             promoteDlsiteDownloadToForeground(dlsiteDownloadStateStore)
         }
         while (runningWorkers.size < MAX_CONCURRENT_DOWNLOADS) {

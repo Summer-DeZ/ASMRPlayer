@@ -3,6 +3,7 @@ package io.github.summerdez.asmrplayer.data
 import io.github.summerdez.asmrplayer.domain.model.AiSubtitleSettings
 import io.github.summerdez.asmrplayer.domain.model.AiTranscriptionBackend
 import io.github.summerdez.asmrplayer.domain.model.AiTranslationEngine
+import io.github.summerdez.asmrplayer.domain.model.AppBehaviorSettings
 import io.github.summerdez.asmrplayer.domain.model.AppThemeMode
 import io.github.summerdez.asmrplayer.domain.model.WhisperModelSpec
 import kotlinx.coroutines.CoroutineDispatcher
@@ -15,10 +16,16 @@ import kotlinx.coroutines.withContext
 
 interface SettingsRepository {
     val themeModeFlow: Flow<AppThemeMode>
+    val appBehaviorSettingsFlow: Flow<AppBehaviorSettings>
     val aiSubtitleSettingsFlow: Flow<AiSubtitleSettings>
 
     suspend fun themeMode(): AppThemeMode
     suspend fun setThemeMode(mode: AppThemeMode)
+    suspend fun appBehaviorSettings(): AppBehaviorSettings
+    suspend fun setBinauralEnhanced(value: Boolean)
+    suspend fun setCrossfadeEnabled(value: Boolean)
+    suspend fun setWifiOnlyDownloads(value: Boolean)
+    suspend fun setSleepFadeBeforeEndEnabled(value: Boolean)
     suspend fun aiSubtitleSettings(): AiSubtitleSettings
     suspend fun setAiTranscriptionBackend(backend: AiTranscriptionBackend)
     suspend fun setAiTranslationEngine(engine: AiTranslationEngine)
@@ -41,6 +48,17 @@ class AppSettingsRepository(
     override val themeModeFlow: Flow<AppThemeMode> = settingsDao.valueFlow(KEY_APP_THEME_MODE)
         .map { AppThemeMode.fromName(it) }
         .distinctUntilChanged()
+
+    override val appBehaviorSettingsFlow: Flow<AppBehaviorSettings> = combine(
+        listOf(
+            settingsDao.valueFlow(KEY_BINAURAL_ENHANCED),
+            settingsDao.valueFlow(KEY_CROSSFADE_ENABLED),
+            settingsDao.valueFlow(KEY_WIFI_ONLY_DOWNLOADS),
+            settingsDao.valueFlow(KEY_SLEEP_FADE_BEFORE_END),
+        ),
+    ) { values ->
+        behaviorSettingsFromValues(values)
+    }.distinctUntilChanged()
 
     override val aiSubtitleSettingsFlow: Flow<AiSubtitleSettings> = combine(
         listOf(
@@ -69,6 +87,35 @@ class AppSettingsRepository(
 
     override suspend fun setThemeMode(mode: AppThemeMode) {
         put(KEY_APP_THEME_MODE, mode.name)
+    }
+
+    override suspend fun appBehaviorSettings(): AppBehaviorSettings {
+        return withContext(ioDispatcher) {
+            behaviorSettingsFromValues(
+                arrayOf(
+                    settingsDao.value(KEY_BINAURAL_ENHANCED),
+                    settingsDao.value(KEY_CROSSFADE_ENABLED),
+                    settingsDao.value(KEY_WIFI_ONLY_DOWNLOADS),
+                    settingsDao.value(KEY_SLEEP_FADE_BEFORE_END),
+                ),
+            )
+        }
+    }
+
+    override suspend fun setBinauralEnhanced(value: Boolean) {
+        put(KEY_BINAURAL_ENHANCED, value.toString())
+    }
+
+    override suspend fun setCrossfadeEnabled(value: Boolean) {
+        put(KEY_CROSSFADE_ENABLED, value.toString())
+    }
+
+    override suspend fun setWifiOnlyDownloads(value: Boolean) {
+        put(KEY_WIFI_ONLY_DOWNLOADS, value.toString())
+    }
+
+    override suspend fun setSleepFadeBeforeEndEnabled(value: Boolean) {
+        put(KEY_SLEEP_FADE_BEFORE_END, value.toString())
     }
 
     override suspend fun aiSubtitleSettings(): AiSubtitleSettings {
@@ -169,7 +216,20 @@ class AppSettingsRepository(
         )
     }
 
+    private fun behaviorSettingsFromValues(values: Array<String?>): AppBehaviorSettings {
+        return AppBehaviorSettings(
+            binauralEnhanced = values.getOrNull(0)?.toBooleanStrictOrNull() ?: true,
+            crossfadeEnabled = values.getOrNull(1)?.toBooleanStrictOrNull() ?: true,
+            wifiOnlyDownloads = values.getOrNull(2)?.toBooleanStrictOrNull() ?: true,
+            sleepFadeBeforeEndEnabled = values.getOrNull(3)?.toBooleanStrictOrNull() ?: true,
+        )
+    }
+
     private companion object {
+        const val KEY_BINAURAL_ENHANCED = "binaural_enhanced"
+        const val KEY_CROSSFADE_ENABLED = "crossfade_enabled"
+        const val KEY_WIFI_ONLY_DOWNLOADS = "wifi_only_downloads"
+        const val KEY_SLEEP_FADE_BEFORE_END = "sleep_fade_before_end"
         const val KEY_AI_TRANSLATION_ENGINE = "ai_translation_engine"
         const val KEY_AI_OLLAMA_BASE_URL = "ai_ollama_base_url"
         const val KEY_AI_OLLAMA_MODEL = "ai_ollama_model"

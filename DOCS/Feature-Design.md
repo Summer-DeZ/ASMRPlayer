@@ -1,4 +1,4 @@
-> 当前软件版本：1.6.1（versionCode 22）
+> 当前软件版本：1.6.2（versionCode 23）
 > 文档更新日期：2026-06-26
 
 # Feature Design
@@ -26,6 +26,8 @@ ASMRPlayer 是面向 ASMR 音声收听场景的 Android 本地播放器，核心
 - 支持播放播放列表中的指定曲目。
 - 支持播放队列展示当前列表和接下来播放的曲目；队列页不提供随机播放或拖拽排序入口。
 - 播放状态会同步到 UI、Mini Player、播放页和睡眠模式。
+- 双耳增强开关开启时，播放服务会在设备支持的音频 session 上启用 Android `Virtualizer`，设备不支持时安静降级。
+- 淡入淡出衔接开关开启时，播放开始和切换曲目会执行短淡入，短淡入按约 8ms tick 更新，适配 60-120Hz 设备上的平滑衔接。
 - 不提供独立播放音质档位；本地导入、外部加载和下载音频均按源文件交由 Media3 播放。
 
 ## 字幕
@@ -68,7 +70,8 @@ ASMRPlayer 是面向 ASMR 音声收听场景的 Android 本地播放器，核心
 - 支持按分钟设置睡眠倒计时，点击预设分钟按钮会立即设置并启动对应分钟倒计时。
 - 支持播完当前音频后停止。
 - 支持自定义睡眠时间；底部单一入口在未计时时打开自定义时间，计时启动后切换为取消定时。
-- UI 会在圆环中心显示剩余倒计时或播完当前音频模式图标，不在圆环下方显示额外状态文案。
+- 支持保存“结束前淡出”开关；普通分钟倒计时进入最后 30 秒后按剩余时间逐步降低播放器音量，取消定时、切换到播完当前作品模式或关闭开关会恢复淡出前音量。
+- UI 会在圆环中心显示剩余倒计时、空状态 `00:00` 或播完当前音频模式图标，不在圆环下方显示额外状态文案。
 
 ## DLsite
 
@@ -82,6 +85,7 @@ ASMRPlayer 是面向 ASMR 音声收听场景的 Android 本地播放器，核心
 - 支持下载队列，多个作品按加入顺序排队，并发上限固定为 2。
 - 下载队列持久化在 `dlsite_download_queue`；服务重启后会把遗留 `running` 任务重置为 `pending`，再按 FIFO 调度。
 - 同一作品已有 active `pending` / `running` 任务时再次入队会去重；异常重复 `pending` 不阻塞后续作品调度。
+- 开启“仅 Wi-Fi 下载”后，DLsite 内容下载入口会在非 Wi-Fi 网络下阻止入队并提示；后台下载服务调度 pending 任务时也会检查当前网络，不在非 Wi-Fi 下启动新下载 worker。
 - 点击加入下载只入队并启动下载服务，排队或开始下载不会更新 `DlsiteWork` / `DlsiteContent` 的 `updatedAt`，作品列表不会因此立即置顶。
 - 支持 DLsite 页顶部显示总下载进度、总速度、已下载/总大小，以及全部暂停/继续。
 - 支持下载管理 sheet 统一查看任务，并对单任务暂停、继续、取消，或清除已完成任务。
@@ -98,6 +102,8 @@ ASMRPlayer 是面向 ASMR 音声收听场景的 Android 本地播放器，核心
 
 - 支持浅色、深色、跟随系统主题模式。
 - 主题模式会保存到 Room 应用设置的 `app_theme_mode`，重启后由 `SettingsRepository.themeModeFlow` 恢复到设置页和应用主题。
+- 支持保存双耳增强、淡入淡出衔接、仅 Wi-Fi 下载和睡眠结束前淡出等行为设置；重启后由 `SettingsRepository.appBehaviorSettingsFlow` 恢复到设置页、播放服务、睡眠定时和 DLsite 下载入口。
+- 支持设置页显示并刷新应用私有缓存占用，统计 DLsite 离线作品、AI 字幕文件和应用更新缓存。
 - 支持悬浮字幕开关。
 - 支持悬浮窗权限入口。
 - 支持 Android 13 及以上通知权限请求。
@@ -119,7 +125,7 @@ ASMRPlayer 是面向 ASMR 音声收听场景的 Android 本地播放器，核心
 - 使用 Repository 层隔离 UI/ViewModel 与数据库/API。
 - Repository 以 `Flow` 推送播放列表、DLsite 内容、上次同步时间和 AI 设置等状态；写入和必要快照读取在 IO 协程中执行，UI 通过 ViewModel state/event 接收更新，不直接同步阻塞读取 Room。
 - `DlsiteRepository` 只暴露 DLsite 作品、内容、远程同步和下载状态协调能力；持久下载队列状态机由 `DlsiteDownloadQueueRepository` 独立管理并显式注入调用方。
-- AI 字幕设置复用应用设置表；Whisper 模型和生成的 `.vtt` 存放在应用私有目录 `filesDir/ai-subtitles/`，转写分段缓存存放在 `cacheDir/ai-subtitles/segments/`，情景卡缓存存放在 `cacheDir/ai-subtitles/scene-contexts/`，翻译批次缓存存放在 `cacheDir/ai-subtitles/translations/`。远程转写配置也保存在设置表，不触发 Room schema migration。
+- AI 字幕设置和应用行为设置复用应用设置表；Whisper 模型和生成的 `.vtt` 存放在应用私有目录 `filesDir/ai-subtitles/`，转写分段缓存存放在 `cacheDir/ai-subtitles/segments/`，情景卡缓存存放在 `cacheDir/ai-subtitles/scene-contexts/`，翻译批次缓存存放在 `cacheDir/ai-subtitles/translations/`。远程转写配置也保存在设置表，不触发 Room schema migration。
 
 ## 内部验证能力
 

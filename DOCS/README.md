@@ -1,5 +1,5 @@
-> 当前软件版本：1.6.1（versionCode 22）
-> 文档更新日期：2026-06-25
+> 当前软件版本：1.6.2（versionCode 23）
+> 文档更新日期：2026-06-26
 
 # ASMRPlayer AI 架构速览
 
@@ -23,7 +23,7 @@
 
 - Android 应用模块：`:app`
 - 包名：`io.github.summerdez.asmrplayer`
-- 版本：`versionName 1.6.1`，`versionCode 22`
+- 版本：`versionName 1.6.2`，`versionCode 23`
 - SDK：`minSdk 26`，`compileSdk 36`，`targetSdk 36`
 - UI：Jetpack Compose + Material 3，自定义暖夜琥珀主题
 - 状态层：ViewModel + `StateFlow` / `SharedFlow`
@@ -59,12 +59,12 @@
 2. `AppContainer` 持有 Room、Repository、DLsite API、DLsite 下载队列仓库、状态 store、播放命令客户端和 ViewModel Factory。
 3. `LibraryRepository`、`DlsiteRepository`、`SettingsRepository` 负责持久化与外部数据源；Room 表状态经 `Flow` 自动推送到 ViewModel，写入与必要的单次读取在 `Dispatchers.IO` 上以 `suspend` 执行，不再通过主线程同步 DB 桥接刷新 UI。`RoomDlsiteRepository` 只协调 DLsite 本地存储、远程源与下载状态，不再持有或代理持久下载队列状态机。
 4. ViewModel 输出不可变 UI state，并通过 `SharedFlow` 发送导入结果、字幕绑定、曲目移动、DLsite 提示和设置提示等一次性事件；Compose 通过 lifecycle-aware collect 渲染。
-5. 播放控制经 `PlaybackCommandClient` 发送给 `PlaybackService`；Media3 `MediaController` 提供播放中、时长、位置和队列能力，`MediaSession.sessionExtras` 下发 playlist identity、字幕、悬浮窗、错误和睡眠定时 deadline 等自定义低频状态并并入 `PlaybackControllerSnapshot`。Service 端字幕状态按下一条 cue 边界定时刷新，睡眠倒计时剩余时间由客户端按 `elapsedRealtime` 本地派生，全局播放状态 bus 已删除。
+5. 播放控制经 `PlaybackCommandClient` 发送给 `PlaybackService`；Media3 `MediaController` 提供播放中、时长、位置和队列能力，`MediaSession.sessionExtras` 下发 playlist identity、字幕、悬浮窗、错误和睡眠定时 deadline 等自定义低频状态并并入 `PlaybackControllerSnapshot`。Service 端字幕状态按下一条 cue 边界定时刷新，睡眠倒计时剩余时间由客户端按 `elapsedRealtime` 本地派生，全局播放状态 bus 已删除。播放服务同时收集 `SettingsRepository.appBehaviorSettingsFlow`，用于按设置启停双耳增强 `Virtualizer`、播放/切歌短淡入和睡眠结束前 30 秒淡出。
 6. DLsite 登录使用 `DlsiteLoginActivity` WebView，后续网络请求复用 WebView Cookie。
-7. 主题设置通过 `SettingsRepository.themeModeFlow` 从 `app_settings` 的 `app_theme_mode` 响应式恢复；`SettingsViewModel` 只收集并保存 `domain.model.AppThemeMode`，`AppUi` 只在 Compose 入口和 Activity 侧应用 palette 与 system bars，不被 data 层调用。
+7. 主题设置通过 `SettingsRepository.themeModeFlow` 从 `app_settings` 的 `app_theme_mode` 响应式恢复；播放、下载和睡眠行为设置通过 `SettingsRepository.appBehaviorSettingsFlow` 从同一设置表恢复，供设置页、播放服务、睡眠定时 ViewModel 和 DLsite 下载入口共享；`SettingsViewModel` 只收集并保存 `domain.model.AppThemeMode` / `AppBehaviorSettings`，`AppUi` 只在 Compose 入口和 Activity 侧应用 palette 与 system bars，不被 data 层调用。
 8. 设置页检查更新经 `GitHubAppUpdateRepository` 请求 GitHub Release；APK 下载交给 `AppUpdateDownloadService` 以前台 `dataSync` 服务写入 `cacheDir/updates/`，更新下载状态由 `AppContainer` 持有的 `AppUpdateDownloadStateStore` 注入给 Service 与设置页，负责同步进度、速度和完成/失败/取消状态；通知渠道“应用更新”在后台持续显示下载进度；下载完成后再通过 `FileProvider` 交给系统安装器。更新缓存下载前会清理旧 APK 和 `.part`，安装成功收到 `ACTION_MY_PACKAGE_REPLACED` 后清理已安装版本及更旧 APK 和全部 `.part`，应用启动时也会做同样的保守清理。
 9. DLsite 作品菜单的载入入口会先请求 DLsite Play `ziptree.json`；remote parser 只负责解析 JSON 并产出 `domain.model.DlsiteZiptree` / `DlsiteContentFile`，`DlsiteDownloadPlanner` 再按文件目录树把音频归入目录/根目录音频选项。用户在下载内容 sheet 中手动勾选后，点击加入下载只通过 `DlsiteDownloadQueueRepository` 把任务持久化写入 `dlsite_download_queue` 并启动 `DlsiteDownloadService`，同一 work 的 active `pending` / `running` 入队会去重，且不刷新 `DlsiteWork` / `DlsiteContent` 的 `updatedAt`。
-10. `DlsiteDownloadService` 启动时会把遗留 `running` 任务重置为 `pending`，按 FIFO 调度，最多 2 个作品并发；`DlsiteDownloadQueueRepository` 显式注入 `DlsiteViewModel`、`DlsiteDownloadServiceDependencies` 与 `DlsiteDownloadBlockingAdapter`，下载服务通过调度线程和下载 worker 调用临时 adapter 过渡到 suspend Repository，阻塞边界不回到 UI 主线程；Android Intent 入参在 Service 边界归一化，进入 adapter、worker 和任务回调后的 required 下载数据保持非空；异常重复 `pending` 不会阻塞后续队列，`AppContainer` 持有的 `DlsiteDownloadStateStore` 注入给 Repository 与 Service，暴露多任务 Map 与字节加权总进度。
+10. `DlsiteDownloadService` 启动时会把遗留 `running` 任务重置为 `pending`，按 FIFO 调度，最多 2 个作品并发；`DlsiteDownloadQueueRepository` 显式注入 `DlsiteViewModel`、`DlsiteDownloadServiceDependencies` 与 `DlsiteDownloadBlockingAdapter`，下载服务通过调度线程和下载 worker 调用临时 adapter 过渡到 suspend Repository，阻塞边界不回到 UI 主线程；Android Intent 入参在 Service 边界归一化，进入 adapter、worker 和任务回调后的 required 下载数据保持非空；异常重复 `pending` 不会阻塞后续队列，`AppContainer` 持有的 `DlsiteDownloadStateStore` 注入给 Repository 与 Service，暴露多任务 Map 与字节加权总进度。`settingsRepository` 同时注入下载入口和下载服务，用于在“仅 Wi-Fi 下载”开启时阻止非 Wi-Fi 新任务入队或调度。
 11. DLsite 下载任务不会在每个内容包完成时立刻导入资料库；单次选择的所有内容下载成功后，才统一导入或复用播放列表，再按内容回填 `trackIds`，避免用户在整次下载完成前看到半成品资料库条目。
 12. AI 字幕请求进入 `AiSubtitleGenerationService`：任务状态由 `AppContainer` 持有的 `AiSubtitleTaskStateStore` 注入给 Service 与 UI 共享，Service 读取转写后端设置，默认使用 sherpa-onnx CPU 后端在本机完成日语转写；用户选择远程后，整段音频上传到用户配置的远程 ASR 转写服务，以异步 job 形式获取真实转写进度，再进入 OpenAI 兼容翻译阶段。
 13. 本机转写使用 Android `MediaExtractor` / `MediaCodec` 解码音频为 16k mono PCM，交给 Silero VAD 流式切段；producer 端用 0.6s 邻近阈值与 `maxSpeechDuration` 上限合并相邻短段，合并段保留首段 `startMs` 与末段真实 `endMs`，再通过 `Channel` 送入 Whisper worker 识别；worker 数和每 worker 线程数按模型体量、可用内存、低内存状态和 CPU 核数规划，ONNX provider 固定为 `cpu`。
@@ -100,7 +100,7 @@ GRADLE_USER_HOME=/tmp/asrm-gradle ./gradlew :app:bundleRelease
 adb install -r app/build/outputs/apk/release/app-release.apk
 ```
 
-涉及 UI 或设备行为时，优先安装 debug 包并在真机/模拟器上验证播放、悬浮字幕、DLsite 多任务下载、睡眠定时、设置页检查更新、更新 APK 后台下载通知和 AI 字幕生成主流程；发布验证安装 release APK。更新下载回归重点覆盖切后台后通知仍显示进度/速度、通知取消、设置页进度同步、失败重试、下载完成安装弹窗，以及安装成功或重启后 `cacheDir/updates/` 缓存清理。DLsite 回归重点覆盖目录树选择、加入下载后作品列表排序不变、服务重启后 `running` 恢复为 `pending`、FIFO / 2 并发、active 任务去重、异常重复 `pending` 不阻塞，以及单次选择全部完成后才导入资料库。AI 字幕完整验证需要准备可读取的本地音频：本机路径需先下载 Whisper base 或 small 模型，远程路径需配置实现 `DOCS/tech/remote-asr-progress-contract.md` 的 ASR 服务。CPU 流水线切片路线重点记录实时率、峰值内存、温升、失败率、字幕准确率、进度条单调性、取消响应和 UI 流畅度；远程路线重点覆盖 `POST /transcriptions` 创建 job、`GET /transcriptions/{job_id}` 真实进度轮询、`GET /transcriptions/{job_id}/result` 结果获取、`DELETE /transcriptions/{job_id}` 取消、错误码中文提示、返回 segments 校验和缓存隔离。OpenAI 兼容翻译回归重点覆盖默认 DeepSeek `deepseek-v4-flash`、自定义模型名保存、DeepSeek thinking 控制不污染通用端点、ordered-lines 严格对齐、完整日文字幕全文只读上下文、短拟声 1:1、情景卡缓存、滑动上下文、整批失败后的逐句兜底、翻译失败后复用切片与翻译批次缓存重试，以及最终绑定字幕只保留中文译文。
+涉及 UI 或设备行为时，优先安装 debug 包并在真机/模拟器上验证播放、悬浮字幕、DLsite 多任务下载、睡眠定时、设置页检查更新、更新 APK 后台下载通知和 AI 字幕生成主流程；发布验证安装 release APK。设置与睡眠回归重点覆盖行为开关重启恢复、已用存储刷新、双耳增强设备降级、播放/切歌短淡入、睡眠最后 30 秒淡出和取消后音量恢复。更新下载回归重点覆盖切后台后通知仍显示进度/速度、通知取消、设置页进度同步、失败重试、下载完成安装弹窗，以及安装成功或重启后 `cacheDir/updates/` 缓存清理。DLsite 回归重点覆盖目录树选择、仅 Wi-Fi 下载在非 Wi-Fi 下阻止入队/调度、加入下载后作品列表排序不变、服务重启后 `running` 恢复为 `pending`、FIFO / 2 并发、active 任务去重、异常重复 `pending` 不阻塞，以及单次选择全部完成后才导入资料库。AI 字幕完整验证需要准备可读取的本地音频：本机路径需先下载 Whisper base 或 small 模型，远程路径需配置实现 `DOCS/tech/remote-asr-progress-contract.md` 的 ASR 服务。CPU 流水线切片路线重点记录实时率、峰值内存、温升、失败率、字幕准确率、进度条单调性、取消响应和 UI 流畅度；远程路线重点覆盖 `POST /transcriptions` 创建 job、`GET /transcriptions/{job_id}` 真实进度轮询、`GET /transcriptions/{job_id}/result` 结果获取、`DELETE /transcriptions/{job_id}` 取消、错误码中文提示、返回 segments 校验和缓存隔离。OpenAI 兼容翻译回归重点覆盖默认 DeepSeek `deepseek-v4-flash`、自定义模型名保存、DeepSeek thinking 控制不污染通用端点、ordered-lines 严格对齐、完整日文字幕全文只读上下文、短拟声 1:1、情景卡缓存、滑动上下文、整批失败后的逐句兜底、翻译失败后复用切片与翻译批次缓存重试，以及最终绑定字幕只保留中文译文。
 
 ## UI Probe 工作流
 

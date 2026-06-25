@@ -1,6 +1,5 @@
 package io.github.summerdez.asmrplayer.ui.screens
 
-import android.widget.Toast
 import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.animation.animateColorAsState
 import androidx.compose.animation.expandVertically
@@ -33,10 +32,8 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.QueueMusic
 import androidx.compose.material.icons.filled.Delete
-import androidx.compose.material.icons.filled.Download
 import androidx.compose.material.icons.filled.Edit
 import androidx.compose.material.icons.filled.KeyboardArrowDown
-import androidx.compose.material.icons.filled.LibraryMusic
 import androidx.compose.material.icons.filled.MoreVert
 import androidx.compose.material.icons.filled.MusicNote
 import androidx.compose.material.icons.filled.Pause
@@ -59,7 +56,6 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.graphicsLayer
-import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.Dp
@@ -101,53 +97,6 @@ internal fun LibrarySearchField(value: String, onValueChange: (String) -> Unit, 
             unfocusedContainerColor = tokens.card,
         ),
     )
-}
-
-@Composable
-internal fun LibraryDlsiteEmptyState() {
-    val tokens = LocalAmberTokens.current
-    val context = LocalContext.current
-    Surface(
-        modifier = Modifier.fillMaxWidth().uiProbe("library.empty-state", "资料库空态卡片", "LibraryRows.kt").padding(start = 6.dp, end = 6.dp, top = 10.dp),
-        shape = RoundedCornerShape(28.dp),
-        color = tokens.card,
-        border = BorderStroke(1.dp, tokens.separator),
-    ) {
-        Column(
-            modifier = Modifier.padding(horizontal = 26.dp, vertical = 36.dp),
-            horizontalAlignment = Alignment.CenterHorizontally,
-            verticalArrangement = Arrangement.spacedBy(14.dp),
-        ) {
-            Surface(Modifier.size(72.dp), CircleShape, tokens.accent2Soft, border = BorderStroke(1.dp, tokens.accent2.copy(alpha = 0.20f))) {
-                Box(contentAlignment = Alignment.Center) { Icon(Icons.Default.LibraryMusic, null, tint = tokens.accent2, modifier = Modifier.size(32.dp)) }
-            }
-            Text(
-                "资料库还是空的",
-                color = tokens.label,
-                fontSize = 26.sp,
-                lineHeight = 28.sp,
-                fontFamily = androidx.compose.ui.text.font.FontFamily.Serif,
-                fontWeight = FontWeight.Normal,
-                textAlign = androidx.compose.ui.text.style.TextAlign.Center,
-            )
-            Text(
-                "连接你的 DLsite 账户，把已购买的音声作品同步到这里；也可以继续用右上角菜单导入本地音频。",
-                color = tokens.label2,
-                fontSize = 14.5.sp,
-                lineHeight = 21.sp,
-                textAlign = androidx.compose.ui.text.style.TextAlign.Center,
-                modifier = Modifier.fillMaxWidth(0.90f),
-            )
-            androidx.compose.material3.Button(
-                onClick = { Toast.makeText(context, "请切换到底部 DLsite 页连接账户", Toast.LENGTH_SHORT).show() },
-                modifier = Modifier.padding(top = 6.dp).height(48.dp),
-            ) {
-                Icon(Icons.Default.Download, null, modifier = Modifier.size(18.dp))
-                Spacer(Modifier.width(8.dp))
-                Text("连接 DLsite", fontWeight = FontWeight.SemiBold)
-            }
-        }
-    }
 }
 
 @Composable

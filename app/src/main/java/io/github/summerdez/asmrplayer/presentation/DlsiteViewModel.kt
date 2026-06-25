@@ -10,6 +10,7 @@ import androidx.lifecycle.viewModelScope
 import io.github.summerdez.asmrplayer.data.DlsiteDownloadState
 import io.github.summerdez.asmrplayer.data.DlsiteRepository
 import io.github.summerdez.asmrplayer.data.LibraryRepository
+import io.github.summerdez.asmrplayer.data.SettingsRepository
 import io.github.summerdez.asmrplayer.data.download.DlsiteDownloadQueueRepository
 import io.github.summerdez.asmrplayer.domain.model.DlsiteContent
 import io.github.summerdez.asmrplayer.domain.model.DlsiteDownloadOption
@@ -45,6 +46,7 @@ class DlsiteViewModel(
     private val dlsiteRepository: DlsiteRepository,
     private val downloadQueueRepository: DlsiteDownloadQueueRepository,
     private val libraryRepository: LibraryRepository,
+    private val settingsRepository: SettingsRepository,
 ) : AndroidViewModel(application) {
     private val _state = MutableStateFlow(DlsiteUiState())
     private val messages = DlsiteEventMessageHelper()
@@ -54,6 +56,7 @@ class DlsiteViewModel(
         dlsiteRepository = dlsiteRepository,
         downloadQueueRepository = downloadQueueRepository,
         libraryRepository = libraryRepository,
+        settingsRepository = settingsRepository,
         stateProvider = { _state.value },
         downloadStateProvider = { downloadState },
         isBusy = ::isBusy,

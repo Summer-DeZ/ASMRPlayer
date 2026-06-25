@@ -227,6 +227,10 @@ fun ASMRPlayerApp(
                     onUnlockOverlay = onUnlockOverlay,
                     onOpenOverlaySettings = onOpenOverlaySettings,
                     onRequestNotificationPermission = onRequestNotificationPermission,
+                    onBinauralEnhancedChange = settingsViewModel::setBinauralEnhanced,
+                    onCrossfadeEnabledChange = settingsViewModel::setCrossfadeEnabled,
+                    onWifiOnlyDownloadsChange = settingsViewModel::setWifiOnlyDownloads,
+                    onRefreshStorageUsage = { settingsViewModel.refreshStorageUsage(showMessage = true) },
                     onThemeSelected = { mode ->
                         settingsViewModel.setThemeMode(mode)
                     },
@@ -271,6 +275,7 @@ fun ASMRPlayerApp(
                     },
                     onCustom = { rootState.customSleepDialog = true },
                     onCancel = { sleepTimerViewModel.cancel() },
+                    onFadeBeforeEndChange = sleepTimerViewModel::setFadeBeforeEndEnabled,
                     onLogin = appLaunchers::login,
                     onLogout = { dlsiteViewModel.logout() },
                     onSync = { dlsiteViewModel.syncWorks() },
@@ -295,8 +300,6 @@ fun ASMRPlayerApp(
                             },
                         )
                     },
-                    onPauseAll = dlsiteViewModel::pauseAllDownloads,
-                    onResumeAll = dlsiteViewModel::resumeAllDownloads,
                     onOpenDownloadManager = { rootState.downloadManagerOpen = true },
                 )
             },

@@ -1,5 +1,6 @@
 package io.github.summerdez.asmrplayer.ui.screens
 
+import androidx.compose.foundation.Image
 import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
@@ -9,6 +10,7 @@ import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxHeight
+import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.navigationBarsPadding
@@ -33,11 +35,14 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.vector.ImageVector
+import androidx.compose.ui.layout.ContentScale
+import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import io.github.summerdez.asmrplayer.R
 import io.github.summerdez.asmrplayer.data.DlsiteDownloadSummary
 import io.github.summerdez.asmrplayer.data.DlsiteDownloadTaskState
 import io.github.summerdez.asmrplayer.data.DlsiteDownloadTaskStatus
@@ -149,25 +154,46 @@ fun DlsiteEmptyState() {
 @Composable
 fun DlsiteSoftActionPill(icon: ImageVector, text: String, onClick: () -> Unit, enabled: Boolean = true) {
     val tokens = LocalAmberTokens.current
-    val accentSoft = tokens.accent.copy(alpha = 0.14f)
-    val accentBorder = tokens.accent.copy(alpha = 0.34f)
+    val actionColor = tokens.switchOn
+    val accentSoft = actionColor.copy(alpha = 0.14f)
+    val accentBorder = actionColor.copy(alpha = 0.34f)
     Surface(shape = RoundedCornerShape(999.dp), color = if (enabled) accentSoft else tokens.gray5, border = BorderStroke(0.5.dp, if (enabled) accentBorder else tokens.separator), modifier = Modifier.height(38.dp).clickable(enabled = enabled, onClick = onClick)) {
-        Row(Modifier.padding(horizontal = 14.dp), verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.Center) { Icon(icon, contentDescription = null, tint = if (enabled) tokens.accent else tokens.label3, modifier = Modifier.size(15.dp)); Spacer(Modifier.width(7.dp)); Text(text, color = if (enabled) tokens.accent else tokens.label3, fontSize = 14.sp, fontWeight = FontWeight.SemiBold, maxLines = 1, overflow = TextOverflow.Ellipsis) }
+        Row(Modifier.padding(horizontal = 14.dp), verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.Center) { Icon(icon, contentDescription = null, tint = if (enabled) actionColor else tokens.label3, modifier = Modifier.size(15.dp)); Spacer(Modifier.width(7.dp)); Text(text, color = if (enabled) actionColor else tokens.label3, fontSize = 14.sp, fontWeight = FontWeight.SemiBold, maxLines = 1, overflow = TextOverflow.Ellipsis) }
     }
 }
 
 @Composable
-fun DlsiteStatusPill(text: String, failed: Boolean) {
+fun DlsiteStatusPill(text: String, failed: Boolean, pink: Boolean = false) {
     val tokens = LocalAmberTokens.current
-    Surface(shape = RoundedCornerShape(999.dp), color = if (failed) tokens.accent2Soft else tokens.accent.copy(alpha = 0.14f), border = BorderStroke(0.5.dp, if (failed) tokens.accent2.copy(alpha = 0.45f) else tokens.accent.copy(alpha = 0.34f))) {
-        Text(text, color = if (failed) tokens.accent2 else tokens.accent, fontSize = 12.sp, fontWeight = FontWeight.SemiBold, maxLines = 1, overflow = TextOverflow.Ellipsis, modifier = Modifier.padding(horizontal = 8.dp, vertical = 3.dp))
+    val accent = when {
+        failed -> tokens.accent2
+        pink -> tokens.switchOn
+        else -> tokens.accent
+    }
+    val background = when {
+        failed -> tokens.accent2Soft
+        else -> accent.copy(alpha = 0.14f)
+    }
+    Surface(shape = RoundedCornerShape(999.dp), color = background, border = BorderStroke(0.5.dp, accent.copy(alpha = 0.34f))) {
+        Text(text, color = accent, fontSize = 12.sp, fontWeight = FontWeight.SemiBold, maxLines = 1, overflow = TextOverflow.Ellipsis, modifier = Modifier.padding(horizontal = 8.dp, vertical = 3.dp))
     }
 }
 
 @Composable
 fun DlsiteLogoBadge(size: Dp) {
-    Surface(shape = RoundedCornerShape(if (size >= 60.dp) 18.dp else 14.dp), color = DlsiteBlue, border = BorderStroke(0.5.dp, DlsiteBlueBorder), modifier = Modifier.size(size)) {
-        Box(contentAlignment = Alignment.Center) { Text("DL", color = Color.White, fontSize = (size.value * 0.34f).sp, lineHeight = (size.value * 0.34f).sp, fontWeight = FontWeight.ExtraBold) }
+    val shape = RoundedCornerShape(if (size >= 60.dp) 18.dp else 14.dp)
+    Surface(
+        shape = shape,
+        color = Color.Transparent,
+        border = BorderStroke(0.5.dp, DlsiteBlueBorder),
+        modifier = Modifier.size(size),
+    ) {
+        Image(
+            painter = painterResource(R.drawable.dlsite_icon),
+            contentDescription = "DLsite",
+            contentScale = ContentScale.Crop,
+            modifier = Modifier.fillMaxSize(),
+        )
     }
 }
 

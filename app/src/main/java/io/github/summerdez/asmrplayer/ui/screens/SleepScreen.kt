@@ -1,6 +1,5 @@
 package io.github.summerdez.asmrplayer.ui.screens
 
-import android.widget.Toast
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
@@ -25,7 +24,6 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
@@ -41,14 +39,13 @@ fun SleepTab(
     onSetEndOfTrack: () -> Unit,
     onCustom: () -> Unit,
     onCancel: () -> Unit,
+    onFadeBeforeEndChange: (Boolean) -> Unit,
 ) {
     val tokens = LocalAmberTokens.current
     var selectedMinutes: Int? by remember {
         mutableStateOf(if (state.active && !state.atEndOfTrack && state.minutes > 0) state.minutes else null)
     }
-    var fadeEnabled by remember { mutableStateOf(true) }
     var stopAfterCurrent by remember { mutableStateOf(state.active && state.atEndOfTrack) }
-    val context = LocalContext.current
     LaunchedEffect(state.active, state.atEndOfTrack, state.minutes) {
         if (state.active && !state.atEndOfTrack && state.minutes > 0) {
             selectedMinutes = state.minutes
@@ -102,11 +99,8 @@ fun SleepTab(
             SleepSwitchSettingRow(
                 icon = Icons.Default.GraphicEq,
                 title = "结束前淡出",
-                checked = fadeEnabled,
-                onCheckedChange = {
-                    fadeEnabled = !fadeEnabled
-                    Toast.makeText(context, if (fadeEnabled) "已开启结束前淡出" else "已关闭结束前淡出", Toast.LENGTH_SHORT).show()
-                },
+                checked = state.fadeBeforeEndEnabled,
+                onCheckedChange = { onFadeBeforeEndChange(!state.fadeBeforeEndEnabled) },
             )
             HorizontalDivider(color = tokens.separator, modifier = Modifier.padding(start = 48.dp))
             SleepSwitchSettingRow(

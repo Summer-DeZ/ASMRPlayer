@@ -1,9 +1,6 @@
 package io.github.summerdez.asmrplayer.ui.screens
 
 import android.content.Context
-import android.content.Intent
-import android.net.Uri
-import android.widget.Toast
 import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.animation.expandVertically
 import androidx.compose.animation.fadeIn
@@ -57,7 +54,6 @@ import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
-import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
@@ -112,7 +108,12 @@ fun DlsiteWorkRow(
             metadata = mapOf("workId" to work.workId, "status" to statusLabel, "action" to actionState.name, "expanded" to expanded.toString()),
         ),
     ) {
-        Column(Modifier.background(tokens.card).padding(horizontal = 10.dp, vertical = 10.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
+        Column(
+            Modifier
+                .background(tokens.card)
+                .padding(horizontal = 10.dp, vertical = 10.dp),
+            verticalArrangement = Arrangement.spacedBy(8.dp),
+        ) {
             Row(Modifier.fillMaxWidth().clickable(enabled = hasContents, onClick = onToggleExpanded), verticalAlignment = Alignment.CenterVertically) {
                 CoverBox(work.coverUri, Modifier.size(52.dp)); Spacer(Modifier.width(13.dp))
                 Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(3.dp)) {
@@ -149,11 +150,15 @@ private fun DlsiteWorkContentPanel(
 ) {
     val tokens = LocalAmberTokens.current
     val showActions = dlsiteExpandedActionsVisible(actionState) && (expanded || contents.isEmpty())
-    if ((!expanded || contents.isEmpty()) && !showActions) return
-    AnimatedVisibility(expanded || showActions, enter = expandVertically(tween(260)) + fadeIn(tween(200)), exit = shrinkVertically(tween(220)) + fadeOut(tween(150))) {
+    val visible = expanded || showActions
+    AnimatedVisibility(
+        visible = visible,
+        enter = expandVertically(tween(260)) + fadeIn(tween(200)),
+        exit = shrinkVertically(tween(220)) + fadeOut(tween(150)),
+    ) {
         Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
             HorizontalDivider(color = tokens.separator)
-            if (expanded && contents.isNotEmpty()) Column {
+            if (contents.isNotEmpty()) Column {
                 contents.forEachIndexed { index, content ->
                     DlsiteContentRow(content, taskState?.takeIf { it.contentId == content.optionId }, busy, { onDownloadContent(content) }, { onDeleteContent(content) }, onPause, onResume)
                     if (index != contents.lastIndex) HorizontalDivider(color = tokens.separator)
@@ -210,7 +215,7 @@ private fun DlsiteContentRow(
 @Composable
 private fun DlsiteContentStatusDot(downloaded: Boolean) {
     val tokens = LocalAmberTokens.current
-    val color = if (downloaded) tokens.accent else tokens.label3
+    val color = if (downloaded) tokens.switchOn else tokens.label3
     Surface(shape = CircleShape, color = color.copy(alpha = 0.16f), border = BorderStroke(0.5.dp, color.copy(alpha = if (downloaded) 0.55f else 0.35f)), modifier = Modifier.size(28.dp)) {
         Box(contentAlignment = Alignment.Center) { Icon(Icons.Default.Check, contentDescription = null, tint = color, modifier = Modifier.size(15.dp)) }
     }
@@ -244,11 +249,11 @@ private fun dlsiteExpandedActionsVisible(actionState: DlsiteRowActionState) = ac
 private fun DlsiteDownloadStatusControl(state: DlsiteRowActionState, progressPercent: Int?, enabled: Boolean, onClick: () -> Unit) {
     val tokens = LocalAmberTokens.current
     val (icon, text, color) = when (state) {
-        DlsiteRowActionState.Download -> Triple(Icons.Default.Sync, "同步", tokens.accent)
-        DlsiteRowActionState.Ready -> Triple(Icons.Default.KeyboardArrowDown, "内容", tokens.accent)
-        DlsiteRowActionState.Queued -> Triple(Icons.Default.Sync, "排队中", tokens.accent)
-        DlsiteRowActionState.Downloading -> Triple(Icons.Default.Pause, progressPercent?.let { "$it%" } ?: "下载中", tokens.accent)
-        DlsiteRowActionState.Paused -> Triple(Icons.Default.PlayArrow, "继续", tokens.accent)
+        DlsiteRowActionState.Download -> Triple(Icons.Default.Sync, "同步", tokens.switchOn)
+        DlsiteRowActionState.Ready -> Triple(Icons.Default.KeyboardArrowDown, "内容", tokens.switchOn)
+        DlsiteRowActionState.Queued -> Triple(Icons.Default.Sync, "排队中", tokens.switchOn)
+        DlsiteRowActionState.Downloading -> Triple(Icons.Default.Pause, progressPercent?.let { "$it%" } ?: "下载中", tokens.switchOn)
+        DlsiteRowActionState.Paused -> Triple(Icons.Default.PlayArrow, "继续", tokens.switchOn)
         DlsiteRowActionState.Failed -> Triple(Icons.Default.Download, "重试", tokens.accent2)
     }
     if (state == DlsiteRowActionState.Download) {
@@ -272,16 +277,9 @@ fun DlsiteAccountCard(
     onLogin: () -> Unit,
     onLogout: () -> Unit,
     onSync: () -> Unit,
-    onPauseAll: () -> Unit,
-    onResumeAll: () -> Unit,
     onOpenDownloadManager: () -> Unit,
 ) {
     val tokens = LocalAmberTokens.current
-    val context = LocalContext.current
-    val hasDownloadTasks = downloadSummary.totalCount > 0
-    val bulkActionIcon = if (downloadSummary.runningCount > 0) Icons.Default.Pause else Icons.Default.PlayArrow
-    val bulkActionText = if (downloadSummary.runningCount > 0) "全部暂停" else "全部继续"
-    val bulkActionClick = if (downloadSummary.runningCount > 0) onPauseAll else onResumeAll
     if (!loggedIn) {
         Column(Modifier.uiProbe("dlsite.account-card", "DLsite 未登录账号卡", "DlsiteRows.kt"), verticalArrangement = Arrangement.spacedBy(12.dp)) {
             Surface(shape = RoundedCornerShape(28.dp), color = Color.Transparent, border = BorderStroke(0.5.dp, DlsiteBlueBorder), modifier = Modifier.fillMaxWidth()) {
@@ -293,7 +291,6 @@ fun DlsiteAccountCard(
             DlsiteVisualInput("密码", Icons.Default.Lock, "••••••••", onLogin)
             DlsiteFilledActionPill(Icons.Default.Download, if (busy) "正在登录并同步..." else "登录并同步", onLogin, !busy, Modifier.fillMaxWidth())
             Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.Center, verticalAlignment = Alignment.CenterVertically) { Icon(Icons.Default.Security, contentDescription = null, tint = Color(0xFF84C2A3), modifier = Modifier.size(14.dp)); Spacer(Modifier.width(8.dp)); Text("登录信息仅用于同步，加密保存在本设备", color = tokens.label3, fontSize = 12.5.sp, maxLines = 1, overflow = TextOverflow.Ellipsis) }
-            Text("没有账户？前往 DLsite 注册", color = DlsiteBlue, fontSize = 13.sp, fontWeight = FontWeight.SemiBold, textAlign = TextAlign.Center, modifier = Modifier.fillMaxWidth().clickable { openDlsiteRegister(context) }.padding(top = 2.dp))
         }
         return
     }
@@ -303,10 +300,9 @@ fun DlsiteAccountCard(
                 DlsiteLogoBadge(52.dp); Spacer(Modifier.width(14.dp))
                 Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(3.dp)) {
                     Text("DLsite", color = tokens.label, fontSize = 16.sp, fontWeight = FontWeight.Bold, maxLines = 1, overflow = TextOverflow.Ellipsis)
-                    Text("已连接 · 已同步 ${workCount} 个作品", color = tokens.label2, fontSize = 13.sp, maxLines = 1, overflow = TextOverflow.Ellipsis)
                 }
                 Spacer(Modifier.width(12.dp))
-                Column(horizontalAlignment = Alignment.End) { DlsiteStatusPill("已连接", false); TextButton(onClick = onLogout, enabled = !busy, contentPadding = PaddingValues(0.dp), modifier = Modifier.height(30.dp)) { Icon(Icons.AutoMirrored.Filled.Logout, contentDescription = null, tint = tokens.label2, modifier = Modifier.size(16.dp)); Spacer(Modifier.width(4.dp)); Text("退出登录", color = tokens.label2, fontSize = 13.sp) } }
+                Column(horizontalAlignment = Alignment.End) { DlsiteStatusPill("已连接", false, pink = true); TextButton(onClick = onLogout, enabled = !busy, contentPadding = PaddingValues(0.dp), modifier = Modifier.height(30.dp)) { Icon(Icons.AutoMirrored.Filled.Logout, contentDescription = null, tint = tokens.label2, modifier = Modifier.size(16.dp)); Spacer(Modifier.width(4.dp)); Text("退出登录", color = tokens.label2, fontSize = 13.sp) } }
             }
         }
         Surface(shape = RoundedCornerShape(28.dp), color = tokens.card, border = BorderStroke(0.5.dp, tokens.separator), modifier = Modifier.fillMaxWidth()) {
@@ -325,7 +321,6 @@ fun DlsiteAccountCard(
                 }
                 Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(10.dp)) {
                     DlsiteSoftActionPill(Icons.Default.Download, "下载管理", onOpenDownloadManager)
-                    DlsiteSoftActionPill(bulkActionIcon, bulkActionText, bulkActionClick, !busy && hasDownloadTasks)
                 }
             }
         }
@@ -357,10 +352,6 @@ private fun DlsiteFilledActionPill(icon: ImageVector, text: String, onClick: () 
     }
 }
 
-private fun openDlsiteRegister(context: Context) {
-    val intent = Intent(Intent.ACTION_VIEW, Uri.parse("https://www.dlsite.com/maniax/regist"))
-    runCatching { context.startActivity(intent) }.onFailure { Toast.makeText(context, "无法打开注册链接", Toast.LENGTH_SHORT).show() }
-}
 private fun dlsiteContentProgressFraction(content: DlsiteContent, taskState: DlsiteDownloadTaskState?): Float? {
     val percent = taskState?.progressPercent
     return when {

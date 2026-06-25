@@ -51,10 +51,12 @@ data class DlsiteDownloadServiceDependencies(
     val libraryRepository: LibraryRepository,
     val dlsiteApi: DlsiteApi,
     val dlsiteDownloadStateStore: DlsiteDownloadStateStore,
+    val settingsRepository: SettingsRepository,
 )
 
 data class PlaybackServiceDependencies(
     val playbackPlaylistResolver: PlaybackPlaylistResolver,
+    val settingsRepository: SettingsRepository,
 )
 
 class AppContainer(private val application: Application) {
@@ -129,11 +131,12 @@ class AppContainer(private val application: Application) {
             libraryRepository,
             dlsiteApi,
             dlsiteDownloadStateStore,
+            settingsRepository,
         )
     }
 
     val playbackServiceDependencies: PlaybackServiceDependencies by lazy {
-        PlaybackServiceDependencies(playbackPlaylistResolver)
+        PlaybackServiceDependencies(playbackPlaylistResolver, settingsRepository)
     }
 
     val viewModelFactory: ViewModelProvider.Factory by lazy {
@@ -170,13 +173,14 @@ private class ASMRViewModelFactory(
                     container.appUpdateDownloadStateStore,
                 ) as T
             modelClass.isAssignableFrom(SleepTimerViewModel::class.java) ->
-                SleepTimerViewModel(container.playbackCommands) as T
+                SleepTimerViewModel(container.playbackCommands, container.settingsRepository) as T
             modelClass.isAssignableFrom(DlsiteViewModel::class.java) ->
                 DlsiteViewModel(
                     application,
                     container.dlsiteRepository,
                     container.dlsiteDownloadQueueRepository,
                     container.libraryRepository,
+                    container.settingsRepository,
                 ) as T
             else -> error("Unknown ViewModel class: ${modelClass.name}")
         }

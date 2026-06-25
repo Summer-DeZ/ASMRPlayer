@@ -1,6 +1,5 @@
 package io.github.summerdez.asmrplayer.ui.screens
 
-import android.widget.Toast
 import androidx.compose.animation.AnimatedContent
 import androidx.compose.animation.SizeTransform
 import androidx.compose.animation.core.CubicBezierEasing
@@ -27,12 +26,8 @@ import androidx.compose.material.icons.filled.Storage
 import androidx.compose.material.icons.filled.Subtitles
 import androidx.compose.material.icons.filled.Wifi
 import androidx.compose.runtime.Composable
-import androidx.compose.runtime.getValue
-import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
-import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.unit.dp
 import io.github.summerdez.asmrplayer.domain.model.AiTranscriptionBackend
 import io.github.summerdez.asmrplayer.domain.model.AiTranslationEngine
@@ -50,6 +45,10 @@ fun SettingsTab(
     onUnlockOverlay: () -> Unit,
     onOpenOverlaySettings: () -> Unit,
     onRequestNotificationPermission: () -> Unit,
+    onBinauralEnhancedChange: (Boolean) -> Unit,
+    onCrossfadeEnabledChange: (Boolean) -> Unit,
+    onWifiOnlyDownloadsChange: (Boolean) -> Unit,
+    onRefreshStorageUsage: () -> Unit,
     onThemeSelected: (AppThemeMode) -> Unit,
     onCheckForUpdates: () -> Unit,
     onShowUpdateDetails: () -> Unit,
@@ -75,13 +74,6 @@ fun SettingsTab(
     aiSettingsOpen: Boolean,
     onAiSettingsOpenChange: (Boolean) -> Unit,
 ) {
-    var binauralEnhanced by remember { mutableStateOf(true) }
-    var crossfadeEnabled by remember { mutableStateOf(true) }
-    var wifiOnly by remember { mutableStateOf(true) }
-    val context = LocalContext.current
-    fun placeholder(message: String) {
-        Toast.makeText(context, message, Toast.LENGTH_SHORT).show()
-    }
     val settingsScrollState = rememberScrollState()
     val aiSettingsScrollState = rememberScrollState()
     val pageSlideEasing = CubicBezierEasing(0.20f, 0f, 0f, 1f)
@@ -118,22 +110,16 @@ fun SettingsTab(
                     SettingsSwitchIconRow(
                         icon = Icons.Default.Hearing,
                         title = "双耳增强",
-                        checked = binauralEnhanced,
-                        onClick = {
-                            binauralEnhanced = !binauralEnhanced
-                            placeholder("双耳增强暂未接入真实播放设置")
-                        },
+                        checked = state.binauralEnhanced,
+                        onClick = { onBinauralEnhancedChange(!state.binauralEnhanced) },
                         subtitle = "为双耳录音作品优化声场",
                     )
                     SettingsDivider()
                     SettingsSwitchIconRow(
                         icon = Icons.Default.MergeType,
                         title = "淡入淡出衔接",
-                        checked = crossfadeEnabled,
-                        onClick = {
-                            crossfadeEnabled = !crossfadeEnabled
-                            placeholder("淡入淡出衔接暂未接入真实播放设置")
-                        },
+                        checked = state.crossfadeEnabled,
+                        onClick = { onCrossfadeEnabledChange(!state.crossfadeEnabled) },
                         subtitle = "作品之间平滑过渡",
                     )
                 }
@@ -143,21 +129,18 @@ fun SettingsTab(
                 SettingsSwitchIconRow(
                     icon = Icons.Default.Wifi,
                     title = "仅 Wi-Fi 下载",
-                    checked = wifiOnly,
-                    onClick = {
-                        wifiOnly = !wifiOnly
-                        placeholder("仅 Wi-Fi 下载暂未接入真实下载设置")
-                    },
+                    checked = state.wifiOnlyDownloads,
+                    onClick = { onWifiOnlyDownloadsChange(!state.wifiOnlyDownloads) },
                     subtitle = "避免使用蜂窝数据同步",
                 )
                 SettingsDivider()
                 SettingsActionRow(
                     icon = Icons.Default.Storage,
                     title = "已用存储",
-                    value = "412 MB",
+                    value = state.storageUsedText,
                     trailing = RowTrailing.None,
                     subtitle = "离线作品缓存占用",
-                    onClick = { placeholder("存储详情暂未实现") },
+                    onClick = onRefreshStorageUsage,
                 )
             }
 
