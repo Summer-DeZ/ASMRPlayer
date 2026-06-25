@@ -80,17 +80,17 @@
 - **结果**：全仓目标全家桶 import 与 `import .*` 已清零，保留必要的精确类型 import 和精确 `R` 资源 import；data/domain 层不再因为 wildcard import 表面依赖 ui/presentation。
 - **后续**：不再补回全家桶 import；如要引入 ktlint/Spotless 等工具链，单独评估格式化规则和 churn。
 
-### C2 · [P1] Java 文件已完成 Kotlin 化（Java 0 / Kotlin 105，0%）
+### C2 · [P1] Java 文件已完成 Kotlin 化（`app/src` Java 0）
 
-- **位置**：`app/src/main/java/` 下主源码 Java 文件已清零；核心 model、`data/remote`、`data/files/DocumentFiles`、`data/download`、`playback/`、旧 `ui/theme` 与 `DlsiteLoginActivity` 均已迁移到 Kotlin，并保留迁移期 Java/ABI 兼容入口。
+- **位置**：`app/src/main/java/` 下主源码 Java 文件已清零；唯一剩余 Java 单测 `DlsiteDownloadTaskTest.java` 已迁为 Kotlin，`find app/src -name '*.java'` 无输出。核心 model、`data/remote`、`data/files/DocumentFiles`、`data/download`、`playback/`、旧 `ui/theme` 与 `DlsiteLoginActivity` 均已迁移到 Kotlin。
 - **问题**：语言统一阶段完成，但部分迁移期 API 仍保留 Java null 宽松边界、`@JvmField` 字段 ABI 和平台值兼容写法，尚未完全发挥 Kotlin 空安全和数据建模能力。
 - **方向**：C2 已完成；下一步继续处理迁移期兼容点，按调用链收紧剩余 nullable API。
 
 ### C3 · [P2] 接口/model nullable 参数泛滥 + 防御式 `if-null-return`（Java 移植味）
 
-- **位置**：`LibraryRepository` 已完成 Phase F/C3 第一切片，playlist/track/subtitle/cover/selected playlist 相关入参改为非空 Kotlin 类型；`DlsiteRepository`、`DlsiteLocalStore` 与 `DlsiteDownloadQueueRepository` 已完成第二切片，`workId`、`taskId`、`optionId`、`DlsiteWork` 与 `saveWork(updatedWork)` 等 identity/required 入参改为非空 Kotlin 类型；核心资料库模型 `TrackItem` 与 `Playlist` 已删除迁移期 `@JvmOverloads`、字段 `@JvmField` 和 nullable 构造语义，构造参数收紧为非空 Kotlin 类型。Room 实现继续保留空字符串业务校验；`DlsiteDownloadBlockingAdapter` 作为 Java/历史边界继续接收 nullable，并在 adapter 内过滤/归一化后调用 repository。
+- **位置**：`LibraryRepository` 已完成 Phase F/C3 第一切片，playlist/track/subtitle/cover/selected playlist 相关入参改为非空 Kotlin 类型；`DlsiteRepository`、`DlsiteLocalStore` 与 `DlsiteDownloadQueueRepository` 已完成第二切片，`workId`、`taskId`、`optionId`、`DlsiteWork` 与 `saveWork(updatedWork)` 等 identity/required 入参改为非空 Kotlin 类型；核心资料库模型 `TrackItem` 与 `Playlist` 已删除迁移期 `@JvmOverloads`、字段 `@JvmField` 和 nullable 构造语义，构造参数收紧为非空 Kotlin 类型；DLsite 下载 DTO `DlsiteDownloadOption` 与 `DlsiteJsonParser.ContentCount` / `DlsiteZiptree` / `ContentFile` 已删除字段 `@JvmField` 和 nullable 构造语义，parser 层继续负责空值归一化。Room 实现继续保留空字符串业务校验；`DlsiteDownloadBlockingAdapter` 作为 Java/历史边界继续接收 nullable，并在 adapter 内过滤/归一化后调用 repository。
 - **问题**：Kotlin 侧本可用非空类型在编译期挡住，旧 Java 迁移边界把校验下沉到运行时、每个方法重复；如果继续扩大，会让业务缺失值和 null 兼容输入混在同一层。
-- **方向**：剩余 C3 工作转入 DLsite 下载链路和 facade 兼容点：`DlsiteDownloadOption`、`DlsiteJsonParser` 等仍保留 Java 单测/下载链路兼容边界，后续单独切片；继续按调用链收紧真实 required 参数；`error`、`optionTitle` 这类“可缺失本身就是业务数据”的 nullable 保留；Java/历史入口继续在 adapter 或 facade 内部归一化。
+- **方向**：剩余 C3 工作转入其它 model/facade 兼容点；继续按调用链收紧真实 required 参数；`error`、`optionTitle` 这类“可缺失本身就是业务数据”的 nullable 保留；Java/历史入口继续在 adapter 或 facade 内部归一化。
 
 ### C4 · [P2] 播放位置 ticker 与字幕 cue-boundary scheduler 的职责边界
 

@@ -2,7 +2,6 @@ package io.github.summerdez.asmrplayer.data.remote
 
 import io.github.summerdez.asmrplayer.domain.model.DlsiteWork
 import java.io.IOException
-import java.util.ArrayList
 import kotlin.math.max
 
 object DlsiteJsonParser {
@@ -54,9 +53,9 @@ object DlsiteJsonParser {
         DlsiteWebvttJsonParser.parseWebvttJson(json)
 
     class ContentCount(
-        @JvmField val user: Int,
-        @JvmField val production: Int,
-        @JvmField val pageLimit: Int,
+        val user: Int = 0,
+        val production: Int = 0,
+        val pageLimit: Int = 50,
     )
 
     class IOExceptionLikeJsonException(
@@ -65,61 +64,19 @@ object DlsiteJsonParser {
     ) : IOException(message, cause)
 
     class DlsiteZiptree(
-        workId: String?,
-        revision: String?,
-        audioFiles: List<ContentFile>?,
+        val workId: String = "",
+        val revision: String = "",
+        val audioFiles: List<ContentFile> = emptyList(),
+    )
+
+    class ContentFile(
+        val displayPath: String = "",
+        val displayName: String = "",
+        val contentPath: String = "",
+        val subtitleContentPath: String = "",
+        val subtitleName: String = "",
+        lengthBytes: Long = 0L,
     ) {
-        @JvmField
-        val workId: String = workId ?: ""
-
-        @JvmField
-        val revision: String = revision ?: ""
-
-        @JvmField
-        val audioFiles: List<ContentFile> = audioFiles ?: ArrayList()
-    }
-
-    class ContentFile {
-        @JvmField
-        val displayPath: String
-
-        @JvmField
-        val displayName: String
-
-        @JvmField
-        val contentPath: String
-
-        @JvmField
-        val subtitleContentPath: String
-
-        @JvmField
-        val subtitleName: String
-
-        @JvmField
-        val lengthBytes: Long
-
-        constructor(
-            displayPath: String?,
-            displayName: String?,
-            contentPath: String?,
-            subtitleContentPath: String?,
-            subtitleName: String?,
-        ) : this(displayPath, displayName, contentPath, subtitleContentPath, subtitleName, 0L)
-
-        constructor(
-            displayPath: String?,
-            displayName: String?,
-            contentPath: String?,
-            subtitleContentPath: String?,
-            subtitleName: String?,
-            lengthBytes: Long,
-        ) {
-            this.displayPath = displayPath ?: ""
-            this.displayName = displayName ?: ""
-            this.contentPath = contentPath ?: ""
-            this.subtitleContentPath = subtitleContentPath ?: ""
-            this.subtitleName = subtitleName ?: ""
-            this.lengthBytes = max(0L, lengthBytes)
-        }
+        val lengthBytes: Long = max(0L, lengthBytes)
     }
 }
