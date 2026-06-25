@@ -41,10 +41,11 @@
 - [x] 需要做：Phase F `data/remote` Kotlin 化第四切片：`DlsiteJsonParser` facade 与 `DlsiteHttpClient` 迁移为 Kotlin，保留 Java 静态 parser 入口、嵌套结果类字段/构造器、HTTP 实例方法和 `successfulText` / `bodyString` 静态 helper，并补充 `parseWorkDetail` 可返回 null 的兼容测试。
 - [x] 需要做：Phase F `data/remote` Kotlin 化第五切片：`DlsiteLibraryJsonParser`、`DlsiteWorkRemote` 迁移为 Kotlin，保留购买记录 JSON 解析异常包装、可下载音声过滤、封面 URL 归一化、购买列表分块拉取、去重合并和最近浏览 fallback 语义。
 - [x] 需要做：Phase F `data/remote` Kotlin 化第六切片：`DlsiteJsonSupport`、`DlsiteCoverRemote` 迁移为 Kotlin，保留 JSON reader/类型转换/escape 行为和封面下载 resolve、sniff、extension、interrupt 语义。
+- [x] 需要做：Phase F `data/remote` Kotlin 化第七切片：`DlsiteContentRemote` 迁移为 Kotlin，`data/remote` Java 清零，并保留 DLsite 内容下载、签名 URL、分片选择、进度回调、字幕下载和失败清理语义。
 - [ ] 后续做：Phase C 继续评估 `PlaybackCommandClient` 播放位置 ticker 的收敛方式，并收敛重复快照数据类和手工字段搬运。
 - [ ] 后续做：Phase D 继续处理其它剩余 service-locator 去耦，逐步收敛到注入的仓库/服务边界。
 - [ ] 后续做：Phase E 继续拆分 `ASMRPlayerApp.kt` 组合根和巨型 Screen 文件。
-- [ ] 后续做：Phase F 优先迁移核心 model 与 `data/remote/` Java 文件到 Kotlin，再收紧 nullable API。
+- [ ] 后续做：Phase F 继续迁移 `data/download/`、`data/files/`、`playback/` 和旧 UI/theme Java 文件；等 Java 调用点进一步收敛后再统一收紧 nullable API。
 - [ ] 暂不做：本轮全仓 Optimize Imports；当前工作区已有多处 UI Probe 和界面改动，后续应单独做纯 import cleanup 变更。
 
 ### 2026-06-24

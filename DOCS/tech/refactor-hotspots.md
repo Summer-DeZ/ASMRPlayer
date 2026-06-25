@@ -80,11 +80,11 @@
 - **问题**：绝大多数未使用（如 `DbIo` 只需 `runBlocking/Dispatchers`），且让 **data 层 `import ui.*`、domain 层 `import ui.*`**，制造跨层耦合假象、可能掩盖真实非法依赖。这是「大量废弃代码」的**最大单一来源**，疑似某次批量移动文件自动生成。
 - **方向**：全仓库一次性清理为精确 import（IDE Optimize Imports / ktlint）。低风险高收益，可独立先做。
 
-### C2 · [P1] 13 个 Java 文件未完成 Kotlin 化（Java 13 / Kotlin 92，约 12%）
+### C2 · [P1] 12 个 Java 文件未完成 Kotlin 化（Java 12 / Kotlin 93，约 11%）
 
-- **位置**：核心 model `domain/model/Playlist`、`TrackItem`、`DlsiteDownloadOption` 已迁移到 Kotlin 并保留 Java 兼容字段/构造器；`data/remote` 已先迁 `DlsiteClient`、`DlsiteContentProgressListener`、`DlsiteRemoteConstants`、`DlsiteRemoteFiles`、`DlsiteDownloadJsonParser`、`DlsiteHtmlParser`、`DlsiteWebvttJsonParser`、`DlsiteJsonParser`、`DlsiteHttpClient`、`DlsiteLibraryJsonParser`、`DlsiteWorkRemote`、`DlsiteJsonSupport`、`DlsiteCoverRemote`，剩余 Java 集中在 `data/remote/`（1 个 `Dlsite*.java`）、`data/files/DocumentFiles.java`、`data/download/`（3 个）、`ui/theme/`（`AppUi/AppThemePalette/AppThemeMode`）、`ui/activity/DlsiteLoginActivity.java`、`playback/`（`SubtitleParser/SubtitleCue/SubtitleOverlayWindow/PlaybackIntents`）。
-- **问题**：核心 model 的 Java 残留已解决一层，但远程解析层主体、下载链路和字幕/窗口工具仍让 Kotlin 调用失去完整空安全与数据建模能力。
-- **方向**：下一步优先迁 `data/remote/` 解析层到 Kotlin（可逐步引入 `data class` / 明确 nullable contract），再处理下载和字幕工具类；nullable API 收紧应在对应 Java 调用点迁完后单独落地。
+- **位置**：核心 model `domain/model/Playlist`、`TrackItem`、`DlsiteDownloadOption` 已迁移到 Kotlin 并保留 Java 兼容字段/构造器；`data/remote` 已迁移完成并保留 Java 下载服务/Task 所需 ABI；剩余 Java 集中在 `data/files/DocumentFiles.java`、`data/download/`（3 个）、`ui/theme/`（`AppUi/AppThemePalette/AppThemeMode`）、`ui/activity/DlsiteLoginActivity.java`、`playback/`（`SubtitleParser/SubtitleCue/SubtitleOverlayWindow/PlaybackIntents`）。
+- **问题**：核心 model 与 `data/remote` 的 Java 残留已解决，但下载链路、文件工具、字幕/窗口工具和旧 UI/theme 类仍让 Kotlin 调用失去完整空安全与数据建模能力。
+- **方向**：下一步优先迁 `data/download/` 与 `data/files/`，再处理字幕、悬浮窗和旧 UI/theme 工具类；nullable API 收紧应在对应 Java 调用点迁完后单独落地。
 
 ### C3 · [P2] 接口/方法 nullable 参数泛滥 + 防御式 `if-null-return`（Java 移植味）
 
