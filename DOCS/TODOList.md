@@ -18,7 +18,8 @@
 - [x] 需要做：Phase C 设置页切片：`SettingsViewModel` 的悬浮窗状态改为从 `PlaybackCommandClient.snapshots` 派生。
 - [x] 需要做：Phase C 睡眠定时切片：`SleepTimerViewModel` 改为从 `PlaybackCommandClient.snapshots` 派生，`sessionExtras` 只下发低频 sleep deadline，客户端本地计算剩余时间。
 - [x] 需要做：Phase C 全局播放状态 bus 切片：`PlaybackViewModel` 移除旧 fallback 订阅，`PlaybackService` 只发布 `MediaSession.sessionExtras`，全局播放状态 bus 删除。
-- [x] 需要做：Phase C C4 字幕调度切片：`PlaybackService` 固定 250ms 字幕轮询改为 cue 边界定时，悬浮窗和 `sessionExtras` 字幕状态仍由 Service 维护。
+- [x] 需要做：Phase C C4 字幕调度切片：`PlaybackService` 字幕刷新改为 cue 边界定时，悬浮窗和 `sessionExtras` 字幕状态仍由 Service 维护。
+- [x] 需要做：Phase C/C4 播放字幕调度收敛切片：保留 `PlaybackCommandClient` UI 进度 ticker 与 `PlaybackService` `subtitleTicker`/Handler cue 边界调度，抽出 `SubtitleCueScheduler` 统一计算当前 cue frame 和下一次唤醒 delay。
 - [x] 需要做：Phase C/D1 快照去重切片：`PlaybackServiceSnapshot` 不再重复承载 `isPlaying`、`durationMs`、`positionMs`，播放三字段保留在 `PlaybackControllerSnapshot`。
 - [x] 需要做：Phase C/D1 `PlaybackUiState` 瘦身切片：删除未消费的 `hasAudio`、`canPlayNext`、`previousSubtitle`、`currentSubtitle`、`nextSubtitle`、`overlayLocked` 和 `error` 重复播放状态字段，只保留当前 UI 可见行为字段。
 - [x] 需要做：Phase C/D1 播放展示状态协调器切片：抽出 `PlaybackPresentationState` 持有 `PlaybackSelection`、playlist cache 与 `PlaybackControllerSnapshot`，集中完成 service snapshot 到 active track/context 和 `PlaybackUiState` 的同步投影。
@@ -53,7 +54,7 @@
 - [x] 需要做：Phase F/C3 第二切片：收紧 `DlsiteRepository`、`DlsiteLocalStore` 和 `DlsiteDownloadQueueRepository` 的 identity/required nullable API 边界，`workId`、`taskId`、`optionId`、`DlsiteWork` 与 `saveWork(updatedWork)` 等入参改为非空 Kotlin 类型；`DlsiteDownloadBlockingAdapter` 保留 nullable 历史边界并在进入 repository 前过滤或归一化。
 - [x] 需要做：Phase F/C3 Kotlin-native model 清理切片：`TrackItem` 与 `Playlist` 删除迁移期 `@JvmOverloads`、字段 `@JvmField` 和 nullable 构造语义，构造参数改为非空 Kotlin 类型并保留 `Playlist(id, name)`、`Playlist(id, name, tracks)`、`Playlist(id, name, coverUri, tracks)`、`copy(...)` 与 JSON 行为。
 - [x] 需要做：Phase A/C1 全仓 import cleanup：清理主源码和单元测试中 46 个文件的自动生成全家桶 wildcard import，改为精确 import，保留必要的精确 `R` 资源 import。
-- [ ] 后续做：Phase C 继续评估 `PlaybackCommandClient` 播放位置 ticker 与 `PlaybackService` 字幕调度的进一步收敛方式。
+- [ ] 后续做：Phase C 如继续评估播放位置/字幕链路，只处理状态边界和测试覆盖；`PlaybackCommandClient` UI position ticker 与 `PlaybackService` cue-boundary scheduler 属于不同 runtime 驱动，不作为“两个 250ms 轮询”合并。
 - [ ] 后续做：Phase D 继续处理其它剩余 service-locator 去耦，逐步收敛到注入的仓库/服务边界。
 - [ ] 后续做：Phase E 继续拆分 `ASMRPlayerApp.kt` 组合根和巨型 Screen 文件。
 - [ ] 后续做：Phase F 继续清理迁移期 `@JvmField`、平台值兼容点和 model/facade nullable helper。

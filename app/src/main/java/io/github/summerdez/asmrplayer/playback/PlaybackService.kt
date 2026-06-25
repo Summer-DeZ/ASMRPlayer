@@ -40,8 +40,7 @@ class PlaybackService : MediaSessionService() {
     private val serviceScope = CoroutineScope(SupervisorJob() + Dispatchers.Main.immediate)
     private val subtitleTicker = object : Runnable {
         override fun run() {
-            updateSubtitleForCurrentPosition()
-            scheduleNextSubtitleUpdate()
+            updateSubtitleForCurrentPositionAndSchedule()
         }
     }
     private val sleepTimer = SleepTimerState()
@@ -427,13 +426,10 @@ class PlaybackService : MediaSessionService() {
         }
     }
 
-    private fun updateSubtitleForCurrentPosition() {
-        updateSubtitleText(SubtitleParser.textAt(subtitleCues, playerPositionMs().toLong()))
-    }
-
     private fun updateSubtitleForCurrentPositionAndSchedule() {
-        updateSubtitleForCurrentPosition()
-        scheduleNextSubtitleUpdate()
+        val schedule = currentSubtitleSchedule()
+        updateSubtitleText(schedule.frame.text)
+        scheduleNextSubtitleUpdate(schedule)
     }
 
     private fun updateSubtitleText(text: String?) {
@@ -456,17 +452,19 @@ class PlaybackService : MediaSessionService() {
         handler.removeCallbacks(subtitleTicker)
     }
 
-    private fun scheduleNextSubtitleUpdate() {
+    private fun currentSubtitleSchedule(): SubtitleCueSchedule {
+        return SubtitleCueScheduler.scheduleAt(subtitleCues, playerPositionMs().toLong())
+    }
+
+    private fun scheduleNextSubtitleUpdate(schedule: SubtitleCueSchedule = currentSubtitleSchedule()) {
         handler.removeCallbacks(subtitleTicker)
         if (!tickerRunning || !player.isPlaying || subtitleCues.isEmpty()) {
             return
         }
-        val positionMs = playerPositionMs().toLong()
-        val nextStartMs = SubtitleParser.nextCueStartAfter(subtitleCues, positionMs)
-        if (nextStartMs < 0L) {
+        val delayMs = schedule.nextWakeDelayMs
+        if (delayMs == null) {
             return
         }
-        val delayMs = max(0L, nextStartMs - positionMs + SUBTITLE_BOUNDARY_GUARD_MS)
         handler.postDelayed(subtitleTicker, delayMs)
     }
 
@@ -581,7 +579,7 @@ class PlaybackService : MediaSessionService() {
     }
 
     private fun activeSubtitleIndex(): Int {
-        return SubtitleParser.indexAt(subtitleCues, playerPositionMs().toLong())
+        return currentSubtitleSchedule().frame.index
     }
 
     private fun getSleepTimerRemainingMs(): Long {
@@ -665,7 +663,6 @@ class PlaybackService : MediaSessionService() {
         const val EXTRA_PLAYLIST_INDEX = "extra_playlist_index"
         const val EXTRA_SLEEP_MINUTES = "extra_sleep_minutes"
 
-        private const val SUBTITLE_BOUNDARY_GUARD_MS = 25L
         private const val DEFAULT_TRACK_TITLE = "ASMRPlayer"
         private val CUSTOM_COMMANDS = listOf(
             COMMAND_PLAY_MEDIA,

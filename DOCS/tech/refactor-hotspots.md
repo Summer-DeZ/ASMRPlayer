@@ -92,11 +92,12 @@
 - **问题**：Kotlin 侧本可用非空类型在编译期挡住，旧 Java 迁移边界把校验下沉到运行时、每个方法重复；如果继续扩大，会让业务缺失值和 null 兼容输入混在同一层。
 - **方向**：剩余 C3 工作转入 DLsite 下载链路和 facade 兼容点：`DlsiteDownloadOption`、`DlsiteJsonParser` 等仍保留 Java 单测/下载链路兼容边界，后续单独切片；继续按调用链收紧真实 required 参数；`error`、`optionTitle` 这类“可缺失本身就是业务数据”的 nullable 保留；Java/历史入口继续在 adapter 或 facade 内部归一化。
 
-### C4 · [P2] 字幕/位置「双 ticker」重复轮询
+### C4 · [P2] 播放位置 ticker 与字幕 cue-boundary scheduler 的职责边界
 
-- **位置**：`playback/PlaybackService.kt:34-40`（`Handler.postDelayed` 每 250ms `SUBTITLE_REFRESH_MS`，`:570`）刷字幕；`playback/PlaybackCommandClient.kt:206-213`（协程 ticker 每 250ms `CONTROLLER_POSITION_REFRESH_MS`，`:239`）拉播放位置。
-- **问题**：两处独立的 250ms 轮询都为「按播放位置刷新」，职责重叠、各刷各的。注：因 ExoPlayer 不 push 位置/字幕，按位置轮询本身**合理**，问题在**两套并存**。
-- **方向**：A4 统一状态源后，位置/字幕刷新合并为单一驱动。
+- **位置**：`playback/PlaybackCommandClient.kt:208-214` 的 `positionTicker` 每 250ms 只在播放中刷新 controller 快照，用于 UI 进度条/时间连续变化；`playback/PlaybackService.kt:41-45` 保留 Handler `subtitleTicker`，`PlaybackService.kt:429-468` 通过 `SubtitleCueScheduler.scheduleAt(...)` 计算当前字幕 frame 和下一次 cue 边界唤醒 delay。
+- **现状**：这不是同一种 250ms 驱动的双份实现。UI position ticker 与 Service cue-boundary scheduler 是不同 runtime 驱动：前者面向连续进度展示，后者面向 Service 内部悬浮字幕和 `sessionExtras.subtitleIndex` 在 cue 边界更新。
+- **已完成切片**：`playback/SubtitleCueScheduler.kt:15-39` 已抽出 `frameAt/scheduleAt/nextWakeDelayMs` 纯计算，保留 cue gap 中沿用上一条字幕、空字幕 index=-1/text=""、最后一条后无下一次 delay，以及 25ms boundary guard 语义。
+- **方向**：不要合并或删除 `PlaybackCommandClient.positionTicker`、`PlaybackCommandClient.sleepTimerTicker` 或 `PlaybackService.subtitleTicker`。后续如继续处理 C4，只评估状态边界和测试覆盖，除非有新的可靠 runtime 事件同时替代连续 UI 进度与 cue 边界刷新职责。
 
 ### C5 · [P3] 异常处理待审：35 处 `catch` / 30 处 `runCatching`
 
@@ -117,7 +118,7 @@
 
 - **位置**：`PlaybackUiState` 与 `PlaybackPresentationState`（`PlaybackPresentationState.kt`）、`PlaybackServiceSnapshot`（`PlaybackServiceState.kt`）、`PlaybackControllerSnapshot`（`PlaybackCommandClient.kt:31-38`）。
 - **已改善**：`PlaybackUiState` 已去掉未消费的 `hasAudio`、`canPlayNext`、`previousSubtitle`、`currentSubtitle`、`nextSubtitle`、`overlayLocked` 和 `error` 重复播放状态字段；`PlaybackServiceSnapshot` / `sessionExtras` 也已删除不再消费的 `previousSubtitle`、`currentSubtitle`、`nextSubtitle` 邻接字幕文本。UI state 现在只保留标题/封面/playlist identity、播放状态与进度、字幕列表/index/空文案、悬浮窗请求等当前可见行为字段。`PlaybackPresentationState` 已承接 `PlaybackSelection`、playlist cache、`PlaybackControllerSnapshot`、service snapshot → active track/context 同步和 `PlaybackUiState` 投影，`PlaybackViewModel` 只保留 Flow collect、对外命令方法和 `PlaybackCommandClient` 调用。
-- **剩余问题**：`PlaybackUiState`、`PlaybackServiceSnapshot`、`PlaybackControllerSnapshot` 仍是三份边界数据；字幕列表/index、悬浮窗请求、sleep 等自定义状态仍经 service snapshot 进入 controller snapshot，再映射到 UI；播放位置 ticker 与 Service 字幕调度的进一步收敛仍未处理。
+- **剩余问题**：`PlaybackUiState`、`PlaybackServiceSnapshot`、`PlaybackControllerSnapshot` 仍是三份边界数据；字幕列表/index、悬浮窗请求、sleep 等自定义状态仍经 service snapshot 进入 controller snapshot，再映射到 UI。字幕 cue frame/delay 纯计算已下沉到 `SubtitleCueScheduler`；UI position ticker 与 Service cue-boundary scheduler 继续保持分离。
 - **方向**：后续在处理 C4/ticker 或继续压缩快照边界时，再评估是否把播放展示领域状态和 UI 映射进一步拆分，避免把字段搬运重新散回 ViewModel。
 
 ### D2 · [P2] ViewModel 职责过载：直接编排文件 IO + 命令式返回业务结果给 UI
@@ -153,7 +154,7 @@
 
 1. **Phase A（卫生，低风险先行）**：C1 全仓 wildcard import 清理与 C6 已完成；后续避免补回全家桶 import。
 2. **Phase B（根因，P0）**：A1 删 `DbIo` → 仓库读写转 `suspend`/`Flow`（A6）→ 删命令式 `refresh/sync`（A2）→ UI 写操作进协程（A3）。一条主线，解决 ANR 与双路径。
-3. **Phase C（播放状态收敛，P1）**：A4 统一到 `MediaController` → D1 展示状态协调器已落地 → 后续继续评估 C4 ticker/字幕调度收敛。
+3. **Phase C（播放状态收敛，P1）**：A4 统一到 `MediaController` → D1 展示状态协调器已落地 → C4 已把字幕 cue frame/delay 纯计算下沉到 `SubtitleCueScheduler`，但 UI position ticker 与 Service cue-boundary scheduler 保持分离。
 4. **Phase D（全局状态去耦，P1）**：A5 把 4 个 bus + service-locator 收敛进 DI。
 5. **Phase E（职责/体量，P2）**：A7 拆 `DlsiteRepository`、D2 下沉文件 IO、D3 拆组合根、D4 拆巨型 Screen。
 6. **Phase F（语言统一，P1/P2，可与上并行）**：C2 迁 Java→Kotlin（先 model 与 `data/remote`）→ C3 收紧 nullable。
