@@ -96,7 +96,7 @@ class DlsiteJsonParserTest {
 
     @Test
     fun parseWorkDetailExtractsNestedCoverUrl() {
-        val work = DlsiteJsonParser.parseWorkDetail(
+        val parsed = DlsiteJsonParser.parseWorkDetail(
             """
             {
               "work": {
@@ -112,9 +112,29 @@ class DlsiteJsonParserTest {
             }
             """.trimIndent()
         )
+        val work = requireNotNull(parsed)
 
         assertEquals("RJ01432570", work.workId)
         assertEquals("https://play.dlsite.com/assets/RJ01432570_cover.webp", work.coverUrl)
+    }
+
+    @Test
+    fun parseWorkDetailReturnsNullForNonDownloadableAudio() {
+        val work = DlsiteJsonParser.parseWorkDetail(
+            """
+            {
+              "work": {
+                "workno": "RJ01432570",
+                "name": "コミック作品",
+                "work_type": "MNG",
+                "downloadable": false,
+                "content_count": 0
+              }
+            }
+            """.trimIndent()
+        )
+
+        assertEquals(null, work)
     }
 
     @Test
