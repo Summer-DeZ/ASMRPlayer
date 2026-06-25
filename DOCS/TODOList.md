@@ -66,6 +66,7 @@
 - [x] 需要做：Phase F/C3 DLsite HTML parser facade 非空化切片：`DlsiteHtmlParser` 的完整 HTML、页面 URL 和目标 `workId` 入参改为非空 `String`，内部链接/标题/封面候选 helper 同步收紧；空 HTML、找不到链接和非法 base URL 仍按既有空结果或保留候选 URL 语义处理。
 - [x] 需要做：Phase F/C3 DLsite model 状态转换非空化切片：`DlsiteWork` 和 `DlsiteContent` 的下载完成、封面推导、URL/URI/title 更新和发现结果合并等 required 入参改为非空；错误详情和选项标题继续保留可空兜底。
 - [x] 需要做：Phase F/C3 DLsite remote file utility 非空化切片：`DlsiteRemoteFiles` 的路径编码、查询编码、安全文件名、body 摘要和 HTML/JSON 文件探测入参改为非空；空字符串语义、不存在文件返回 false、删除清理 nullable 兜底继续保留。
+- [x] 需要做：Phase F/C3 DLsite remote HTTP/cover helper 非空化切片：`DlsiteCoverRemote` 复用 `DlsiteRemoteFiles` 的编码、sniff、清理、摘要和中断工具，删除重复 helper；`DlsiteCoverRemote`、`DlsiteWorkRemote`、`DlsiteContentRemote` 的私有 HTTP helper 必填入参改为非空。
 - [ ] 后续做：Phase C 如继续评估播放位置/字幕链路，只处理状态边界和测试覆盖；`PlaybackCommandClient` UI position ticker 与 `PlaybackService` cue-boundary scheduler 属于不同 runtime 驱动，不作为“两个 250ms 轮询”合并。
 - [ ] 后续做：Phase D 继续处理其它剩余 service-locator 去耦，逐步收敛到注入的仓库/服务边界。
 - [ ] 后续做：Phase E 继续拆分 `ASMRPlayerApp.kt` 组合根和巨型 Screen 文件。

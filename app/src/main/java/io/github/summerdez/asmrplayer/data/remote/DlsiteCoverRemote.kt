@@ -5,12 +5,8 @@ import io.github.summerdez.asmrplayer.domain.model.DlsiteWork
 import java.io.BufferedInputStream
 import java.io.BufferedOutputStream
 import java.io.File
-import java.io.FileInputStream
 import java.io.FileOutputStream
 import java.io.IOException
-import java.io.InterruptedIOException
-import java.net.URLEncoder
-import java.nio.charset.StandardCharsets
 import java.util.Locale
 
 class DlsiteCoverRemote(private val httpClient: DlsiteHttpClient) {
@@ -78,7 +74,7 @@ class DlsiteCoverRemote(private val httpClient: DlsiteHttpClient) {
                 (actualContentType.contains("text/html") || actualContentType.contains("application/json"))
             ) {
                 val body = DlsiteHttpClient.bodyString(response)
-                throw IOException("DLsite 返回了网页或错误信息，未拿到封面: ${summarizeBody(body)}")
+                throw IOException("DLsite 返回了网页或错误信息，未拿到封面: ${DlsiteRemoteFiles.summarizeBody(body)}")
             }
 
             val responseBody = response.body ?: throw IOException("封面下载失败: 响应为空")
@@ -90,7 +86,7 @@ class DlsiteCoverRemote(private val httpClient: DlsiteHttpClient) {
                         if (count == -1) {
                             break
                         }
-                        throwIfInterrupted()
+                        DlsiteRemoteFiles.throwIfInterrupted()
                         output.write(buffer, 0, count)
                     }
                 }
@@ -98,8 +94,8 @@ class DlsiteCoverRemote(private val httpClient: DlsiteHttpClient) {
         }
 
         val targetFile = File(targetDir, "cover" + coverExtension(coverUrl, contentType))
-        if (looksLikeHtml(tempFile) || looksLikeJson(tempFile)) {
-            deleteQuietly(tempFile)
+        if (DlsiteRemoteFiles.looksLikeHtml(tempFile) || DlsiteRemoteFiles.looksLikeJson(tempFile)) {
+            DlsiteRemoteFiles.deleteQuietly(tempFile)
             throw IOException("DLsite 返回了网页或错误信息，未拿到封面")
         }
         if (targetFile.exists() && !targetFile.delete()) {
@@ -119,7 +115,7 @@ class DlsiteCoverRemote(private val httpClient: DlsiteHttpClient) {
 
         try {
             val detailJson = get(
-                "/api/v3/work/" + encodeQueryValue(workId),
+                "/api/v3/work/" + DlsiteRemoteFiles.encodeQueryValue(workId),
                 DlsiteRemoteConstants.PLAY_BASE_URL + "/library",
                 "application/json, text/plain, */*",
             )
@@ -166,7 +162,7 @@ class DlsiteCoverRemote(private val httpClient: DlsiteHttpClient) {
     }
 
     @Throws(IOException::class)
-    private fun get(pathOrUrl: String?, referer: String?, accept: String?): String {
+    private fun get(pathOrUrl: String, referer: String, accept: String): String {
         return httpClient.text(
             pathOrUrl,
             referer,
@@ -191,21 +187,12 @@ class DlsiteCoverRemote(private val httpClient: DlsiteHttpClient) {
         )
     }
 
-    private fun encodeQueryValue(value: String?): String {
-        return try {
-            URLEncoder.encode(value ?: "", StandardCharsets.UTF_8.name())
-                .replace("+", "%20")
-        } catch (exception: IOException) {
-            ""
-        }
-    }
-
-    private fun coverExtension(url: String?, contentType: String?): String {
+    private fun coverExtension(url: String, contentType: String?): String {
         val typeExtension = coverExtensionFromContentType(contentType)
         if (typeExtension.isNotEmpty()) {
             return typeExtension
         }
-        var path = url ?: ""
+        var path = url
         val query = path.indexOf('?')
         if (query >= 0) {
             path = path.substring(0, query)
@@ -254,58 +241,4 @@ class DlsiteCoverRemote(private val httpClient: DlsiteHttpClient) {
         return ""
     }
 
-    @Throws(IOException::class)
-    private fun looksLikeHtml(file: File?): Boolean {
-        if (file == null || !file.isFile) {
-            return false
-        }
-        val header = ByteArray(minOf(128L, file.length()).toInt())
-        FileInputStream(file).use { input ->
-            val count = input.read(header)
-            if (count <= 0) {
-                return false
-            }
-            val text = String(header, 0, count, StandardCharsets.UTF_8)
-                .trim { it <= ' ' }
-                .lowercase(Locale.ROOT)
-            return text.startsWith("<!doctype html") || text.startsWith("<html")
-        }
-    }
-
-    @Throws(IOException::class)
-    private fun looksLikeJson(file: File?): Boolean {
-        if (file == null || !file.isFile) {
-            return false
-        }
-        val header = ByteArray(minOf(128L, file.length()).toInt())
-        FileInputStream(file).use { input ->
-            val count = input.read(header)
-            if (count <= 0) {
-                return false
-            }
-            val text = String(header, 0, count, StandardCharsets.UTF_8).trim { it <= ' ' }
-            return text.startsWith("{") || text.startsWith("[")
-        }
-    }
-
-    private fun deleteQuietly(file: File?) {
-        if (file != null && file.exists() && !file.delete()) {
-            file.deleteOnExit()
-        }
-    }
-
-    private fun summarizeBody(body: String?): String {
-        if (body == null) {
-            return ""
-        }
-        val text = body.replace(Regex("\\s+"), " ").trim { it <= ' ' }
-        return if (text.length <= 160) text else text.substring(0, 160)
-    }
-
-    @Throws(InterruptedIOException::class)
-    private fun throwIfInterrupted() {
-        if (Thread.currentThread().isInterrupted) {
-            throw InterruptedIOException("下载已取消")
-        }
-    }
 }

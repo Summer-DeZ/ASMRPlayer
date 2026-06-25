@@ -395,7 +395,7 @@ class DlsiteContentRemote(private val httpClient: DlsiteHttpClient) {
     }
 
     @Throws(IOException::class)
-    private fun get(pathOrUrl: String?, referer: String?, accept: String?): String {
+    private fun get(pathOrUrl: String, referer: String, accept: String): String {
         return httpClient.text(
             pathOrUrl,
             referer,

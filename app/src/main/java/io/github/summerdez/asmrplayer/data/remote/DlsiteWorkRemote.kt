@@ -127,7 +127,7 @@ class DlsiteWorkRemote(private val httpClient: DlsiteHttpClient) {
     }
 
     @Throws(IOException::class)
-    private fun get(pathOrUrl: String?, referer: String?, accept: String?): String {
+    private fun get(pathOrUrl: String, referer: String, accept: String): String {
         return httpClient.text(
             pathOrUrl,
             referer,
@@ -140,7 +140,7 @@ class DlsiteWorkRemote(private val httpClient: DlsiteHttpClient) {
     }
 
     @Throws(IOException::class)
-    private fun postJsonArray(path: String?, jsonBody: String, referer: String?): String {
+    private fun postJsonArray(path: String, jsonBody: String, referer: String): String {
         return httpClient.text(
             path,
             referer,
