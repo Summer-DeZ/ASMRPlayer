@@ -10,11 +10,14 @@ import android.net.Uri
 import android.provider.DocumentsContract
 import android.provider.OpenableColumns
 import android.text.TextUtils
+import android.util.Log
 import java.io.IOException
 import java.util.Collections
 import java.util.Locale
 
 object DocumentFiles {
+    private const val TAG = "DocumentFiles"
+
     private val FOLDER_COLUMNS = arrayOf(
         DocumentsContract.Document.COLUMN_DOCUMENT_ID,
         DocumentsContract.Document.COLUMN_DISPLAY_NAME,
@@ -213,10 +216,10 @@ object DocumentFiles {
     }
 
     private fun treeDocuments(context: Context?, treeUri: Uri): List<TreeDocument> {
-        val treeDocumentId = DocumentsContract.getTreeDocumentId(treeUri)
-        val childrenUri = DocumentsContract.buildChildDocumentsUriUsingTree(treeUri, treeDocumentId)
         val documents = ArrayList<TreeDocument>()
         try {
+            val treeDocumentId = DocumentsContract.getTreeDocumentId(treeUri)
+            val childrenUri = DocumentsContract.buildChildDocumentsUriUsingTree(treeUri, treeDocumentId)
             context?.contentResolver?.query(
                 childrenUri,
                 FOLDER_COLUMNS,
@@ -226,8 +229,10 @@ object DocumentFiles {
             )?.use { cursor ->
                 collectTreeDocuments(cursor, treeUri, documents)
             } ?: return documents
-        } catch (ignored: IllegalArgumentException) {
-        } catch (ignored: SecurityException) {
+        } catch (exception: IllegalArgumentException) {
+            Log.w(TAG, "Failed to scan document tree=$treeUri; returning ${documents.size} collected documents", exception)
+        } catch (exception: SecurityException) {
+            Log.w(TAG, "No permission to scan document tree=$treeUri; returning ${documents.size} collected documents", exception)
         }
         return documents
     }

@@ -1,8 +1,8 @@
 package io.github.summerdez.asmrplayer.data.remote
 
+import io.github.summerdez.asmrplayer.domain.model.DlsiteZiptree
 import io.github.summerdez.asmrplayer.domain.model.DlsiteWork
 import java.io.IOException
-import kotlin.math.max
 
 object DlsiteJsonParser {
     fun isAuthorized(json: String): Boolean = DlsiteLibraryJsonParser.isAuthorized(json)
@@ -52,21 +52,4 @@ object DlsiteJsonParser {
         message: String?,
         cause: Throwable?,
     ) : IOException(message, cause)
-
-    class DlsiteZiptree(
-        val workId: String = "",
-        val revision: String = "",
-        val audioFiles: List<ContentFile> = emptyList(),
-    )
-
-    class ContentFile(
-        val displayPath: String = "",
-        val displayName: String = "",
-        val contentPath: String = "",
-        val subtitleContentPath: String = "",
-        val subtitleName: String = "",
-        lengthBytes: Long = 0L,
-    ) {
-        val lengthBytes: Long = max(0L, lengthBytes)
-    }
 }

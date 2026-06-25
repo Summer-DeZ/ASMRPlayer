@@ -1,5 +1,7 @@
 package io.github.summerdez.asmrplayer.data.remote
 
+import io.github.summerdez.asmrplayer.domain.model.DlsiteContentFile
+import io.github.summerdez.asmrplayer.domain.model.DlsiteZiptree
 import java.util.LinkedHashMap
 
 object DlsiteDownloadJsonParser {
@@ -19,13 +21,13 @@ object DlsiteDownloadJsonParser {
     }
 
     @Throws(DlsiteJsonParser.IOExceptionLikeJsonException::class)
-    fun parseZiptree(json: String): DlsiteJsonParser.DlsiteZiptree {
+    fun parseZiptree(json: String): DlsiteZiptree {
         try {
             val root = DlsiteJsonSupport.asObject(DlsiteJsonSupport.parse(json))
             val playFiles = DlsiteJsonSupport.asObject(root["playfile"])
-            val audioFiles = ArrayList<DlsiteJsonParser.ContentFile>()
+            val audioFiles = ArrayList<DlsiteContentFile>()
             collectAudioFiles(DlsiteJsonSupport.arrayFromRoot(root, "tree"), playFiles, "", audioFiles)
-            return DlsiteJsonParser.DlsiteZiptree(
+            return DlsiteZiptree(
                 javaTrim(DlsiteJsonSupport.asString(root["workno"])),
                 javaTrim(DlsiteJsonSupport.asString(root["revision"])),
                 audioFiles,
@@ -63,7 +65,7 @@ object DlsiteDownloadJsonParser {
         tree: List<Any?>,
         playFiles: Map<String, Any?>,
         parentPath: String,
-        output: MutableList<DlsiteJsonParser.ContentFile>,
+        output: MutableList<DlsiteContentFile>,
     ) {
         for (value in tree) {
             val item = DlsiteJsonSupport.asObjectOrNull(value) ?: continue
@@ -112,7 +114,7 @@ object DlsiteDownloadJsonParser {
                 subtitleContentPath = subtitleContentPath(playFiles, subtitleHash)
             }
             output.add(
-                DlsiteJsonParser.ContentFile(
+                DlsiteContentFile(
                     joinPath(parentPath, displayName),
                     displayName,
                     "optimized/$optimizedName",

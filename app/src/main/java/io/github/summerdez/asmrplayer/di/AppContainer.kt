@@ -47,6 +47,7 @@ data class AiSubtitleGenerationServiceDependencies(
 
 data class DlsiteDownloadServiceDependencies(
     val dlsiteRepository: DlsiteRepository,
+    val dlsiteDownloadQueueRepository: DlsiteDownloadQueueRepository,
     val libraryRepository: LibraryRepository,
     val dlsiteApi: DlsiteApi,
     val dlsiteDownloadStateStore: DlsiteDownloadStateStore,
@@ -82,11 +83,11 @@ class AppContainer(private val application: Application) {
     }
 
     val dlsiteRepository: DlsiteRepository by lazy {
-        RoomDlsiteRepository(dlsiteLocalStore, dlsiteApi, dlsiteDownloadQueueRepository, dlsiteDownloadStateStore)
+        RoomDlsiteRepository(dlsiteLocalStore, dlsiteApi, dlsiteDownloadStateStore)
     }
 
     val settingsRepository: SettingsRepository by lazy {
-        AppSettingsRepository(application, database.appSettingsDao())
+        AppSettingsRepository(database.appSettingsDao())
     }
 
     val updateRepository: AppUpdateRepository by lazy {
@@ -122,7 +123,13 @@ class AppContainer(private val application: Application) {
     }
 
     val dlsiteDownloadServiceDependencies: DlsiteDownloadServiceDependencies by lazy {
-        DlsiteDownloadServiceDependencies(dlsiteRepository, libraryRepository, dlsiteApi, dlsiteDownloadStateStore)
+        DlsiteDownloadServiceDependencies(
+            dlsiteRepository,
+            dlsiteDownloadQueueRepository,
+            libraryRepository,
+            dlsiteApi,
+            dlsiteDownloadStateStore,
+        )
     }
 
     val playbackServiceDependencies: PlaybackServiceDependencies by lazy {
@@ -165,7 +172,12 @@ private class ASMRViewModelFactory(
             modelClass.isAssignableFrom(SleepTimerViewModel::class.java) ->
                 SleepTimerViewModel(container.playbackCommands) as T
             modelClass.isAssignableFrom(DlsiteViewModel::class.java) ->
-                DlsiteViewModel(application, container.dlsiteRepository, container.libraryRepository) as T
+                DlsiteViewModel(
+                    application,
+                    container.dlsiteRepository,
+                    container.dlsiteDownloadQueueRepository,
+                    container.libraryRepository,
+                ) as T
             else -> error("Unknown ViewModel class: ${modelClass.name}")
         }
     }

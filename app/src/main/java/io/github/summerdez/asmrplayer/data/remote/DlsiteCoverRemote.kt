@@ -1,13 +1,17 @@
 package io.github.summerdez.asmrplayer.data.remote
 
 import android.text.TextUtils
+import android.util.Log
 import io.github.summerdez.asmrplayer.domain.model.DlsiteWork
 import java.io.BufferedInputStream
 import java.io.BufferedOutputStream
 import java.io.File
 import java.io.FileOutputStream
 import java.io.IOException
+import java.io.InterruptedIOException
 import java.util.Locale
+
+private const val TAG = "DlsiteCoverRemote"
 
 class DlsiteCoverRemote(private val httpClient: DlsiteHttpClient) {
     @Throws(IOException::class)
@@ -17,7 +21,10 @@ class DlsiteCoverRemote(private val httpClient: DlsiteHttpClient) {
         if (!TextUtils.isEmpty(coverWork.coverUrl)) {
             try {
                 return downloadCoverUrl(coverWork, coverWork.coverUrl, targetDir)
+            } catch (exception: InterruptedIOException) {
+                throw exception
             } catch (exception: IOException) {
+                Log.w(TAG, "Primary cover download failed for work=${coverWork.workId}; trying resolved cover fallback", exception)
                 firstFailure = exception
             }
         }
@@ -126,7 +133,10 @@ class DlsiteCoverRemote(private val httpClient: DlsiteHttpClient) {
             ) {
                 return detail.coverUrl
             }
-        } catch (ignored: IOException) {
+        } catch (exception: InterruptedIOException) {
+            throw exception
+        } catch (exception: IOException) {
+            Log.d(TAG, "Failed to resolve cover from DLsite Play detail for work=$workId; trying public pages", exception)
         }
 
         for (publicUrl in publicWorkUrls(workId)) {
@@ -136,7 +146,10 @@ class DlsiteCoverRemote(private val httpClient: DlsiteHttpClient) {
                 if (!TextUtils.isEmpty(coverUrl) && coverUrl != work.coverUrl) {
                     return coverUrl
                 }
-            } catch (ignored: IOException) {
+            } catch (exception: InterruptedIOException) {
+                throw exception
+            } catch (exception: IOException) {
+                Log.d(TAG, "Failed to resolve cover from public page for work=$workId url=$publicUrl; trying next fallback", exception)
             }
         }
         return ""

@@ -56,28 +56,29 @@
 ## 应用数据流
 
 1. `MainActivity` 创建 Compose UI，并通过 `AppGraph.container(this).viewModelFactory` 注入 ViewModel。
-2. `AppContainer` 持有 Room、Repository、DLsite API、播放命令客户端和 ViewModel Factory。
-3. `LibraryRepository`、`DlsiteRepository`、`SettingsRepository` 负责持久化与外部数据源；Room 表状态经 `Flow` 自动推送到 ViewModel，写入与必要的单次读取在 `Dispatchers.IO` 上以 `suspend` 执行，不再通过主线程同步 DB 桥接刷新 UI。
+2. `AppContainer` 持有 Room、Repository、DLsite API、DLsite 下载队列仓库、状态 store、播放命令客户端和 ViewModel Factory。
+3. `LibraryRepository`、`DlsiteRepository`、`SettingsRepository` 负责持久化与外部数据源；Room 表状态经 `Flow` 自动推送到 ViewModel，写入与必要的单次读取在 `Dispatchers.IO` 上以 `suspend` 执行，不再通过主线程同步 DB 桥接刷新 UI。`RoomDlsiteRepository` 只协调 DLsite 本地存储、远程源与下载状态，不再持有或代理持久下载队列状态机。
 4. ViewModel 输出不可变 UI state，并通过 `SharedFlow` 发送导入结果、字幕绑定、曲目移动、DLsite 提示和设置提示等一次性事件；Compose 通过 lifecycle-aware collect 渲染。
 5. 播放控制经 `PlaybackCommandClient` 发送给 `PlaybackService`；Media3 `MediaController` 提供播放中、时长、位置和队列能力，`MediaSession.sessionExtras` 下发 playlist identity、字幕、悬浮窗、错误和睡眠定时 deadline 等自定义低频状态并并入 `PlaybackControllerSnapshot`。Service 端字幕状态按下一条 cue 边界定时刷新，睡眠倒计时剩余时间由客户端按 `elapsedRealtime` 本地派生，全局播放状态 bus 已删除。
 6. DLsite 登录使用 `DlsiteLoginActivity` WebView，后续网络请求复用 WebView Cookie。
-7. 设置页检查更新经 `GitHubAppUpdateRepository` 请求 GitHub Release；APK 下载交给 `AppUpdateDownloadService` 以前台 `dataSync` 服务写入 `cacheDir/updates/`，更新下载状态由 `AppContainer` 持有的 `AppUpdateDownloadStateStore` 注入给 Service 与设置页，负责同步进度、速度和完成/失败/取消状态；通知渠道“应用更新”在后台持续显示下载进度；下载完成后再通过 `FileProvider` 交给系统安装器。更新缓存下载前会清理旧 APK 和 `.part`，安装成功收到 `ACTION_MY_PACKAGE_REPLACED` 后清理已安装版本及更旧 APK 和全部 `.part`，应用启动时也会做同样的保守清理。
-8. DLsite 作品菜单的载入入口会先请求 DLsite Play `ziptree.json`，按文件目录树把音频归入目录/根目录音频选项；用户在下载内容 sheet 中手动勾选后，点击加入下载只把任务持久化写入 `dlsite_download_queue` 并启动 `DlsiteDownloadService`，同一 work 的 active `pending` / `running` 入队会去重，且不刷新 `DlsiteWork` / `DlsiteContent` 的 `updatedAt`。
-9. `DlsiteDownloadService` 启动时会把遗留 `running` 任务重置为 `pending`，按 FIFO 调度，最多 2 个作品并发；下载服务通过调度线程和下载 worker 调用临时 `DlsiteDownloadBlockingAdapter` 过渡到 suspend Repository，阻塞边界不回到 UI 主线程；Android Intent 入参在 Service 边界归一化，进入 adapter、worker 和任务回调后的 required 下载数据保持非空；异常重复 `pending` 不会阻塞后续队列，`AppContainer` 持有的 `DlsiteDownloadStateStore` 注入给 Repository 与 Service，暴露多任务 Map 与字节加权总进度。
-10. DLsite 下载任务不会在每个内容包完成时立刻导入资料库；单次选择的所有内容下载成功后，才统一导入或复用播放列表，再按内容回填 `trackIds`，避免用户在整次下载完成前看到半成品资料库条目。
-11. AI 字幕请求进入 `AiSubtitleGenerationService`：任务状态由 `AppContainer` 持有的 `AiSubtitleTaskStateStore` 注入给 Service 与 UI 共享，Service 读取转写后端设置，默认使用 sherpa-onnx CPU 后端在本机完成日语转写；用户选择远程后，整段音频上传到用户配置的远程 ASR 转写服务，以异步 job 形式获取真实转写进度，再进入 OpenAI 兼容翻译阶段。
-12. 本机转写使用 Android `MediaExtractor` / `MediaCodec` 解码音频为 16k mono PCM，交给 Silero VAD 流式切段；producer 端用 0.6s 邻近阈值与 `maxSpeechDuration` 上限合并相邻短段，合并段保留首段 `startMs` 与末段真实 `endMs`，再通过 `Channel` 送入 Whisper worker 识别；worker 数和每 worker 线程数按模型体量、可用内存、低内存状态和 CPU 核数规划，ONNX provider 固定为 `cpu`。
-13. 远程转写设置页的「测试连接」调用用户配置服务器的 `GET /health`，确认服务可达、鉴权可用和 `models_ready`；真正生成字幕时再以 `multipart/form-data` 调用 `POST /transcriptions` 创建任务，服务端返回 `job_id` 后轮询 `GET /transcriptions/{job_id}`；完成后通过 `GET /transcriptions/{job_id}/result` 取回 `segments`，取消时调用 `DELETE /transcriptions/{job_id}`。请求可附带 `Authorization: Bearer <token>`，为支持局域网 `http://host:port`，应用允许 cleartext traffic。
-14. 远程 ASR 合约以 `Qwen3-ASR-0.6B` + `Qwen3-ForcedAligner-0.6B` 为基线模型组合；状态字段、错误码、进度单调性和轮询要求见 `DOCS/tech/remote-asr-progress-contract.md`。远程阶段 UI 进度来自服务端 `progress` / `stage`，不再只用上传完成或本地估算表示转写进度。
-15. 转写完成后，分段时间轴与日文原文会缓存到 `cacheDir/ai-subtitles/segments/`。缓存键包含转写后端、本机 Whisper 模型或远程地址/端口/model，避免本机 base 与远程服务结果串用；翻译失败后重试会优先复用匹配缓存。
-16. AI 字幕翻译阶段只发送字幕文本到 OpenAI 兼容接口；本地 Ollama 不需要 API Key，云端 OpenAI 兼容接口可配置 baseUrl、模型名和 API Key，默认预设为 DeepSeek `https://api.deepseek.com` + `deepseek-v4-flash`，但用户填写的任意非空模型名会原样保存。翻译请求使用较长的 LLM 超时并把网络异常转为中文提示。
-17. 翻译前会按模型、标题、音轨、源字幕签名生成或复用全局情景卡，情景卡包含场景、说话者、听者称呼、语气和术语表；生成失败时降级为空情景卡，不阻断翻译。
-18. 翻译按约 80 行批次执行，每批携带只读前 4 行“日文 + 已定中文”和后 4 行日文窗口；云端 OpenAI 兼容接口会额外携带完整日文字幕全文作为只读全局上下文，Ollama 仍使用精简上下文。请求和响应协议为有序 `lines` 数组，模型只接触 `{id, ja}` 文本，不接触时间轴。
-19. 翻译响应必须通过结构、id 顺序/唯一性、行数、非空译文和日文假名残留校验；完整字幕全文只允许用于理解作品整体、称呼、语气、术语和音效，输出仍限制为当前批次。拟声和无实义短段也要求输出中文拟声或中文保守占位，舔舐、摩擦、呼吸等 ASMR 非台词声音优先输出「（舔舐声）」「（摩擦声）」这类中文音效描述。整批连续失败后会逐句兜底翻译，缺一行不会继续写出可能错位的 VTT。
-20. 已完成批次缓存到 `cacheDir/ai-subtitles/translations/`；重试会校验曲目、音频 URI、转写签名、翻译引擎、baseUrl、model、情景卡签名、协议版本、批策略版本和源字幕签名，匹配后跳过已完成批次。翻译完成后写出仅含中文译文的 `.vtt` 并重新绑定；生成文件名包含曲目 ID，避免外部导入的多条音频在标题清洗后同名时共用同一个 VTT 文件。
-21. 生成字幕 sheet 的“重新分片并翻译”会以 `forceRegenerate` 启动 Service，先清除该曲目的分段缓存、情景卡缓存和翻译缓存，再按当前后端重新转写与翻译；普通失败重试仍优先复用可匹配缓存。
-22. AI 字幕生成以前台 Service 保活，通知更新做限频，避免高频转写进度回调触发系统通知队列限流或前台服务超时。
-23. UI Probe 只在 `uiProbe` 构建启用：根 Compose 树由 `UiProbeHost` 包裹，带 `Modifier.uiProbe(id, label, sourceHint, metadata)` 的节点会登记屏幕内 bounds。点右上角“UI 探针”后再次点选界面，命中规则选择包含点击点的最小 bounds；同面积时选择最新登记的节点。结果写入应用私有目录 `files/ui-probe/latest-selection.json`，并用 `ASRM_UI_PROBE` 输出到 Logcat，便于根据真实点选区域定位 Compose 源文件和业务 ID。
+7. 主题设置通过 `SettingsRepository.themeModeFlow` 从 `app_settings` 的 `app_theme_mode` 响应式恢复；`SettingsViewModel` 只收集并保存 `domain.model.AppThemeMode`，`AppUi` 只在 Compose 入口和 Activity 侧应用 palette 与 system bars，不被 data 层调用。
+8. 设置页检查更新经 `GitHubAppUpdateRepository` 请求 GitHub Release；APK 下载交给 `AppUpdateDownloadService` 以前台 `dataSync` 服务写入 `cacheDir/updates/`，更新下载状态由 `AppContainer` 持有的 `AppUpdateDownloadStateStore` 注入给 Service 与设置页，负责同步进度、速度和完成/失败/取消状态；通知渠道“应用更新”在后台持续显示下载进度；下载完成后再通过 `FileProvider` 交给系统安装器。更新缓存下载前会清理旧 APK 和 `.part`，安装成功收到 `ACTION_MY_PACKAGE_REPLACED` 后清理已安装版本及更旧 APK 和全部 `.part`，应用启动时也会做同样的保守清理。
+9. DLsite 作品菜单的载入入口会先请求 DLsite Play `ziptree.json`；remote parser 只负责解析 JSON 并产出 `domain.model.DlsiteZiptree` / `DlsiteContentFile`，`DlsiteDownloadPlanner` 再按文件目录树把音频归入目录/根目录音频选项。用户在下载内容 sheet 中手动勾选后，点击加入下载只通过 `DlsiteDownloadQueueRepository` 把任务持久化写入 `dlsite_download_queue` 并启动 `DlsiteDownloadService`，同一 work 的 active `pending` / `running` 入队会去重，且不刷新 `DlsiteWork` / `DlsiteContent` 的 `updatedAt`。
+10. `DlsiteDownloadService` 启动时会把遗留 `running` 任务重置为 `pending`，按 FIFO 调度，最多 2 个作品并发；`DlsiteDownloadQueueRepository` 显式注入 `DlsiteViewModel`、`DlsiteDownloadServiceDependencies` 与 `DlsiteDownloadBlockingAdapter`，下载服务通过调度线程和下载 worker 调用临时 adapter 过渡到 suspend Repository，阻塞边界不回到 UI 主线程；Android Intent 入参在 Service 边界归一化，进入 adapter、worker 和任务回调后的 required 下载数据保持非空；异常重复 `pending` 不会阻塞后续队列，`AppContainer` 持有的 `DlsiteDownloadStateStore` 注入给 Repository 与 Service，暴露多任务 Map 与字节加权总进度。
+11. DLsite 下载任务不会在每个内容包完成时立刻导入资料库；单次选择的所有内容下载成功后，才统一导入或复用播放列表，再按内容回填 `trackIds`，避免用户在整次下载完成前看到半成品资料库条目。
+12. AI 字幕请求进入 `AiSubtitleGenerationService`：任务状态由 `AppContainer` 持有的 `AiSubtitleTaskStateStore` 注入给 Service 与 UI 共享，Service 读取转写后端设置，默认使用 sherpa-onnx CPU 后端在本机完成日语转写；用户选择远程后，整段音频上传到用户配置的远程 ASR 转写服务，以异步 job 形式获取真实转写进度，再进入 OpenAI 兼容翻译阶段。
+13. 本机转写使用 Android `MediaExtractor` / `MediaCodec` 解码音频为 16k mono PCM，交给 Silero VAD 流式切段；producer 端用 0.6s 邻近阈值与 `maxSpeechDuration` 上限合并相邻短段，合并段保留首段 `startMs` 与末段真实 `endMs`，再通过 `Channel` 送入 Whisper worker 识别；worker 数和每 worker 线程数按模型体量、可用内存、低内存状态和 CPU 核数规划，ONNX provider 固定为 `cpu`。
+14. 远程转写设置页的「测试连接」调用用户配置服务器的 `GET /health`，确认服务可达、鉴权可用和 `models_ready`；真正生成字幕时再以 `multipart/form-data` 调用 `POST /transcriptions` 创建任务，服务端返回 `job_id` 后轮询 `GET /transcriptions/{job_id}`；完成后通过 `GET /transcriptions/{job_id}/result` 取回 `segments`，取消时调用 `DELETE /transcriptions/{job_id}`。请求可附带 `Authorization: Bearer <token>`，为支持局域网 `http://host:port`，应用允许 cleartext traffic。
+15. 远程 ASR 合约以 `Qwen3-ASR-0.6B` + `Qwen3-ForcedAligner-0.6B` 为基线模型组合；状态字段、错误码、进度单调性和轮询要求见 `DOCS/tech/remote-asr-progress-contract.md`。远程阶段 UI 进度来自服务端 `progress` / `stage`，不再只用上传完成或本地估算表示转写进度。
+16. 转写完成后，分段时间轴与日文原文会缓存到 `cacheDir/ai-subtitles/segments/`。缓存键包含转写后端、本机 Whisper 模型或远程地址/端口/model，避免本机 base 与远程服务结果串用；翻译失败后重试会优先复用匹配缓存。
+17. AI 字幕翻译阶段只发送字幕文本到 OpenAI 兼容接口；本地 Ollama 不需要 API Key，云端 OpenAI 兼容接口可配置 baseUrl、模型名和 API Key，默认预设为 DeepSeek `https://api.deepseek.com` + `deepseek-v4-flash`，但用户填写的任意非空模型名会原样保存。翻译请求使用较长的 LLM 超时并把网络异常转为中文提示。
+18. 翻译前会按模型、标题、音轨、源字幕签名生成或复用全局情景卡，情景卡包含场景、说话者、听者称呼、语气和术语表；生成失败时降级为空情景卡，不阻断翻译。
+19. 翻译按约 80 行批次执行，每批携带只读前 4 行“日文 + 已定中文”和后 4 行日文窗口；云端 OpenAI 兼容接口会额外携带完整日文字幕全文作为只读全局上下文，Ollama 仍使用精简上下文。请求和响应协议为有序 `lines` 数组，模型只接触 `{id, ja}` 文本，不接触时间轴。
+20. 翻译响应必须通过结构、id 顺序/唯一性、行数、非空译文和日文假名残留校验；完整字幕全文只允许用于理解作品整体、称呼、语气、术语和音效，输出仍限制为当前批次。拟声和无实义短段也要求输出中文拟声或中文保守占位，舔舐、摩擦、呼吸等 ASMR 非台词声音优先输出「（舔舐声）」「（摩擦声）」这类中文音效描述。整批连续失败后会逐句兜底翻译，缺一行不会继续写出可能错位的 VTT。
+21. 已完成批次缓存到 `cacheDir/ai-subtitles/translations/`；重试会校验曲目、音频 URI、转写签名、翻译引擎、baseUrl、model、情景卡签名、协议版本、批策略版本和源字幕签名，匹配后跳过已完成批次。翻译完成后写出仅含中文译文的 `.vtt` 并重新绑定；生成文件名包含曲目 ID，避免外部导入的多条音频在标题清洗后同名时共用同一个 VTT 文件。
+22. 生成字幕 sheet 的“重新分片并翻译”会以 `forceRegenerate` 启动 Service，先清除该曲目的分段缓存、情景卡缓存和翻译缓存，再按当前后端重新转写与翻译；普通失败重试仍优先复用可匹配缓存。
+23. AI 字幕生成以前台 Service 保活，通知更新做限频，避免高频转写进度回调触发系统通知队列限流或前台服务超时。
+24. UI Probe 只在 `uiProbe` 构建启用：根 Compose 树由 `UiProbeHost` 包裹，带 `Modifier.uiProbe(id, label, sourceHint, metadata)` 的节点会登记屏幕内 bounds。点右上角“UI 探针”后再次点选界面，命中规则选择包含点击点的最小 bounds；同面积时选择最新登记的节点。结果写入应用私有目录 `files/ui-probe/latest-selection.json`，并用 `ASRM_UI_PROBE` 输出到 Logcat，便于根据真实点选区域定位 Compose 源文件和业务 ID。
 
 ## Release 更新规范
 

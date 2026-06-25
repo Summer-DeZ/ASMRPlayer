@@ -5,6 +5,7 @@ import android.content.ComponentName
 import android.net.Uri
 import android.os.Bundle
 import android.os.SystemClock
+import android.util.Log
 import androidx.core.content.ContextCompat
 import androidx.media3.common.C
 import androidx.media3.common.Player
@@ -27,6 +28,8 @@ import kotlinx.coroutines.flow.launchIn
 import kotlinx.coroutines.flow.onEach
 import kotlinx.coroutines.isActive
 import kotlinx.coroutines.launch
+
+private const val TAG = "PlaybackCommandClient"
 
 data class PlaybackControllerSnapshot(
     val connected: Boolean = false,
@@ -65,14 +68,29 @@ class PlaybackCommandClient(private val application: Application) {
             return
         }
         val token = SessionToken(application, ComponentName(application, PlaybackService::class.java))
-        val future = MediaController.Builder(application, token)
-            .setListener(controllerListener)
-            .buildAsync()
+        val future = try {
+            MediaController.Builder(application, token)
+                .setListener(controllerListener)
+                .buildAsync()
+        } catch (exception: RuntimeException) {
+            Log.w(TAG, "Failed to build playback controller; connection can retry", exception)
+            controller = null
+            controllerFuture = null
+            return
+        }
         controllerFuture = future
         future.addListener(
             {
-                controller = runCatching { future.get() }.getOrNull()
-                controller?.let(::observeController)
+                val builtController = try {
+                    future.get()
+                } catch (exception: Exception) {
+                    Log.w(TAG, "Failed to obtain playback controller; connection can retry", exception)
+                    controller = null
+                    controllerFuture = null
+                    return@addListener
+                }
+                controller = builtController
+                observeController(builtController)
             },
             ContextCompat.getMainExecutor(application),
         )

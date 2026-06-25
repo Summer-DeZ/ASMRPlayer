@@ -1,9 +1,7 @@
 package io.github.summerdez.asmrplayer.data
 
-import io.github.summerdez.asmrplayer.data.download.DlsiteDownloadQueueRepository
 import io.github.summerdez.asmrplayer.domain.model.DlsiteContent
 import io.github.summerdez.asmrplayer.domain.model.DlsiteDownloadOption
-import io.github.summerdez.asmrplayer.domain.model.DlsiteDownloadQueueTask
 import io.github.summerdez.asmrplayer.domain.model.DlsiteWork
 import java.io.File
 import kotlinx.coroutines.flow.Flow
@@ -21,18 +19,6 @@ interface DlsiteRepository {
     fun downloadCover(work: DlsiteWork, outputDir: File): File
     suspend fun getWork(workId: String): DlsiteWork?
     suspend fun getContents(workId: String): List<DlsiteContent>
-    suspend fun enqueueDownload(work: DlsiteWork, optionIds: List<String>, optionTitle: String?): DlsiteDownloadQueueTask?
-    suspend fun pendingDownloadQueueTasks(limit: Int): List<DlsiteDownloadQueueTask>
-    suspend fun activeDownloadQueueTasks(): List<DlsiteDownloadQueueTask>
-    suspend fun resetRunningDownloadQueue(): Int
-    suspend fun markDownloadQueueTaskRunning(taskId: String): DlsiteDownloadQueueTask?
-    suspend fun markDownloadQueueTaskCompleted(taskId: String)
-    suspend fun markDownloadQueueTaskFailed(taskId: String, error: String?)
-    suspend fun markDownloadQueueTaskPaused(taskId: String)
-    suspend fun markDownloadQueueTaskCanceled(taskId: String)
-    suspend fun markDownloadQueueTaskPending(taskId: String)
-    suspend fun pauseQueuedDownload(workId: String): DlsiteDownloadQueueTask?
-    suspend fun cancelQueuedDownload(workId: String): DlsiteDownloadQueueTask?
     suspend fun mergeDiscoveredWorks(discoveredWorks: List<DlsiteWork>): List<DlsiteWork>
     suspend fun saveWork(updatedWork: DlsiteWork)
     suspend fun saveDownloadOptions(work: DlsiteWork, options: List<DlsiteDownloadOption>): List<DlsiteContent>
@@ -58,14 +44,12 @@ interface DlsiteRepository {
     suspend fun markContentFailed(workId: String, optionId: String, error: String?)
     suspend fun markContentPaused(workId: String, optionIds: List<String>)
     suspend fun markContentCacheDeleted(workId: String, optionId: String)
-    suspend fun markAllQueuedDownloadsPaused()
     fun clearCompletedDownloadTasks()
 }
 
 class RoomDlsiteRepository(
     private val localStore: DlsiteLocalStore,
     private val remoteSource: DlsiteRemoteSource,
-    private val downloadQueueRepository: DlsiteDownloadQueueRepository,
     private val downloadStateStore: DlsiteDownloadStateStore,
 ) : DlsiteRepository {
     override val worksFlow: Flow<List<DlsiteWork>> =
@@ -105,51 +89,6 @@ class RoomDlsiteRepository(
 
     override suspend fun getContents(workId: String): List<DlsiteContent> =
         localStore.getContents(workId)
-
-    override suspend fun enqueueDownload(
-        work: DlsiteWork,
-        optionIds: List<String>,
-        optionTitle: String?,
-    ): DlsiteDownloadQueueTask? =
-        downloadQueueRepository.enqueueDownload(work, optionIds, optionTitle)
-
-    override suspend fun pendingDownloadQueueTasks(limit: Int): List<DlsiteDownloadQueueTask> =
-        downloadQueueRepository.pendingDownloadQueueTasks(limit)
-
-    override suspend fun activeDownloadQueueTasks(): List<DlsiteDownloadQueueTask> =
-        downloadQueueRepository.activeDownloadQueueTasks()
-
-    override suspend fun resetRunningDownloadQueue(): Int =
-        downloadQueueRepository.resetRunningDownloadQueue()
-
-    override suspend fun markDownloadQueueTaskRunning(taskId: String): DlsiteDownloadQueueTask? =
-        downloadQueueRepository.markDownloadQueueTaskRunning(taskId)
-
-    override suspend fun markDownloadQueueTaskCompleted(taskId: String) {
-        downloadQueueRepository.markDownloadQueueTaskCompleted(taskId)
-    }
-
-    override suspend fun markDownloadQueueTaskFailed(taskId: String, error: String?) {
-        downloadQueueRepository.markDownloadQueueTaskFailed(taskId, error)
-    }
-
-    override suspend fun markDownloadQueueTaskPaused(taskId: String) {
-        downloadQueueRepository.markDownloadQueueTaskPaused(taskId)
-    }
-
-    override suspend fun markDownloadQueueTaskCanceled(taskId: String) {
-        downloadQueueRepository.markDownloadQueueTaskCanceled(taskId)
-    }
-
-    override suspend fun markDownloadQueueTaskPending(taskId: String) {
-        downloadQueueRepository.markDownloadQueueTaskPending(taskId)
-    }
-
-    override suspend fun pauseQueuedDownload(workId: String): DlsiteDownloadQueueTask? =
-        downloadQueueRepository.pauseQueuedDownload(workId)
-
-    override suspend fun cancelQueuedDownload(workId: String): DlsiteDownloadQueueTask? =
-        downloadQueueRepository.cancelQueuedDownload(workId)
 
     override suspend fun mergeDiscoveredWorks(discoveredWorks: List<DlsiteWork>): List<DlsiteWork> =
         localStore.mergeDiscoveredWorks(discoveredWorks)
@@ -225,9 +164,5 @@ class RoomDlsiteRepository(
 
     override suspend fun markContentCacheDeleted(workId: String, optionId: String) {
         localStore.markContentCacheDeleted(workId, optionId)
-    }
-
-    override suspend fun markAllQueuedDownloadsPaused() {
-        downloadQueueRepository.markAllQueuedDownloadsPaused()
     }
 }

@@ -1,15 +1,21 @@
 package io.github.summerdez.asmrplayer.data.remote
 
 import android.text.TextUtils
+import android.util.Log
 import io.github.summerdez.asmrplayer.domain.DlsiteDownloadPlanner
+import io.github.summerdez.asmrplayer.domain.model.DlsiteContentFile
 import io.github.summerdez.asmrplayer.domain.model.DlsiteDownloadOption
 import io.github.summerdez.asmrplayer.domain.model.DlsiteWork
+import io.github.summerdez.asmrplayer.domain.model.DlsiteZiptree
 import java.io.BufferedInputStream
 import java.io.BufferedOutputStream
 import java.io.File
 import java.io.FileOutputStream
 import java.io.IOException
+import java.io.InterruptedIOException
 import java.util.Locale
+
+private const val TAG = "DlsiteContentRemote"
 
 class DlsiteContentRemote(private val httpClient: DlsiteHttpClient) {
     @Throws(IOException::class)
@@ -126,7 +132,14 @@ class DlsiteContentRemote(private val httpClient: DlsiteHttpClient) {
                         signedContentUrl(workId, contentFile.subtitleContentPath, revision, signParams),
                         subtitleFile,
                     )
-                } catch (ignored: IOException) {
+                } catch (exception: InterruptedIOException) {
+                    throw exception
+                } catch (exception: IOException) {
+                    Log.w(
+                        TAG,
+                        "Subtitle download failed for work=${work.workId}, file=${contentFile.displayPath}; continuing without subtitle",
+                        exception,
+                    )
                     DlsiteRemoteFiles.deleteQuietly(subtitleFile)
                     DlsiteRemoteFiles.deleteQuietly(File(subtitleFile.parentFile, subtitleFile.name + ".part"))
                 }
@@ -137,9 +150,9 @@ class DlsiteContentRemote(private val httpClient: DlsiteHttpClient) {
 
     @Throws(IOException::class)
     private fun selectedContentFiles(
-        ziptree: DlsiteJsonParser.DlsiteZiptree,
+        ziptree: DlsiteZiptree,
         downloadOptionId: String,
-    ): List<DlsiteJsonParser.ContentFile> {
+    ): List<DlsiteContentFile> {
         if (TextUtils.isEmpty(downloadOptionId)) {
             return ziptree.audioFiles
         }
@@ -170,7 +183,7 @@ class DlsiteContentRemote(private val httpClient: DlsiteHttpClient) {
     }
 
     @Throws(IOException::class)
-    private fun fetchZiptree(workId: String): DlsiteJsonParser.DlsiteZiptree {
+    private fun fetchZiptree(workId: String): DlsiteZiptree {
         val seconds = System.currentTimeMillis() / 1000L
         val minuteBucket = seconds - seconds % 60L
         val json = get(
@@ -222,6 +235,7 @@ class DlsiteContentRemote(private val httpClient: DlsiteHttpClient) {
         val numericId = try {
             digits.toInt()
         } catch (exception: NumberFormatException) {
+            Log.d(TAG, "Failed to parse DLsite work id suffix for work=$workId; using bucket fallback", exception)
             0
         }
         val bucket = ((numericId + 999) / 1000) * 1000
@@ -248,7 +262,7 @@ class DlsiteContentRemote(private val httpClient: DlsiteHttpClient) {
         url: String,
         targetFile: File,
         accept: String,
-        contentFile: DlsiteJsonParser.ContentFile,
+        contentFile: DlsiteContentFile,
         progressListener: DlsiteContentProgressListener?,
     ) {
         val parent = targetFile.parentFile

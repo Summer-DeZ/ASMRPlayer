@@ -3,30 +3,29 @@ package io.github.summerdez.asmrplayer.presentation
 import android.app.Application
 import android.net.Uri
 import android.text.TextUtils
+import android.util.Log
 import android.webkit.CookieManager
-import androidx.core.content.ContextCompat
 import androidx.lifecycle.AndroidViewModel
 import androidx.lifecycle.viewModelScope
 import io.github.summerdez.asmrplayer.data.DlsiteDownloadState
 import io.github.summerdez.asmrplayer.data.DlsiteRepository
 import io.github.summerdez.asmrplayer.data.LibraryRepository
-import io.github.summerdez.asmrplayer.data.download.DlsiteDownloadService
-import io.github.summerdez.asmrplayer.data.download.DlsiteDownloadTask
+import io.github.summerdez.asmrplayer.data.download.DlsiteDownloadQueueRepository
 import io.github.summerdez.asmrplayer.domain.model.DlsiteContent
 import io.github.summerdez.asmrplayer.domain.model.DlsiteDownloadOption
-import io.github.summerdez.asmrplayer.domain.model.DlsiteDownloadQueueTask
 import io.github.summerdez.asmrplayer.domain.model.DlsiteWork
 import java.io.File
+import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.Dispatchers
-import kotlinx.coroutines.flow.MutableSharedFlow
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.SharedFlow
 import kotlinx.coroutines.flow.StateFlow
-import kotlinx.coroutines.flow.asSharedFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
+
+private const val TAG = "DlsiteViewModel"
 
 data class DlsiteUiState(
     val loggedIn: Boolean = false,
@@ -44,14 +43,27 @@ sealed interface DlsiteEvent {
 class DlsiteViewModel(
     application: Application,
     private val dlsiteRepository: DlsiteRepository,
+    private val downloadQueueRepository: DlsiteDownloadQueueRepository,
     private val libraryRepository: LibraryRepository,
 ) : AndroidViewModel(application) {
     private val _state = MutableStateFlow(DlsiteUiState())
-    private val _events = MutableSharedFlow<DlsiteEvent>(extraBufferCapacity = 8)
+    private val messages = DlsiteEventMessageHelper()
+    private val downloadActions = DlsiteDownloadActions(
+        application = application,
+        scope = viewModelScope,
+        dlsiteRepository = dlsiteRepository,
+        downloadQueueRepository = downloadQueueRepository,
+        libraryRepository = libraryRepository,
+        stateProvider = { _state.value },
+        downloadStateProvider = { downloadState },
+        isBusy = ::isBusy,
+        setBusy = ::setBusy,
+        showMessage = ::showMessage,
+    )
     private var downloadState = DlsiteDownloadState()
     private var operationBusy = false
     val state: StateFlow<DlsiteUiState> = _state.asStateFlow()
-    val events: SharedFlow<DlsiteEvent> = _events.asSharedFlow()
+    val events: SharedFlow<DlsiteEvent> = messages.events
 
     init {
         observeRepository()
@@ -134,6 +146,8 @@ class DlsiteViewModel(
                         },
                     )
                 }
+            } catch (exception: CancellationException) {
+                throw exception
             } catch (exception: Exception) {
                 withContext(Dispatchers.Main) {
                     setBusy(false)
@@ -161,7 +175,11 @@ class DlsiteViewModel(
                 val coverFile = dlsiteRepository.downloadCover(coverWork, File(dlsiteCoverRoot(), coverWork.workId))
                 dlsiteRepository.saveWork(coverWork.withCoverUri(Uri.fromFile(coverFile).toString()))
                 synced++
-            } catch (ignored: Exception) {
+            } catch (exception: CancellationException) {
+                throw exception
+            } catch (exception: Exception) {
+                rethrowIfCancellationOrInterrupted(exception)
+                Log.w(TAG, "Failed to sync DLsite cover for work=${coverWork.workId}", exception)
             }
         }
         return synced
@@ -191,7 +209,11 @@ class DlsiteViewModel(
                 dlsiteRepository.saveWork(work.withCoverUri(coverUri))
                 libraryRepository.setPlaylistCover(work.playlistId, coverUri)
                 repaired++
-            } catch (ignored: Exception) {
+            } catch (exception: CancellationException) {
+                throw exception
+            } catch (exception: Exception) {
+                rethrowIfCancellationOrInterrupted(exception)
+                Log.w(TAG, "Failed to repair DLsite downloaded cover for work=${work.workId}", exception)
             }
         }
         return repaired
@@ -218,191 +240,43 @@ class DlsiteViewModel(
     }
 
     fun requestDownloadOptions(work: DlsiteWork) {
-        if (isBusy()) {
-            return
-        }
-        val cachedContents = _state.value.contentsByWork[work.workId].orEmpty()
-        if (cachedContents.isNotEmpty()) {
-            showMessage("已加载 ${cachedContents.size} 个内容")
-            return
-        }
-        if (!dlsiteRepository.hasLoginCookie()) {
-            showMessage("请先登录 DLsite")
-            return
-        }
-        setBusy(true)
-        viewModelScope.launch(Dispatchers.IO) {
-            try {
-                val options = dlsiteRepository.fetchDownloadOptions(work)
-                val contents = dlsiteRepository.saveDownloadOptions(work, options)
-                withContext(Dispatchers.Main) {
-                    setBusy(false)
-                    if (options.isEmpty()) {
-                        showMessage("没有找到可下载内容")
-                    } else {
-                        showMessage("已解析 ${contents.size} 个内容")
-                    }
-                }
-            } catch (exception: Exception) {
-                withContext(Dispatchers.Main) {
-                    setBusy(false)
-                    showMessage(shortDlsiteError(exception))
-                }
-            }
-        }
+        downloadActions.requestDownloadOptions(work)
     }
 
     fun startDownload(work: DlsiteWork, option: DlsiteDownloadOption) {
-        startDownload(work, listOf(option))
+        downloadActions.startDownload(work, option)
     }
 
     fun startDownload(work: DlsiteWork, content: DlsiteContent) {
-        startDownload(
-            work,
-            DlsiteDownloadOption(
-                content.optionId,
-                content.title.ifEmpty { "默认版本" },
-                emptyList(),
-            ),
-        )
+        downloadActions.startDownload(work, content)
     }
 
     fun startDownload(work: DlsiteWork, options: List<DlsiteDownloadOption>) {
-        if (isBusy() || options.isEmpty()) {
-            return
-        }
-        setBusy(true)
-        val optionIds = options.map { it.id }
-        val optionTitle = options.joinToString("、") { it.title }
-        viewModelScope.launch {
-            var queuedTask: DlsiteDownloadQueueTask? = null
-            try {
-                queuedTask = withContext(Dispatchers.IO) {
-                    dlsiteRepository.enqueueDownload(work, optionIds, optionTitle)
-                }
-                if (queuedTask == null) {
-                    setBusy(false)
-                    showMessage("无法加入下载队列")
-                    return@launch
-                }
-                ContextCompat.startForegroundService(
-                    getApplication(),
-                    DlsiteDownloadService.downloadIntent(getApplication(), work.workId, optionIds),
-                )
-                setBusy(false)
-                showMessage("已加入下载队列")
-            } catch (exception: Exception) {
-                val message = shortDlsiteError(exception)
-                withContext(Dispatchers.IO) {
-                    queuedTask?.let { task ->
-                        dlsiteRepository.markDownloadQueueTaskFailed(task.taskId, message)
-                    }
-                    dlsiteRepository.markFailed(work, message)
-                }
-                setBusy(false)
-                showMessage(message)
-            }
-        }
+        downloadActions.startDownload(work, options)
     }
 
     fun pauseDownload(work: DlsiteWork) {
-        val task = downloadState.tasks[work.workId]
-        if (!work.isDownloading() && !work.isQueued() && task == null) {
-            return
-        }
-        try {
-            getApplication<Application>().startService(DlsiteDownloadService.pauseIntent(getApplication(), work.workId))
-            showMessage("正在暂停下载")
-        } catch (exception: RuntimeException) {
-            viewModelScope.launch {
-                withContext(Dispatchers.IO) {
-                    runCatching {
-                        dlsiteRepository.markPaused(work)
-                    }
-                }
-                showMessage(shortDlsiteError(exception))
-            }
-        }
+        downloadActions.pauseDownload(work)
     }
 
     fun resumeDownload(work: DlsiteWork) {
-        if (isBusy()) {
-            return
-        }
-        if (!TextUtils.isEmpty(work.downloadOptionId)) {
-            val ids = work.downloadOptionId.split("|").filter { it.isNotEmpty() }
-            val contents = _state.value.contentsByWork[work.workId].orEmpty().associateBy { it.optionId }
-            val options = ids.map { id ->
-                DlsiteDownloadOption(id, contents[id]?.title ?: work.downloadOptionTitle, emptyList())
-            }
-            startDownload(work, options)
-            return
-        }
-        requestDownloadOptions(work)
+        downloadActions.resumeDownload(work)
     }
 
     fun deleteCache(work: DlsiteWork, onLibraryChanged: () -> Unit) {
-        val task = downloadState.tasks[work.workId]
-        if (work.isDownloading() || work.isQueued() || task?.active == true) {
-            cancelDownload(work)
-            return
-        }
-        if (isBusy()) {
-            return
-        }
-        if (!work.isPaused() && !work.isFailed() && !work.isDownloaded()) {
-            return
-        }
-        setBusy(true)
-        viewModelScope.launch(Dispatchers.IO) {
-            try {
-                val playlistId = work.playlistId
-                DlsiteDownloadTask.deleteCache(getApplication<Application>(), work)
-                if (!TextUtils.isEmpty(playlistId)) {
-                    libraryRepository.deletePlaylist(playlistId)
-                }
-                dlsiteRepository.markCacheDeleted(work)
-                withContext(Dispatchers.Main) {
-                    setBusy(false)
-                    onLibraryChanged()
-                    showMessage("已删除缓存")
-                }
-            } catch (exception: Exception) {
-                withContext(Dispatchers.Main) {
-                    setBusy(false)
-                    showMessage(shortDlsiteError(exception))
-                }
-            }
-        }
+        downloadActions.deleteCache(work, onLibraryChanged)
     }
 
     fun cancelDownload(work: DlsiteWork) {
-        try {
-            getApplication<Application>().startService(DlsiteDownloadService.deleteIntent(getApplication(), work.workId))
-            showMessage("正在取消下载")
-        } catch (exception: RuntimeException) {
-            showMessage(shortDlsiteError(exception))
-        }
+        downloadActions.cancelDownload(work)
     }
 
     fun pauseAllDownloads() {
-        val activeWorks = _state.value.works.filter { work ->
-            work.isDownloading() || work.isQueued() || downloadState.tasks[work.workId]?.active == true
-        }
-        activeWorks.forEach { work ->
-            getApplication<Application>().startService(DlsiteDownloadService.pauseIntent(getApplication(), work.workId))
-        }
-        viewModelScope.launch {
-            withContext(Dispatchers.IO) {
-                dlsiteRepository.markAllQueuedDownloadsPaused()
-            }
-            showMessage("正在暂停全部下载")
-        }
+        downloadActions.pauseAllDownloads()
     }
 
     fun resumeAllDownloads() {
-        val pausedWorks = _state.value.works.filter { it.isPaused() }
-        pausedWorks.forEach { resumeDownload(it) }
+        downloadActions.resumeAllDownloads()
     }
 
     fun clearCompletedDownloadTasks() {
@@ -410,27 +284,7 @@ class DlsiteViewModel(
     }
 
     fun deleteContent(work: DlsiteWork, content: DlsiteContent, onLibraryChanged: () -> Unit) {
-        if (content.isDownloading() || content.isQueued()) {
-            showMessage("请先暂停该内容")
-            return
-        }
-        viewModelScope.launch(Dispatchers.IO) {
-            try {
-                content.trackIdList().forEach { trackId ->
-                    libraryRepository.removeTrack(work.playlistId, trackId)
-                }
-                DlsiteDownloadTask.deleteContentCache(getApplication<Application>(), work, content.optionId)
-                dlsiteRepository.markContentCacheDeleted(work.workId, content.optionId)
-                withContext(Dispatchers.Main) {
-                    onLibraryChanged()
-                    showMessage("已删除该内容")
-                }
-            } catch (exception: Exception) {
-                withContext(Dispatchers.Main) {
-                    showMessage(shortDlsiteError(exception))
-                }
-            }
-        }
+        downloadActions.deleteContent(work, content, onLibraryChanged)
     }
 
     private fun setBusy(busy: Boolean) {
@@ -454,23 +308,6 @@ class DlsiteViewModel(
     }
 
     private fun showMessage(message: String) {
-        if (message.isNotEmpty()) {
-            _events.tryEmit(DlsiteEvent.Message(message))
-        }
+        messages.showMessage(message)
     }
-
-    private fun shortDlsiteError(exception: Exception?): String {
-        var message = exception?.message.orEmpty()
-        if (TextUtils.isEmpty(message)) {
-            message = "DLsite 操作失败"
-        }
-        return if (message.length > 42) message.substring(0, 42) + "..." else message
-    }
-
-    private data class DownloadSnapshot(
-        val works: List<DlsiteWork>,
-        val contents: List<DlsiteContent>,
-        val lastSyncMs: Long,
-        val downloadState: DlsiteDownloadState,
-    )
 }

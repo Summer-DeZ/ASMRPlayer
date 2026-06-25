@@ -1,6 +1,6 @@
 package io.github.summerdez.asmrplayer
 
-import io.github.summerdez.asmrplayer.ui.theme.AppThemeMode
+import io.github.summerdez.asmrplayer.domain.model.AppThemeMode
 import io.github.summerdez.asmrplayer.ui.theme.AppUi
 
 import org.junit.Assert.assertEquals

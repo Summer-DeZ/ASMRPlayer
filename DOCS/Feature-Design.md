@@ -77,6 +77,7 @@ ASMRPlayer 是面向 ASMR 音声收听场景的 Android 本地播放器，核心
 - 支持同步已购买作品。
 - 支持下载作品封面。
 - 支持请求 DLsite Play 文件目录树，并按目录/根目录音频生成可缓存下载内容清单。
+- DLsite 文件目录树解析产物使用 `domain.model.DlsiteZiptree` 与 `DlsiteContentFile`；下载规划和下载选项不依赖 remote parser 内部 DTO。
 - 支持下载作品文件到应用私有目录。
 - 支持下载队列，多个作品按加入顺序排队，并发上限固定为 2。
 - 下载队列持久化在 `dlsite_download_queue`；服务重启后会把遗留 `running` 任务重置为 `pending`，再按 FIFO 调度。
@@ -96,6 +97,7 @@ ASMRPlayer 是面向 ASMR 音声收听场景的 Android 本地播放器，核心
 ## 设置
 
 - 支持浅色、深色、跟随系统主题模式。
+- 主题模式会保存到 Room 应用设置的 `app_theme_mode`，重启后由 `SettingsRepository.themeModeFlow` 恢复到设置页和应用主题。
 - 支持悬浮字幕开关。
 - 支持悬浮窗权限入口。
 - 支持 Android 13 及以上通知权限请求。
@@ -116,6 +118,7 @@ ASMRPlayer 是面向 ASMR 音声收听场景的 Android 本地播放器，核心
 - 已配置 v1 到 v6 的 Room migration。
 - 使用 Repository 层隔离 UI/ViewModel 与数据库/API。
 - Repository 以 `Flow` 推送播放列表、DLsite 内容、上次同步时间和 AI 设置等状态；写入和必要快照读取在 IO 协程中执行，UI 通过 ViewModel state/event 接收更新，不直接同步阻塞读取 Room。
+- `DlsiteRepository` 只暴露 DLsite 作品、内容、远程同步和下载状态协调能力；持久下载队列状态机由 `DlsiteDownloadQueueRepository` 独立管理并显式注入调用方。
 - AI 字幕设置复用应用设置表；Whisper 模型和生成的 `.vtt` 存放在应用私有目录 `filesDir/ai-subtitles/`，转写分段缓存存放在 `cacheDir/ai-subtitles/segments/`，情景卡缓存存放在 `cacheDir/ai-subtitles/scene-contexts/`，翻译批次缓存存放在 `cacheDir/ai-subtitles/translations/`。远程转写配置也保存在设置表，不触发 Room schema migration。
 
 ## 内部验证能力

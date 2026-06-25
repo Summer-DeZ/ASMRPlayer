@@ -2,34 +2,25 @@ package io.github.summerdez.asmrplayer.presentation
 
 import android.Manifest
 import android.app.Application
-import android.content.Context
 import android.content.pm.PackageManager
 import android.os.Build
 import android.provider.Settings
 import androidx.core.content.ContextCompat
 import androidx.lifecycle.AndroidViewModel
 import androidx.lifecycle.viewModelScope
-import io.github.summerdez.asmrplayer.data.ai.RemoteWhisperTranscriber
+import io.github.summerdez.asmrplayer.data.SettingsRepository
 import io.github.summerdez.asmrplayer.data.ai.WhisperModelRepository
 import io.github.summerdez.asmrplayer.data.ai.WhisperModelState
-import io.github.summerdez.asmrplayer.data.SettingsRepository
-import io.github.summerdez.asmrplayer.data.update.AppUpdateCheckResult
-import io.github.summerdez.asmrplayer.data.update.AppUpdateDownloadService
-import io.github.summerdez.asmrplayer.data.update.AppUpdateDownloadState
 import io.github.summerdez.asmrplayer.data.update.AppUpdateDownloadStateStore
-import io.github.summerdez.asmrplayer.data.update.AppUpdateDownloadStateStatus
 import io.github.summerdez.asmrplayer.data.update.AppUpdateRelease
 import io.github.summerdez.asmrplayer.data.update.AppUpdateRepository
 import io.github.summerdez.asmrplayer.domain.model.AiSubtitleSettings
 import io.github.summerdez.asmrplayer.domain.model.AiTranscriptionBackend
 import io.github.summerdez.asmrplayer.domain.model.AiTranslationEngine
+import io.github.summerdez.asmrplayer.domain.model.AppThemeMode
 import io.github.summerdez.asmrplayer.domain.model.WhisperModelSpec
-import io.github.summerdez.asmrplayer.domain.model.remoteTranscriptionBaseUrl
 import io.github.summerdez.asmrplayer.playback.PlaybackCommandClient
 import io.github.summerdez.asmrplayer.playback.PlaybackControllerSnapshot
-import io.github.summerdez.asmrplayer.ui.theme.AppThemeMode
-import java.util.concurrent.CancellationException
-import kotlinx.coroutines.Job
 import kotlinx.coroutines.flow.MutableSharedFlow
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.SharedFlow
@@ -112,7 +103,6 @@ class SettingsViewModel(
     private val whisperModelRepository = WhisperModelRepository(application)
     private val _state = MutableStateFlow(
         SettingsUiState(
-            themeMode = settingsRepository.themeMode(),
             currentVersionName = application.installedVersionName(),
             whisperModelState = whisperModelRepository.state(WhisperModelSpec.BASE),
         ),
@@ -120,12 +110,39 @@ class SettingsViewModel(
     val state: StateFlow<SettingsUiState> = _state.asStateFlow()
     private val _events = MutableSharedFlow<SettingsEvent>()
     val events: SharedFlow<SettingsEvent> = _events.asSharedFlow()
-    private var whisperModelDownloadJob: Job? = null
-    private val remoteWhisperTranscriber = RemoteWhisperTranscriber()
-    private var promptedInstallApkPath: String = ""
+
+    private val updateHandler = SettingsUpdateHandler(
+        context = application,
+        updateRepository = updateRepository,
+        appUpdateDownloadStateStore = appUpdateDownloadStateStore,
+        state = _state,
+        events = _events,
+        scope = viewModelScope,
+    )
+    private val aiSettingsHandler = SettingsAiSettingsHandler(
+        settingsRepository = settingsRepository,
+        state = _state,
+        scope = viewModelScope,
+    )
+    private val remoteWhisperTester = SettingsRemoteWhisperTester(
+        state = _state,
+        events = _events,
+        scope = viewModelScope,
+    )
+    private val whisperModelActions = SettingsWhisperModelDownloadHandler(
+        whisperModelRepository = whisperModelRepository,
+        state = _state,
+        events = _events,
+        scope = viewModelScope,
+    )
 
     init {
         playbackCommands.connect()
+        viewModelScope.launch {
+            settingsRepository.themeModeFlow.collect { mode ->
+                _state.update { it.copy(themeMode = mode) }
+            }
+        }
         viewModelScope.launch {
             playbackCommands.snapshots.collect { snapshot ->
                 updateState(snapshot)
@@ -143,7 +160,7 @@ class SettingsViewModel(
         }
         viewModelScope.launch {
             appUpdateDownloadStateStore.state.collect { downloadState ->
-                applyUpdateDownloadState(downloadState)
+                updateHandler.applyDownloadState(downloadState)
             }
         }
     }
@@ -174,8 +191,7 @@ class SettingsViewModel(
                     ContextCompat.checkSelfPermission(
                         context,
                         Manifest.permission.POST_NOTIFICATIONS,
-                ) == PackageManager.PERMISSION_GRANTED,
-                themeMode = settingsRepository.themeMode(),
+                    ) == PackageManager.PERMISSION_GRANTED,
                 currentVersionName = context.installedVersionName(),
             )
         }
@@ -190,365 +206,113 @@ class SettingsViewModel(
     }
 
     fun setThemeMode(mode: AppThemeMode) {
-        settingsRepository.setThemeMode(mode)
-        refresh()
+        _state.update { it.copy(themeMode = mode) }
+        viewModelScope.launch {
+            settingsRepository.setThemeMode(mode)
+        }
     }
 
     fun checkForUpdates() {
-        if (_state.value.updateStatus is AppUpdateStatus.Checking) {
-            return
-        }
-        viewModelScope.launch {
-            val currentVersionName = getApplication<Application>().installedVersionName()
-            _state.update {
-                it.copy(
-                    updateStatus = AppUpdateStatus.Checking,
-                    updateDialogRelease = null,
-                )
-            }
-            try {
-                when (val result = updateRepository.checkLatestRelease(currentVersionName)) {
-                    is AppUpdateCheckResult.Available -> {
-                        _state.update {
-                            it.copy(
-                                updateStatus = AppUpdateStatus.Available(result.release),
-                                updateDialogRelease = result.release,
-                            )
-                        }
-                    }
-                    AppUpdateCheckResult.UpToDate -> {
-                        _state.update {
-                            it.copy(updateStatus = AppUpdateStatus.UpToDate)
-                        }
-                    }
-                }
-            } catch (error: Throwable) {
-                if (error is CancellationException) {
-                    throw error
-                }
-                _state.update {
-                    it.copy(updateStatus = AppUpdateStatus.Failed(error.message ?: "检查更新失败"))
-                }
-            }
-        }
+        updateHandler.checkForUpdates()
     }
 
     fun showUpdateDetails() {
-        val release = when (val status = _state.value.updateStatus) {
-            is AppUpdateStatus.Available -> status.release
-            else -> null
-        } ?: return
-        _state.update { it.copy(updateDialogRelease = release) }
+        updateHandler.showUpdateDetails()
     }
 
     fun dismissUpdateDetails() {
-        _state.update { it.copy(updateDialogRelease = null) }
+        updateHandler.dismissUpdateDetails()
     }
 
     fun downloadAvailableUpdate() {
-        val release = _state.value.updateDialogRelease
-            ?: (_state.value.updateStatus as? AppUpdateStatus.Available)?.release
-            ?: (_state.value.updateDownloadStatus as? AppUpdateDownloadStatus.Failed)?.release
-            ?: return
-        if (_state.value.updateDownloadStatus is AppUpdateDownloadStatus.Downloading) {
-            return
-        }
-        val context = getApplication<Application>()
-        _state.update {
-            it.copy(
-                updateDialogRelease = null,
-                updateDownloadStatus = AppUpdateDownloadStatus.Downloading(release),
-            )
-        }
-        appUpdateDownloadStateStore.publishDownloading(
-            release = release,
-            bytesDownloaded = 0L,
-            totalBytes = release.apkSizeBytes,
-        )
-        try {
-            ContextCompat.startForegroundService(
-                context,
-                AppUpdateDownloadService.downloadIntent(context, release),
-            )
-        } catch (error: Throwable) {
-            appUpdateDownloadStateStore.publishFailed(
-                release = release,
-                message = error.message ?: "启动更新下载失败",
-            )
-        }
+        updateHandler.downloadAvailableUpdate()
     }
 
     fun cancelUpdateDownload() {
-        val context = getApplication<Application>()
-        try {
-            context.startService(AppUpdateDownloadService.cancelIntent(context))
-        } catch (_: Throwable) {
-            appUpdateDownloadStateStore.publishCanceled()
-            _state.update { it.copy(updateDownloadStatus = AppUpdateDownloadStatus.Idle) }
-        }
+        updateHandler.cancelUpdateDownload()
     }
 
     fun retryUpdateDownload() {
-        if (_state.value.updateDownloadStatus is AppUpdateDownloadStatus.Failed) {
-            downloadAvailableUpdate()
-        }
+        updateHandler.retryUpdateDownload()
     }
 
     fun dismissInstallPrompt() {
-        _state.update { it.copy(installPromptRelease = null) }
+        updateHandler.dismissInstallPrompt()
     }
 
     fun installDownloadedUpdate() {
-        val downloaded = _state.value.updateDownloadStatus as? AppUpdateDownloadStatus.Downloaded
-        if (downloaded == null) {
-            viewModelScope.launch {
-                _events.emit(SettingsEvent.Message("更新包不存在，请重新下载"))
-            }
-            return
-        }
-        _state.update { it.copy(installPromptRelease = null) }
-        viewModelScope.launch {
-            _events.emit(SettingsEvent.InstallUpdate(downloaded.apkPath))
-        }
+        updateHandler.installDownloadedUpdate()
     }
 
     fun setAiTranslationEngine(engine: AiTranslationEngine) {
-        viewModelScope.launch {
-            settingsRepository.setAiTranslationEngine(engine)
-        }
+        aiSettingsHandler.setAiTranslationEngine(engine)
     }
 
     fun setAiTranscriptionBackend(backend: AiTranscriptionBackend) {
-        viewModelScope.launch {
-            settingsRepository.setAiTranscriptionBackend(backend)
-        }
-        resetRemoteWhisperTestStatus()
+        aiSettingsHandler.setAiTranscriptionBackend(backend)
     }
 
     fun setAiOllamaBaseUrl(value: String) {
-        viewModelScope.launch {
-            settingsRepository.setAiOllamaBaseUrl(value)
-        }
+        aiSettingsHandler.setAiOllamaBaseUrl(value)
     }
 
     fun setAiOllamaModel(value: String) {
-        viewModelScope.launch {
-            settingsRepository.setAiOllamaModel(value)
-        }
+        aiSettingsHandler.setAiOllamaModel(value)
     }
 
     fun setAiDeepSeekBaseUrl(value: String) {
-        viewModelScope.launch {
-            settingsRepository.setAiDeepSeekBaseUrl(value)
-        }
+        aiSettingsHandler.setAiDeepSeekBaseUrl(value)
     }
 
     fun setAiDeepSeekModel(value: String) {
-        viewModelScope.launch {
-            settingsRepository.setAiDeepSeekModel(value)
-        }
+        aiSettingsHandler.setAiDeepSeekModel(value)
     }
 
     fun setAiDeepSeekApiKey(value: String) {
-        viewModelScope.launch {
-            settingsRepository.setAiDeepSeekApiKey(value)
-        }
+        aiSettingsHandler.setAiDeepSeekApiKey(value)
     }
 
     fun setAiWhisperModelId(value: String) {
-        viewModelScope.launch {
-            settingsRepository.setAiWhisperModelId(value)
-        }
+        aiSettingsHandler.setAiWhisperModelId(value)
     }
 
     fun setAiRemoteWhisperBaseUrl(value: String) {
-        viewModelScope.launch {
-            settingsRepository.setAiRemoteWhisperBaseUrl(value)
-        }
-        resetRemoteWhisperTestStatus()
+        aiSettingsHandler.setAiRemoteWhisperBaseUrl(value)
     }
 
     fun setAiRemoteTranscriptionAddress(value: String) {
-        val current = _state.value.aiSubtitleSettings
-        viewModelScope.launch {
-            settingsRepository.setAiRemoteWhisperBaseUrl(
-                remoteTranscriptionBaseUrl(value, current.remoteTranscriptionPort),
-            )
-        }
-        resetRemoteWhisperTestStatus()
+        aiSettingsHandler.setAiRemoteTranscriptionAddress(value)
     }
 
     fun setAiRemoteTranscriptionPort(value: String) {
-        val current = _state.value.aiSubtitleSettings
-        viewModelScope.launch {
-            settingsRepository.setAiRemoteWhisperBaseUrl(
-                remoteTranscriptionBaseUrl(current.remoteTranscriptionAddress, value),
-            )
-        }
-        resetRemoteWhisperTestStatus()
+        aiSettingsHandler.setAiRemoteTranscriptionPort(value)
     }
 
     fun setAiRemoteWhisperModel(value: String) {
-        viewModelScope.launch {
-            settingsRepository.setAiRemoteWhisperModel(value)
-        }
-        resetRemoteWhisperTestStatus()
+        aiSettingsHandler.setAiRemoteWhisperModel(value)
     }
 
     fun setAiRemoteWhisperToken(value: String) {
-        viewModelScope.launch {
-            settingsRepository.setAiRemoteWhisperToken(value)
-        }
-        resetRemoteWhisperTestStatus()
+        aiSettingsHandler.setAiRemoteWhisperToken(value)
     }
 
     fun testRemoteWhisperConnection() {
-        if (_state.value.remoteWhisperTestStatus is RemoteWhisperTestStatus.Checking) {
-            return
-        }
-        viewModelScope.launch {
-            val settings = _state.value.aiSubtitleSettings
-            _state.update { it.copy(remoteWhisperTestStatus = RemoteWhisperTestStatus.Checking) }
-            try {
-                val health = remoteWhisperTranscriber.checkHealth(settings)
-                if (!health.modelsReady) {
-                    val message = "服务可达，模型未就绪：${health.displaySummary}"
-                    _state.update { it.copy(remoteWhisperTestStatus = RemoteWhisperTestStatus.Failed(message)) }
-                    _events.emit(SettingsEvent.Message(message))
-                    return@launch
-                }
-                val message = "OK"
-                _state.update { it.copy(remoteWhisperTestStatus = RemoteWhisperTestStatus.Success(message)) }
-                _events.emit(SettingsEvent.Message(message))
-            } catch (error: Throwable) {
-                if (error is CancellationException) {
-                    _state.update { it.copy(remoteWhisperTestStatus = RemoteWhisperTestStatus.Idle) }
-                    throw error
-                }
-                val message = error.message ?: "远程转写服务连接失败"
-                _state.update { it.copy(remoteWhisperTestStatus = RemoteWhisperTestStatus.Failed(message)) }
-                _events.emit(SettingsEvent.Message(message))
-            }
-        }
-    }
-
-    private fun resetRemoteWhisperTestStatus() {
-        _state.update { it.copy(remoteWhisperTestStatus = RemoteWhisperTestStatus.Idle) }
-    }
-
-    private fun applyUpdateDownloadState(downloadState: AppUpdateDownloadState) {
-        val uiStatus = appUpdateDownloadUiStatus(downloadState)
-        _state.update { current ->
-            val installPromptRelease = when {
-                uiStatus is AppUpdateDownloadStatus.Downloaded &&
-                    uiStatus.apkPath != promptedInstallApkPath -> {
-                    promptedInstallApkPath = uiStatus.apkPath
-                    uiStatus.release
-                }
-                uiStatus is AppUpdateDownloadStatus.Downloading -> {
-                    promptedInstallApkPath = ""
-                    current.installPromptRelease
-                }
-                else -> current.installPromptRelease
-            }
-            current.copy(
-                updateDownloadStatus = uiStatus,
-                installPromptRelease = installPromptRelease,
-            )
-        }
+        remoteWhisperTester.testConnection()
     }
 
     fun setAiAdultContentTranslationAllowed(value: Boolean) {
-        viewModelScope.launch {
-            settingsRepository.setAiAdultContentTranslationAllowed(value)
-        }
+        aiSettingsHandler.setAiAdultContentTranslationAllowed(value)
     }
 
     fun downloadWhisperModel() {
-        val spec = WhisperModelSpec.byId(_state.value.aiSubtitleSettings.whisperModelId)
-        if (_state.value.whisperModelState.downloading || _state.value.whisperModelState.downloaded) {
-            return
-        }
-        whisperModelDownloadJob?.cancel()
-        whisperModelDownloadJob = viewModelScope.launch {
-            try {
-                _state.update {
-                    it.copy(whisperModelState = whisperModelRepository.state(spec).copy(downloading = true))
-                }
-                val state = whisperModelRepository.download(spec) { progress ->
-                    _state.update { it.copy(whisperModelState = progress) }
-                }
-                _state.update { it.copy(whisperModelState = state) }
-                _events.emit(SettingsEvent.Message("${spec.label} 已下载"))
-            } catch (error: Throwable) {
-                if (error is CancellationException) {
-                    _state.update { it.copy(whisperModelState = whisperModelRepository.state(spec)) }
-                    return@launch
-                }
-                _state.update {
-                    it.copy(
-                        whisperModelState = whisperModelRepository.state(spec).copy(
-                            error = error.message ?: "模型下载失败",
-                        ),
-                    )
-                }
-            }
-        }
+        whisperModelActions.downloadWhisperModel()
     }
 
     fun cancelWhisperModelDownload() {
-        whisperModelDownloadJob?.cancel()
-        whisperModelDownloadJob = null
-        val spec = WhisperModelSpec.byId(_state.value.aiSubtitleSettings.whisperModelId)
-        _state.update { it.copy(whisperModelState = whisperModelRepository.state(spec)) }
+        whisperModelActions.cancelWhisperModelDownload()
     }
 
     fun deleteWhisperModel() {
-        val spec = WhisperModelSpec.byId(_state.value.aiSubtitleSettings.whisperModelId)
-        whisperModelRepository.delete(spec)
-        _state.update { it.copy(whisperModelState = whisperModelRepository.state(spec)) }
+        whisperModelActions.deleteWhisperModel()
     }
-}
-
-internal fun appUpdateDownloadUiStatus(downloadState: AppUpdateDownloadState): AppUpdateDownloadStatus {
-    val release = downloadState.release ?: return AppUpdateDownloadStatus.Idle
-    return when (downloadState.status) {
-        AppUpdateDownloadStateStatus.DOWNLOADING -> AppUpdateDownloadStatus.Downloading(
-            release = release,
-            bytesDownloaded = downloadState.bytesDownloaded,
-            totalBytes = downloadState.totalBytes,
-            speedBytesPerSecond = downloadState.speedBytesPerSecond,
-        )
-        AppUpdateDownloadStateStatus.DOWNLOADED -> {
-            if (downloadState.apkPath.isBlank()) {
-                AppUpdateDownloadStatus.Idle
-            } else {
-                AppUpdateDownloadStatus.Downloaded(
-                    release = release,
-                    apkPath = downloadState.apkPath,
-                    totalBytes = downloadState.totalBytes,
-                )
-            }
-        }
-        AppUpdateDownloadStateStatus.FAILED -> AppUpdateDownloadStatus.Failed(
-            release = release,
-            message = downloadState.error.ifBlank { "下载更新失败" },
-            bytesDownloaded = downloadState.bytesDownloaded,
-            totalBytes = downloadState.totalBytes,
-            speedBytesPerSecond = downloadState.speedBytesPerSecond,
-        )
-        AppUpdateDownloadStateStatus.IDLE,
-        AppUpdateDownloadStateStatus.CANCELED,
-        -> AppUpdateDownloadStatus.Idle
-    }
-}
-
-private fun Context.installedVersionName(): String {
-    val packageInfo = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
-        packageManager.getPackageInfo(packageName, PackageManager.PackageInfoFlags.of(0))
-    } else {
-        @Suppress("DEPRECATION")
-        packageManager.getPackageInfo(packageName, 0)
-    }
-    return packageInfo.versionName ?: "未知"
 }

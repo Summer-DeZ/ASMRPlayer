@@ -1,6 +1,6 @@
 package io.github.summerdez.asmrplayer.data.download
 
-import io.github.summerdez.asmrplayer.data.remote.DlsiteJsonParser
+import io.github.summerdez.asmrplayer.domain.model.DlsiteContentFile
 import io.github.summerdez.asmrplayer.domain.model.DlsiteDownloadOption
 import java.io.File
 import org.junit.Assert.assertEquals
@@ -74,8 +74,8 @@ class DlsiteDownloadTaskTest {
         assertEquals(1, results[1].trackCount)
     }
 
-    private fun contentFile(name: String, lengthBytes: Long): DlsiteJsonParser.ContentFile {
-        return DlsiteJsonParser.ContentFile(
+    private fun contentFile(name: String, lengthBytes: Long): DlsiteContentFile {
+        return DlsiteContentFile(
             displayPath = name,
             displayName = name,
             contentPath = "optimized/$name",

@@ -1,8 +1,8 @@
 package io.github.summerdez.asmrplayer
 
-import io.github.summerdez.asmrplayer.data.remote.DlsiteJsonParser
 import io.github.summerdez.asmrplayer.domain.DlsiteDownloadPlanner
-
+import io.github.summerdez.asmrplayer.domain.model.DlsiteContentFile
+import io.github.summerdez.asmrplayer.domain.model.DlsiteZiptree
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertTrue
 import org.junit.Test
@@ -100,13 +100,13 @@ class DlsiteDownloadPlannerTest {
         assertTrue(options.isEmpty())
     }
 
-    private fun ziptree(vararg files: DlsiteJsonParser.ContentFile): DlsiteJsonParser.DlsiteZiptree {
-        return DlsiteJsonParser.DlsiteZiptree("RJ00000001", "revision", files.toList())
+    private fun ziptree(vararg files: DlsiteContentFile): DlsiteZiptree {
+        return DlsiteZiptree("RJ00000001", "revision", files.toList())
     }
 
-    private fun contentFile(path: String): DlsiteJsonParser.ContentFile {
+    private fun contentFile(path: String): DlsiteContentFile {
         val name = path.substringAfterLast("/")
-        return DlsiteJsonParser.ContentFile(
+        return DlsiteContentFile(
             path,
             name,
             "optimized/$name",

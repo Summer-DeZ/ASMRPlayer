@@ -1,23 +1,24 @@
 package io.github.summerdez.asmrplayer.data
 
-import android.content.Context
 import io.github.summerdez.asmrplayer.domain.model.AiSubtitleSettings
 import io.github.summerdez.asmrplayer.domain.model.AiTranscriptionBackend
 import io.github.summerdez.asmrplayer.domain.model.AiTranslationEngine
+import io.github.summerdez.asmrplayer.domain.model.AppThemeMode
 import io.github.summerdez.asmrplayer.domain.model.WhisperModelSpec
-import io.github.summerdez.asmrplayer.ui.theme.AppThemeMode
-import io.github.summerdez.asmrplayer.ui.theme.AppUi
 import kotlinx.coroutines.CoroutineDispatcher
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.combine
+import kotlinx.coroutines.flow.distinctUntilChanged
+import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.withContext
 
 interface SettingsRepository {
+    val themeModeFlow: Flow<AppThemeMode>
     val aiSubtitleSettingsFlow: Flow<AiSubtitleSettings>
 
-    fun themeMode(): AppThemeMode
-    fun setThemeMode(mode: AppThemeMode)
+    suspend fun themeMode(): AppThemeMode
+    suspend fun setThemeMode(mode: AppThemeMode)
     suspend fun aiSubtitleSettings(): AiSubtitleSettings
     suspend fun setAiTranscriptionBackend(backend: AiTranscriptionBackend)
     suspend fun setAiTranslationEngine(engine: AiTranslationEngine)
@@ -34,11 +35,13 @@ interface SettingsRepository {
 }
 
 class AppSettingsRepository(
-    context: Context,
     private val settingsDao: AppSettingsDao,
     private val ioDispatcher: CoroutineDispatcher = Dispatchers.IO,
 ) : SettingsRepository {
-    private val appContext = context.applicationContext
+    override val themeModeFlow: Flow<AppThemeMode> = settingsDao.valueFlow(KEY_APP_THEME_MODE)
+        .map { AppThemeMode.fromName(it) }
+        .distinctUntilChanged()
+
     override val aiSubtitleSettingsFlow: Flow<AiSubtitleSettings> = combine(
         listOf(
             settingsDao.valueFlow(KEY_AI_TRANSLATION_ENGINE),
@@ -58,12 +61,14 @@ class AppSettingsRepository(
         aiSettingsFromValues(values)
     }
 
-    override fun themeMode(): AppThemeMode {
-        return AppUi.themeMode()
+    override suspend fun themeMode(): AppThemeMode {
+        return withContext(ioDispatcher) {
+            AppThemeMode.fromName(settingsDao.value(KEY_APP_THEME_MODE))
+        }
     }
 
-    override fun setThemeMode(mode: AppThemeMode) {
-        AppUi.setThemeMode(appContext, mode)
+    override suspend fun setThemeMode(mode: AppThemeMode) {
+        put(KEY_APP_THEME_MODE, mode.name)
     }
 
     override suspend fun aiSubtitleSettings(): AiSubtitleSettings {
@@ -177,6 +182,7 @@ class AppSettingsRepository(
         const val KEY_AI_REMOTE_WHISPER_BASE_URL = "ai_remote_whisper_base_url"
         const val KEY_AI_REMOTE_WHISPER_MODEL = "ai_remote_whisper_model"
         const val KEY_AI_REMOTE_WHISPER_TOKEN = "ai_remote_whisper_token"
+        const val KEY_APP_THEME_MODE = "app_theme_mode"
     }
 }
 

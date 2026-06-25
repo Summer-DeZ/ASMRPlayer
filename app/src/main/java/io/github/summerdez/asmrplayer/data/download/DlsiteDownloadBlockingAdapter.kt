@@ -12,6 +12,7 @@ import kotlinx.coroutines.runBlocking
 
 class DlsiteDownloadBlockingAdapter constructor(
     private val dlsiteRepository: DlsiteRepository,
+    private val downloadQueueRepository: DlsiteDownloadQueueRepository,
     private val libraryRepository: LibraryRepository,
     private val dispatcher: CoroutineDispatcher = Dispatchers.IO,
 ) {
@@ -44,57 +45,57 @@ class DlsiteDownloadBlockingAdapter constructor(
         optionIds: List<String>,
         optionTitle: String?,
     ): DlsiteDownloadQueueTask? = blocking {
-        dlsiteRepository.enqueueDownload(work, optionIds, optionTitle)
+        downloadQueueRepository.enqueueDownload(work, optionIds, optionTitle)
     }
 
     fun pendingDownloadQueueTasks(limit: Int): List<DlsiteDownloadQueueTask> = blocking {
-        dlsiteRepository.pendingDownloadQueueTasks(limit)
+        downloadQueueRepository.pendingDownloadQueueTasks(limit)
     }
 
     fun resetRunningDownloadQueue(): Int = blocking {
-        dlsiteRepository.resetRunningDownloadQueue()
+        downloadQueueRepository.resetRunningDownloadQueue()
     }
 
     fun markDownloadQueueTaskRunning(taskId: String): DlsiteDownloadQueueTask? = blocking {
-        dlsiteRepository.markDownloadQueueTaskRunning(taskId)
+        downloadQueueRepository.markDownloadQueueTaskRunning(taskId)
     }
 
     fun markDownloadQueueTaskCompleted(taskId: String) {
         blocking {
-            dlsiteRepository.markDownloadQueueTaskCompleted(taskId)
+            downloadQueueRepository.markDownloadQueueTaskCompleted(taskId)
         }
     }
 
     fun markDownloadQueueTaskFailed(taskId: String, error: String?) {
         blocking {
-            dlsiteRepository.markDownloadQueueTaskFailed(taskId, error)
+            downloadQueueRepository.markDownloadQueueTaskFailed(taskId, error)
         }
     }
 
     fun markDownloadQueueTaskPaused(taskId: String) {
         blocking {
-            dlsiteRepository.markDownloadQueueTaskPaused(taskId)
+            downloadQueueRepository.markDownloadQueueTaskPaused(taskId)
         }
     }
 
     fun markDownloadQueueTaskCanceled(taskId: String) {
         blocking {
-            dlsiteRepository.markDownloadQueueTaskCanceled(taskId)
+            downloadQueueRepository.markDownloadQueueTaskCanceled(taskId)
         }
     }
 
     fun markDownloadQueueTaskPending(taskId: String) {
         blocking {
-            dlsiteRepository.markDownloadQueueTaskPending(taskId)
+            downloadQueueRepository.markDownloadQueueTaskPending(taskId)
         }
     }
 
     fun pauseQueuedDownload(workId: String): DlsiteDownloadQueueTask? = blocking {
-        dlsiteRepository.pauseQueuedDownload(workId)
+        downloadQueueRepository.pauseQueuedDownload(workId)
     }
 
     fun cancelQueuedDownload(workId: String): DlsiteDownloadQueueTask? = blocking {
-        dlsiteRepository.cancelQueuedDownload(workId)
+        downloadQueueRepository.cancelQueuedDownload(workId)
     }
 
     fun markDownloading(work: DlsiteWork, optionId: String, optionTitle: String?) {

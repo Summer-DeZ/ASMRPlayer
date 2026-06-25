@@ -3,13 +3,16 @@
 
 # UI Design
 
-ASMRPlayer 当前界面以 `DOCS/ASMRDesign/exports/ASMRPlayer-App-standalone.html` 展示的应用效果为视觉基准，并以 `DOCS/ASMRDesign/tokens/`、`DOCS/ASMRDesign/ui_kits/app/*.jsx` 中的设计系统作为实现参照。
+ASMRPlayer 当前界面以 `DOCS/design/exports/asmr-player-app-standalone.html` 展示的应用效果为视觉基准，并以 `DOCS/design/tokens/`、`DOCS/design/ui-kits/app/*.jsx` 及 `DOCS/design/components/` 中的设计系统作为实现参照。
 
-## 设计校验锚点
-
-- 后续维护 UI 蓝图时，以可见模拟器中的实际 Compose 界面为准，并用 UI Probe 选区确认目标区域对应的 `selected.id`、`label`、`sourceHint` 和截图。
-- UI Probe 只作为定位和校验手段，不属于正式 UI 视觉蓝图；具体启动、安装、读取 JSON 和截图命令写在 `DOCS/README.md` 的 UI Probe 工作流中。
-- 改动当前 UI 后，本文件只记录已经落地的布局、视觉规则和交互形态；需要长期保留的截图、mockup 或设计资产放入 `DOCS/design/`。
+## 设计资产索引
+- `DOCS/design/exports/asmr-player-app-standalone.html`：应用主界面原型（单页）
+- `DOCS/design/styles.css`：主样式变量与页面层级
+- `DOCS/design/tokens/`：字体、色彩、间距、阴影、圆角和动效令牌
+- `DOCS/design/guidelines/`：配色、字体、动效、半径与层级规范文档
+- `DOCS/design/components/`：按钮、开关、搜索、进度条、卡片、媒体展示等组件快照与文档
+- `DOCS/design/ui-kits/`：应用关键 Screen 原型（`readme.md`、`index.html`、原型页面 `*.jsx`）
+- `DOCS/design/assets/`：logo 等可复用视觉资源
 
 ## 全局视觉
 
@@ -20,7 +23,7 @@ ASMRPlayer 当前界面以 `DOCS/ASMRDesign/exports/ASMRPlayer-App-standalone.ht
 - 字体映射：Android 端使用系统 Sans/Serif/Mono 对应设计包的 Hanken Grotesk、Instrument Serif、JetBrains Mono；标题和播放器主字幕优先使用 Serif 风格，编号、时间和进度信息优先使用 Mono 风格。
 - 形态规则：卡片使用 20-36dp 大圆角，按钮和 chip 接近 pill；页面卡片使用暗色 surface、细边框和低调阴影。
 - 动效规则：展开、切换、播放状态高亮使用慢速柔和动画；播放中状态使用 `WaveBars`，播放时竖条错峰循环，暂停时保持低高度。
-- 图标规则：主要导航、播放器和状态图标使用 ASMRDesign 中的 Lucide outline 风格；Android 无直接等价图标时使用 Compose Canvas 复刻。
+- 图标规则：主要导航、播放器和状态图标使用 `DOCS/design` 中的 Lucide outline 风格；Android 无直接等价图标时使用 Compose Canvas 复刻。
 
 ## 应用壳
 
@@ -66,7 +69,7 @@ ASMRPlayer 当前界面以 `DOCS/ASMRDesign/exports/ASMRPlayer-App-standalone.ht
 - 未解析内容的作品卡右侧显示小号同步图标按钮，不显示文字；点击后解析并缓存 DLsite 可下载目录，不弹出二级内容选择页。
 - 已解析内容的作品卡采用类似资料库播放列表的 accordion 交互，右侧显示展开/收起箭头，不再显示“已解析”文字；点按作品卡头部展开或合上内容清单，内容下载中或下载完成后仍保持同一套 accordion 目录样式。
 - 展开后的作品卡在卡片内展示 `contentsByWork` 中该作品的全部下载内容；内容级下载任务不会把作品卡头部切换成整卡下载态或整体已下载态，正在下载的内容项在自身行下方显示进度线，方便继续下载其它内容；内容行左侧原音乐图标位置显示下载状态勾选图标，未下载为灰色，已下载使用全局强调色，右侧只保留单行下载/删除/重试/暂停/继续或进行中状态。
-- DLsite 页面只在品牌标识和账号连接感知上使用蓝色，其余操作图标、按钮状态和展开控制遵循全局 ASMRDesign 暖橙强调。
+- DLsite 页面只在品牌标识和账号连接感知上使用蓝色，其余操作图标、按钮状态和展开控制遵循全局 `DOCS/design` 暖橙强调。
 
 ## 设置
 

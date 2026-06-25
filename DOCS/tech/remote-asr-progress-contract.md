@@ -1,5 +1,5 @@
 > 当前软件版本：1.6.1（versionCode 22）
-> 文档更新日期：2026-06-24
+> 文档更新日期：2026-06-25
 
 # Remote ASR Progress Contract
 

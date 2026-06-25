@@ -1,4 +1,4 @@
-package io.github.summerdez.asmrplayer.ui.theme
+package io.github.summerdez.asmrplayer.domain.model
 
 enum class AppThemeMode {
     DARK,

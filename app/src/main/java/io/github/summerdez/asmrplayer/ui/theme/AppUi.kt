@@ -19,6 +19,7 @@ import android.widget.LinearLayout
 import android.widget.TextView
 import androidx.core.view.WindowCompat
 import io.github.summerdez.asmrplayer.R
+import io.github.summerdez.asmrplayer.domain.model.AppThemeMode
 import kotlin.math.max
 
 class AppUi private constructor() {

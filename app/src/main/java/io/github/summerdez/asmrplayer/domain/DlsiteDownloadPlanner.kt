@@ -1,10 +1,11 @@
 package io.github.summerdez.asmrplayer.domain
 
-import io.github.summerdez.asmrplayer.data.remote.DlsiteJsonParser
+import io.github.summerdez.asmrplayer.domain.model.DlsiteContentFile
 import io.github.summerdez.asmrplayer.domain.model.DlsiteDownloadOption
+import io.github.summerdez.asmrplayer.domain.model.DlsiteZiptree
 
 object DlsiteDownloadPlanner {
-    fun optionsFor(ziptree: DlsiteJsonParser.DlsiteZiptree): List<DlsiteDownloadOption> {
+    fun optionsFor(ziptree: DlsiteZiptree): List<DlsiteDownloadOption> {
         val files = ziptree.audioFiles
         if (files.isEmpty()) {
             return emptyList()
@@ -12,7 +13,7 @@ object DlsiteDownloadPlanner {
 
         val parentPaths = files.map { parentPath(it.displayPath) }
         val commonPrefix = commonDirectoryPrefix(parentPaths)
-        val byDirectory = linkedMapOf<List<String>, MutableList<DlsiteJsonParser.ContentFile>>()
+        val byDirectory = linkedMapOf<List<String>, MutableList<DlsiteContentFile>>()
         files.forEach { file ->
             val groupPath = selectableDirectoryPath(parentPath(file.displayPath), commonPrefix)
             byDirectory.getOrPut(groupPath) { mutableListOf() }.add(file)
