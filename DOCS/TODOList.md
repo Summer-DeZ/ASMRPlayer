@@ -40,6 +40,7 @@
 - [x] 需要做：Phase F `data/remote` Kotlin 化第三切片：`DlsiteHtmlParser`、`DlsiteWebvttJsonParser` 迁移为 Kotlin `object`，通过 `@JvmStatic` 保持 Java/Kotlin 静态解析入口，保留 HTML 链接/封面解析、WebVTT JSON 时间轴转换和字幕解析异常包装语义。
 - [x] 需要做：Phase F `data/remote` Kotlin 化第四切片：`DlsiteJsonParser` facade 与 `DlsiteHttpClient` 迁移为 Kotlin，保留 Java 静态 parser 入口、嵌套结果类字段/构造器、HTTP 实例方法和 `successfulText` / `bodyString` 静态 helper，并补充 `parseWorkDetail` 可返回 null 的兼容测试。
 - [x] 需要做：Phase F `data/remote` Kotlin 化第五切片：`DlsiteLibraryJsonParser`、`DlsiteWorkRemote` 迁移为 Kotlin，保留购买记录 JSON 解析异常包装、可下载音声过滤、封面 URL 归一化、购买列表分块拉取、去重合并和最近浏览 fallback 语义。
+- [x] 需要做：Phase F `data/remote` Kotlin 化第六切片：`DlsiteJsonSupport`、`DlsiteCoverRemote` 迁移为 Kotlin，保留 JSON reader/类型转换/escape 行为和封面下载 resolve、sniff、extension、interrupt 语义。
 - [ ] 后续做：Phase C 继续评估 `PlaybackCommandClient` 播放位置 ticker 的收敛方式，并收敛重复快照数据类和手工字段搬运。
 - [ ] 后续做：Phase D 继续处理其它剩余 service-locator 去耦，逐步收敛到注入的仓库/服务边界。
 - [ ] 后续做：Phase E 继续拆分 `ASMRPlayerApp.kt` 组合根和巨型 Screen 文件。
