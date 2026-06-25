@@ -83,9 +83,10 @@ class AiSubtitleGenerationService : Service() {
             return
         }
         aiSubtitleTaskStateStore.publish(target, AiSubtitleStage.TRANSCRIBING)
+        val task = aiSubtitleTaskStateStore.taskFor(target.trackId) ?: return
         startForeground(
             AiSubtitleNotifications.NOTIFICATION_ID,
-            AiSubtitleNotifications.build(this, aiSubtitleTaskStateStore.taskFor(target.trackId)!!),
+            AiSubtitleNotifications.build(this, task),
         )
         jobs[target.trackId] = scope.launch {
             runGeneration(target, forceRegenerate)

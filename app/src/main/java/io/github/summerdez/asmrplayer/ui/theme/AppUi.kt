@@ -123,8 +123,8 @@ class AppUi private constructor() {
             SHEET_MATERIAL = nextPalette.sheetMaterial
         }
 
-        fun horizontalRow(context: Context?): LinearLayout {
-            val row = LinearLayout(context!!)
+        fun horizontalRow(context: Context): LinearLayout {
+            val row = LinearLayout(context)
             row.orientation = LinearLayout.HORIZONTAL
             row.gravity = Gravity.CENTER
             return row
@@ -137,14 +137,14 @@ class AppUi private constructor() {
             )
         }
 
-        fun matchWrapWithTop(context: Context?, topDp: Int): LinearLayout.LayoutParams {
+        fun matchWrapWithTop(context: Context, topDp: Int): LinearLayout.LayoutParams {
             val params = matchWrap()
             params.topMargin = dp(context, topDp)
             return params
         }
 
-        fun compactTitleText(context: Context?, text: String?): TextView {
-            val view = TextView(context!!)
+        fun compactTitleText(context: Context, text: String?): TextView {
+            val view = TextView(context)
             view.text = text
             view.setTextColor(LABEL)
             view.textSize = TEXT_HEADLINE.toFloat()
@@ -153,8 +153,8 @@ class AppUi private constructor() {
             return view
         }
 
-        fun pageTitle(context: Context?, text: String?): TextView {
-            val view = TextView(context!!)
+        fun pageTitle(context: Context, text: String?): TextView {
+            val view = TextView(context)
             view.text = text
             view.setTextColor(LABEL)
             view.textSize = TEXT_LARGE_TITLE.toFloat()
@@ -164,8 +164,8 @@ class AppUi private constructor() {
             return view
         }
 
-        fun compactSubtitleText(context: Context?, text: String?): TextView {
-            val view = TextView(context!!)
+        fun compactSubtitleText(context: Context, text: String?): TextView {
+            val view = TextView(context)
             view.text = text
             view.setTextColor(LABEL2)
             view.textSize = TEXT_FOOTNOTE.toFloat()
@@ -174,8 +174,8 @@ class AppUi private constructor() {
             return view
         }
 
-        fun iconView(context: Context?, drawableRes: Int, tintColor: Int, iconDp: Int): ImageView {
-            val view = ImageView(context!!)
+        fun iconView(context: Context, drawableRes: Int, tintColor: Int, iconDp: Int): ImageView {
+            val view = ImageView(context)
             view.setImageResource(drawableRes)
             view.imageTintList = ColorStateList.valueOf(tintColor)
             view.scaleType = ImageView.ScaleType.CENTER
@@ -185,8 +185,8 @@ class AppUi private constructor() {
             return view
         }
 
-        fun iconButton(context: Context?, drawableRes: Int, tintColor: Int, iconDp: Int): ImageButton {
-            val button = ImageButton(context!!)
+        fun iconButton(context: Context, drawableRes: Int, tintColor: Int, iconDp: Int): ImageButton {
+            val button = ImageButton(context)
             button.setImageResource(drawableRes)
             button.imageTintList = ColorStateList.valueOf(tintColor)
             button.scaleType = ImageView.ScaleType.CENTER
@@ -200,8 +200,8 @@ class AppUi private constructor() {
             return button
         }
 
-        fun miniCoverView(context: Context?, index: Int): TextView {
-            val view = TextView(context!!)
+        fun miniCoverView(context: Context, index: Int): TextView {
+            val view = TextView(context)
             view.text = index.toString()
             view.setTextColor(LABEL3)
             view.textSize = 24f
@@ -211,8 +211,8 @@ class AppUi private constructor() {
             return view
         }
 
-        fun coverView(context: Context?, coverUri: String?, sizeDp: Int, selected: Boolean): FrameLayout {
-            val cover = FrameLayout(context!!)
+        fun coverView(context: Context, coverUri: String?, sizeDp: Int, selected: Boolean): FrameLayout {
+            val cover = FrameLayout(context)
             cover.background = coverBackground(context, selected)
             cover.clipToOutline = true
 
@@ -220,7 +220,7 @@ class AppUi private constructor() {
                 val image = ImageView(context)
                 image.scaleType = ImageView.ScaleType.CENTER_CROP
                 try {
-                    image.setImageURI(Uri.parse(coverUri!!))
+                    image.setImageURI(Uri.parse(coverUri.orEmpty()))
                 } catch (_: SecurityException) {
                 } catch (_: IllegalArgumentException) {
                 }
@@ -249,8 +249,8 @@ class AppUi private constructor() {
             return cover
         }
 
-        fun subtitleLineText(context: Context?, color: Int, textSize: Float): TextView {
-            val view = TextView(context!!)
+        fun subtitleLineText(context: Context, color: Int, textSize: Float): TextView {
+            val view = TextView(context)
             view.setTextColor(color)
             view.textSize = textSize
             view.gravity = Gravity.LEFT
@@ -260,8 +260,8 @@ class AppUi private constructor() {
             return view
         }
 
-        fun transparentTextButton(context: Context?, text: String?): Button {
-            val button = Button(context!!)
+        fun transparentTextButton(context: Context, text: String?): Button {
+            val button = Button(context)
             button.text = text
             button.isAllCaps = false
             button.textSize = 22f
@@ -272,8 +272,8 @@ class AppUi private constructor() {
             return button
         }
 
-        fun compactButton(context: Context?, text: String?): Button {
-            val button = Button(context!!)
+        fun compactButton(context: Context, text: String?): Button {
+            val button = Button(context)
             button.text = text
             button.isAllCaps = false
             button.textSize = 15f
@@ -283,8 +283,8 @@ class AppUi private constructor() {
             return button
         }
 
-        fun rowWithDivider(context: Context?, row: View?, leftInsetDp: Int): View {
-            val container = LinearLayout(context!!)
+        fun rowWithDivider(context: Context, row: View?, leftInsetDp: Int): View {
+            val container = LinearLayout(context)
             container.orientation = LinearLayout.VERTICAL
             container.setBackgroundColor(Color.TRANSPARENT)
             container.addView(row, matchWrap())
@@ -292,8 +292,8 @@ class AppUi private constructor() {
             return container
         }
 
-        fun listDivider(context: Context?, leftInsetDp: Int): View {
-            val divider = View(context!!)
+        fun listDivider(context: Context, leftInsetDp: Int): View {
+            val divider = View(context)
             divider.setBackgroundColor(SEPARATOR)
             val params = LinearLayout.LayoutParams(
                 LinearLayout.LayoutParams.MATCH_PARENT,
@@ -305,11 +305,11 @@ class AppUi private constructor() {
             return divider
         }
 
-        fun materialBackground(context: Context?, fillColor: Int, radiusDp: Int): GradientDrawable {
+        fun materialBackground(context: Context, fillColor: Int, radiusDp: Int): GradientDrawable {
             return cardBackground(context, fillColor, SEPARATOR, 1, radiusDp)
         }
 
-        fun topRoundedBackground(context: Context?, fillColor: Int, radiusDp: Int): GradientDrawable {
+        fun topRoundedBackground(context: Context, fillColor: Int, radiusDp: Int): GradientDrawable {
             val drawable = GradientDrawable()
             drawable.setColor(fillColor)
             val radius = dp(context, radiusDp).toFloat()
@@ -327,7 +327,7 @@ class AppUi private constructor() {
         }
 
         fun cardBackground(
-            context: Context?,
+            context: Context,
             fillColor: Int,
             strokeColor: Int,
             strokeDp: Int,
@@ -342,7 +342,7 @@ class AppUi private constructor() {
             return drawable
         }
 
-        private fun coverBackground(context: Context?, selected: Boolean): GradientDrawable {
+        private fun coverBackground(context: Context, selected: Boolean): GradientDrawable {
             val drawable = GradientDrawable(
                 GradientDrawable.Orientation.TL_BR,
                 intArrayOf(GRAY5, GRAY4),
@@ -352,8 +352,8 @@ class AppUi private constructor() {
             return drawable
         }
 
-        fun dp(context: Context?, value: Int): Int {
-            return Math.round(value * context!!.resources.displayMetrics.density)
+        fun dp(context: Context, value: Int): Int {
+            return Math.round(value * context.resources.displayMetrics.density)
         }
     }
 }

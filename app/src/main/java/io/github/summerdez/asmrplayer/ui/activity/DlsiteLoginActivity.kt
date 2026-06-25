@@ -30,14 +30,12 @@ open class DlsiteLoginActivity : AppCompatActivity() {
         setContentView(buildUi())
         configureWebView()
         registerBackHandler()
-        webView!!.loadUrl(DlsiteClient.LOGIN_URL)
+        webView?.loadUrl(DlsiteClient.LOGIN_URL)
     }
 
     override fun onDestroy() {
-        if (webView != null) {
-            webView!!.destroy()
-            webView = null
-        }
+        webView?.destroy()
+        webView = null
         super.onDestroy()
     }
 
@@ -46,8 +44,8 @@ open class DlsiteLoginActivity : AppCompatActivity() {
             this,
             object : OnBackPressedCallback(true) {
                 override fun handleOnBackPressed() {
-                    if (webView != null && webView!!.canGoBack()) {
-                        webView!!.goBack()
+                    if (webView?.canGoBack() == true) {
+                        webView?.goBack()
                         return
                     }
                     finishWithResult()
@@ -111,7 +109,7 @@ open class DlsiteLoginActivity : AppCompatActivity() {
         )
 
         progressView = View(this)
-        progressView!!.setBackgroundColor(AppUi.ACCENT)
+        progressView?.setBackgroundColor(AppUi.ACCENT)
         content.addView(
             progressView,
             LinearLayout.LayoutParams(
@@ -137,7 +135,7 @@ open class DlsiteLoginActivity : AppCompatActivity() {
         cookieManager.setAcceptCookie(true)
         cookieManager.setAcceptThirdPartyCookies(webView, true)
 
-        val settings = webView!!.settings
+        val settings = webView?.settings ?: return
         settings.javaScriptEnabled = true
         settings.domStorageEnabled = true
         settings.databaseEnabled = true
@@ -148,14 +146,14 @@ open class DlsiteLoginActivity : AppCompatActivity() {
         settings.allowContentAccess = false
         settings.mixedContentMode = WebSettings.MIXED_CONTENT_NEVER_ALLOW
 
-        webView!!.webViewClient = object : WebViewClient() {
+        webView?.webViewClient = object : WebViewClient() {
             override fun onPageStarted(view: WebView?, url: String?, favicon: Bitmap?) {
-                progressView!!.visibility = View.VISIBLE
+                progressView?.visibility = View.VISIBLE
             }
 
             override fun onPageFinished(view: WebView?, url: String?) {
                 CookieManager.getInstance().flush()
-                progressView!!.visibility = View.GONE
+                progressView?.visibility = View.GONE
             }
         }
     }

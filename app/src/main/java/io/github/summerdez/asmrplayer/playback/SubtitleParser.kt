@@ -49,7 +49,7 @@ object SubtitleParser {
 
     fun textAt(cues: List<SubtitleCue>?, positionMs: Long): String? {
         val index = indexAt(cues, positionMs)
-        return if (index >= 0) cues!![index].text else ""
+        return if (index >= 0) cues?.get(index)?.text else ""
     }
 
     fun indexAt(cues: List<SubtitleCue>?, positionMs: Long): Int {
@@ -97,7 +97,8 @@ object SubtitleParser {
     @Throws(IOException::class)
     private fun readLines(resolver: ContentResolver?, uri: Uri?): List<String> {
         val lines = ArrayList<String>()
-        resolver!!.openInputStream(uri!!).use { stream ->
+        if (resolver == null || uri == null) return lines
+        resolver.openInputStream(uri).use { stream ->
             if (stream == null) {
                 return lines
             }
@@ -170,8 +171,8 @@ object SubtitleParser {
                 continue
             }
 
-            val start = parseSrtTime(matcher.group(1)!!.trim())
-            val end = parseSrtTime(matcher.group(2)!!.trim())
+            val start = parseSrtTime(matcher.group(1).orEmpty().trim())
+            val end = parseSrtTime(matcher.group(2).orEmpty().trim())
             index++
 
             val text = StringBuilder()
@@ -197,8 +198,8 @@ object SubtitleParser {
     }
 
     private fun parseLrcTime(matcher: Matcher): Long {
-        val minutes = matcher.group(1)!!.toLong()
-        val seconds = matcher.group(2)!!.toLong()
+        val minutes = matcher.group(1)?.toLong() ?: 0L
+        val seconds = matcher.group(2)?.toLong() ?: 0L
         val fraction = matcher.group(3)
         var millis = 0L
         if (fraction != null && fraction.isNotEmpty()) {

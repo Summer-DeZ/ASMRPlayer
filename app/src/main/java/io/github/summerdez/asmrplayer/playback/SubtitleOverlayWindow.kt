@@ -18,7 +18,7 @@ import android.widget.LinearLayout
 import android.widget.TextView
 import io.github.summerdez.asmrplayer.R
 
-class SubtitleOverlayWindow(context: Context?, private val listener: Listener?) {
+class SubtitleOverlayWindow(private val context: Context, private val listener: Listener?) {
     interface Listener {
         fun onPrevious()
 
@@ -35,8 +35,7 @@ class SubtitleOverlayWindow(context: Context?, private val listener: Listener?) 
         FAILED,
     }
 
-    private val context: Context = context!!
-    private val windowManager: WindowManager? = this.context.getSystemService(WindowManager::class.java)
+    private val windowManager: WindowManager? = context.getSystemService(WindowManager::class.java)
     private var rootView: LinearLayout? = null
     private var topRow: LinearLayout? = null
     private var controlsRow: LinearLayout? = null
@@ -80,7 +79,7 @@ class SubtitleOverlayWindow(context: Context?, private val listener: Listener?) 
         val spacer = View(context)
         top.addView(spacer, LinearLayout.LayoutParams(0, 1, 1f))
         val lockButton = overlayButton(R.drawable.ic_lock, 32, false)
-        lockButton.setOnClickListener { listener!!.onLock() }
+        lockButton.setOnClickListener { listener?.onLock() }
         top.addView(lockButton, LinearLayout.LayoutParams(dp(34), dp(32)))
         root.addView(
             top,
@@ -113,18 +112,18 @@ class SubtitleOverlayWindow(context: Context?, private val listener: Listener?) 
         controls.gravity = Gravity.CENTER
         controlsRow = controls
         val previousButton = overlayButton(R.drawable.ic_skip_previous, 36, true)
-        previousButton.setOnClickListener { listener!!.onPrevious() }
+        previousButton.setOnClickListener { listener?.onPrevious() }
         controls.addView(previousButton, LinearLayout.LayoutParams(dp(38), dp(38)))
 
         playPauseButton = overlayButton(R.drawable.ic_pause, 44, true)
-        playPauseButton!!.setOnClickListener { listener!!.onPlayPause() }
+        playPauseButton?.setOnClickListener { listener?.onPlayPause() }
         val playParams = LinearLayout.LayoutParams(dp(46), dp(46))
         playParams.leftMargin = dp(16)
         playParams.rightMargin = dp(16)
         controls.addView(playPauseButton, playParams)
 
         val nextButton = overlayButton(R.drawable.ic_skip_next, 36, true)
-        nextButton.setOnClickListener { listener!!.onNext() }
+        nextButton.setOnClickListener { listener?.onNext() }
         controls.addView(nextButton, LinearLayout.LayoutParams(dp(38), dp(38)))
         root.addView(
             controls,
@@ -310,7 +309,7 @@ class SubtitleOverlayWindow(context: Context?, private val listener: Listener?) 
             val layoutParams = params ?: return false
             val root = rootView ?: return false
             val manager = windowManager
-            val touchEvent = event!!
+            val touchEvent = event ?: return false
             when (touchEvent.action) {
                 MotionEvent.ACTION_DOWN -> {
                     initialX = layoutParams.x
@@ -333,7 +332,7 @@ class SubtitleOverlayWindow(context: Context?, private val listener: Listener?) 
                 }
                 MotionEvent.ACTION_UP -> {
                     if (!moved) {
-                        view!!.performClick()
+                        view?.performClick()
                     }
                     return true
                 }

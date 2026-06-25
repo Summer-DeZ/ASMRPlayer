@@ -58,8 +58,9 @@ object DocumentFiles {
     }
 
     fun urisFromResult(data: Intent?): List<Uri> {
+        data ?: return emptyList()
         val uris = ArrayList<Uri>()
-        val clipData: ClipData? = data!!.clipData
+        val clipData: ClipData? = data.clipData
         if (clipData != null) {
             for (i in 0 until clipData.itemCount) {
                 val uri = clipData.getItemAt(i).uri
@@ -67,16 +68,17 @@ object DocumentFiles {
                     uris.add(uri)
                 }
             }
-        } else if (data.data != null) {
-            uris.add(data.data!!)
+        } else {
+            data.data?.let { uris.add(it) }
         }
         return uris
     }
 
     fun persistReadPermission(context: Context?, uri: Uri?) {
+        if (context == null || uri == null) return
         try {
-            context!!.contentResolver.takePersistableUriPermission(
-                uri!!,
+            context.contentResolver.takePersistableUriPermission(
+                uri,
                 Intent.FLAG_GRANT_READ_URI_PERMISSION,
             )
         } catch (ignored: SecurityException) {
@@ -89,8 +91,9 @@ object DocumentFiles {
         if (readFlags == 0) {
             readFlags = Intent.FLAG_GRANT_READ_URI_PERMISSION
         }
+        if (context == null || uri == null) return
         try {
-            context!!.contentResolver.takePersistableUriPermission(uri!!, readFlags)
+            context.contentResolver.takePersistableUriPermission(uri, readFlags)
         } catch (ignored: SecurityException) {
         }
     }
@@ -127,9 +130,9 @@ object DocumentFiles {
     }
 
     fun displayName(context: Context?, uri: Uri?): String {
-        val targetUri = uri!!
+        val targetUri = uri ?: return ""
         if (ContentResolver.SCHEME_CONTENT == targetUri.scheme) {
-            context!!.contentResolver.query(
+            context?.contentResolver?.query(
                 targetUri,
                 arrayOf(OpenableColumns.DISPLAY_NAME),
                 null,
@@ -148,7 +151,7 @@ object DocumentFiles {
             }
         }
         val lastSegment = targetUri.lastPathSegment
-        return if (TextUtils.isEmpty(lastSegment)) targetUri.toString() else lastSegment!!
+        return if (lastSegment.isNullOrEmpty()) targetUri.toString() else lastSegment
     }
 
     fun audioDurationMs(context: Context?, uri: Uri?): Long {
@@ -159,10 +162,10 @@ object DocumentFiles {
         try {
             retriever.setDataSource(context, uri)
             val duration = retriever.extractMetadata(MediaMetadataRetriever.METADATA_KEY_DURATION)
-            if (TextUtils.isEmpty(duration)) {
+            if (duration.isNullOrEmpty()) {
                 return 0L
             }
-            return maxOf(0L, java.lang.Long.parseLong(duration!!))
+            return maxOf(0L, java.lang.Long.parseLong(duration))
         } catch (ignored: RuntimeException) {
             return 0L
         } finally {
@@ -214,7 +217,7 @@ object DocumentFiles {
         val childrenUri = DocumentsContract.buildChildDocumentsUriUsingTree(treeUri, treeDocumentId)
         val documents = ArrayList<TreeDocument>()
         try {
-            context!!.contentResolver.query(
+            context?.contentResolver?.query(
                 childrenUri,
                 FOLDER_COLUMNS,
                 null,

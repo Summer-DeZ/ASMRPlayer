@@ -13,14 +13,14 @@ object PlaybackIntents {
 
     fun playMedia(
         context: Context?,
-        audioUri: Uri?,
+        audioUri: Uri,
         title: String?,
         subtitleUri: Uri?,
         playlistId: String?,
         playlistIndex: Int,
     ): Intent {
         val intent = simpleAction(context, PlaybackService.ACTION_PLAY_MEDIA)
-        intent.putExtra(PlaybackService.EXTRA_AUDIO_URI, audioUri!!.toString())
+        intent.putExtra(PlaybackService.EXTRA_AUDIO_URI, audioUri.toString())
         intent.putExtra(PlaybackService.EXTRA_TRACK_TITLE, title)
         intent.putExtra(PlaybackService.EXTRA_PLAYLIST_ID, playlistId)
         intent.putExtra(PlaybackService.EXTRA_PLAYLIST_INDEX, playlistIndex)
@@ -36,9 +36,9 @@ object PlaybackIntents {
         return intent
     }
 
-    fun setSubtitle(context: Context?, subtitleUri: Uri?): Intent {
+    fun setSubtitle(context: Context?, subtitleUri: Uri): Intent {
         val intent = simpleAction(context, PlaybackService.ACTION_SET_SUBTITLE)
-        intent.putExtra(PlaybackService.EXTRA_SUBTITLE_URI, subtitleUri!!.toString())
+        intent.putExtra(PlaybackService.EXTRA_SUBTITLE_URI, subtitleUri.toString())
         return intent
     }
 
