@@ -15,48 +15,36 @@ class DlsiteDownloadBlockingAdapter constructor(
     private val libraryRepository: LibraryRepository,
     private val dispatcher: CoroutineDispatcher = Dispatchers.IO,
 ) {
-    fun getPlaylist(playlistId: String?): Playlist? {
-        val normalizedPlaylistId = playlistId?.takeIf { it.isNotEmpty() } ?: return null
-        return blocking {
-            libraryRepository.getPlaylist(normalizedPlaylistId)
-        }
+    fun getPlaylist(playlistId: String): Playlist? = blocking {
+        libraryRepository.getPlaylist(playlistId)
     }
 
-    fun createPlaylist(name: String?): Playlist = blocking {
-        libraryRepository.createPlaylist(name.orEmpty())
+    fun createPlaylist(name: String): Playlist = blocking {
+        libraryRepository.createPlaylist(name)
     }
 
-    fun setPlaylistCover(playlistId: String?, coverUri: String?) {
-        val normalizedPlaylistId = playlistId?.takeIf { it.isNotEmpty() } ?: return
+    fun setPlaylistCover(playlistId: String, coverUri: String) {
         blocking {
-            libraryRepository.setPlaylistCover(normalizedPlaylistId, coverUri.orEmpty())
+            libraryRepository.setPlaylistCover(playlistId, coverUri)
         }
     }
 
-    fun addTrack(playlistId: String?, track: TrackItem?) {
-        val normalizedPlaylistId = playlistId?.takeIf { it.isNotEmpty() } ?: return
-        val normalizedTrack = track ?: return
+    fun addTrack(playlistId: String, track: TrackItem) {
         blocking {
-            libraryRepository.addTrack(normalizedPlaylistId, normalizedTrack)
+            libraryRepository.addTrack(playlistId, track)
         }
     }
 
-    fun getWork(workId: String?): DlsiteWork? {
-        val normalizedWorkId = workId?.takeIf { it.isNotEmpty() } ?: return null
-        return blocking {
-            dlsiteRepository.getWork(normalizedWorkId)
-        }
+    fun getWork(workId: String): DlsiteWork? = blocking {
+        dlsiteRepository.getWork(workId)
     }
 
     fun enqueueDownload(
-        work: DlsiteWork?,
+        work: DlsiteWork,
         optionIds: List<String>,
         optionTitle: String?,
-    ): DlsiteDownloadQueueTask? {
-        val normalizedWork = work?.takeIf { it.workId.isNotEmpty() } ?: return null
-        return blocking {
-            dlsiteRepository.enqueueDownload(normalizedWork, optionIds, optionTitle)
-        }
+    ): DlsiteDownloadQueueTask? = blocking {
+        dlsiteRepository.enqueueDownload(work, optionIds, optionTitle)
     }
 
     fun pendingDownloadQueueTasks(limit: Int): List<DlsiteDownloadQueueTask> = blocking {
@@ -67,157 +55,131 @@ class DlsiteDownloadBlockingAdapter constructor(
         dlsiteRepository.resetRunningDownloadQueue()
     }
 
-    fun markDownloadQueueTaskRunning(taskId: String?): DlsiteDownloadQueueTask? {
-        val normalizedTaskId = taskId?.takeIf { it.isNotEmpty() } ?: return null
-        return blocking {
-            dlsiteRepository.markDownloadQueueTaskRunning(normalizedTaskId)
-        }
+    fun markDownloadQueueTaskRunning(taskId: String): DlsiteDownloadQueueTask? = blocking {
+        dlsiteRepository.markDownloadQueueTaskRunning(taskId)
     }
 
-    fun markDownloadQueueTaskCompleted(taskId: String?) {
-        val normalizedTaskId = taskId?.takeIf { it.isNotEmpty() } ?: return
+    fun markDownloadQueueTaskCompleted(taskId: String) {
         blocking {
-            dlsiteRepository.markDownloadQueueTaskCompleted(normalizedTaskId)
+            dlsiteRepository.markDownloadQueueTaskCompleted(taskId)
         }
     }
 
-    fun markDownloadQueueTaskFailed(taskId: String?, error: String?) {
-        val normalizedTaskId = taskId?.takeIf { it.isNotEmpty() } ?: return
+    fun markDownloadQueueTaskFailed(taskId: String, error: String?) {
         blocking {
-            dlsiteRepository.markDownloadQueueTaskFailed(normalizedTaskId, error)
+            dlsiteRepository.markDownloadQueueTaskFailed(taskId, error)
         }
     }
 
-    fun markDownloadQueueTaskPaused(taskId: String?) {
-        val normalizedTaskId = taskId?.takeIf { it.isNotEmpty() } ?: return
+    fun markDownloadQueueTaskPaused(taskId: String) {
         blocking {
-            dlsiteRepository.markDownloadQueueTaskPaused(normalizedTaskId)
+            dlsiteRepository.markDownloadQueueTaskPaused(taskId)
         }
     }
 
-    fun markDownloadQueueTaskCanceled(taskId: String?) {
-        val normalizedTaskId = taskId?.takeIf { it.isNotEmpty() } ?: return
+    fun markDownloadQueueTaskCanceled(taskId: String) {
         blocking {
-            dlsiteRepository.markDownloadQueueTaskCanceled(normalizedTaskId)
+            dlsiteRepository.markDownloadQueueTaskCanceled(taskId)
         }
     }
 
-    fun markDownloadQueueTaskPending(taskId: String?) {
-        val normalizedTaskId = taskId?.takeIf { it.isNotEmpty() } ?: return
+    fun markDownloadQueueTaskPending(taskId: String) {
         blocking {
-            dlsiteRepository.markDownloadQueueTaskPending(normalizedTaskId)
+            dlsiteRepository.markDownloadQueueTaskPending(taskId)
         }
     }
 
-    fun pauseQueuedDownload(workId: String?): DlsiteDownloadQueueTask? {
-        val normalizedWorkId = workId?.takeIf { it.isNotEmpty() } ?: return null
-        return blocking {
-            dlsiteRepository.pauseQueuedDownload(normalizedWorkId)
-        }
+    fun pauseQueuedDownload(workId: String): DlsiteDownloadQueueTask? = blocking {
+        dlsiteRepository.pauseQueuedDownload(workId)
     }
 
-    fun cancelQueuedDownload(workId: String?): DlsiteDownloadQueueTask? {
-        val normalizedWorkId = workId?.takeIf { it.isNotEmpty() } ?: return null
-        return blocking {
-            dlsiteRepository.cancelQueuedDownload(normalizedWorkId)
-        }
+    fun cancelQueuedDownload(workId: String): DlsiteDownloadQueueTask? = blocking {
+        dlsiteRepository.cancelQueuedDownload(workId)
     }
 
-    fun markDownloading(work: DlsiteWork?, optionId: String?, optionTitle: String?) {
-        val normalizedWork = work?.takeIf { it.workId.isNotEmpty() } ?: return
+    fun markDownloading(work: DlsiteWork, optionId: String, optionTitle: String?) {
         blocking {
-            dlsiteRepository.markDownloading(normalizedWork, optionId.orEmpty(), optionTitle)
+            dlsiteRepository.markDownloading(work, optionId, optionTitle)
         }
     }
 
-    fun markQueued(work: DlsiteWork?, optionIds: List<String>, optionTitle: String?) {
-        val normalizedWork = work?.takeIf { it.workId.isNotEmpty() } ?: return
+    fun markQueued(work: DlsiteWork, optionIds: List<String>, optionTitle: String?) {
         blocking {
-            dlsiteRepository.markQueued(normalizedWork, optionIds, optionTitle)
+            dlsiteRepository.markQueued(work, optionIds, optionTitle)
         }
     }
 
-    fun markPaused(work: DlsiteWork?) {
-        val normalizedWork = work?.takeIf { it.workId.isNotEmpty() } ?: return
+    fun markPaused(work: DlsiteWork) {
         blocking {
-            dlsiteRepository.markPaused(normalizedWork)
+            dlsiteRepository.markPaused(work)
         }
     }
 
-    fun markDownloaded(work: DlsiteWork?, playlistId: String?, localPath: String?, trackCount: Int) {
-        val normalizedWork = work?.takeIf { it.workId.isNotEmpty() } ?: return
+    fun markDownloaded(work: DlsiteWork, playlistId: String, localPath: String, trackCount: Int) {
         blocking {
-            dlsiteRepository.markDownloaded(normalizedWork, playlistId.orEmpty(), localPath.orEmpty(), trackCount)
+            dlsiteRepository.markDownloaded(work, playlistId, localPath, trackCount)
         }
     }
 
-    fun markImported(work: DlsiteWork?, playlistId: String?, localPath: String?, trackCount: Int) {
-        val normalizedWork = work?.takeIf { it.workId.isNotEmpty() } ?: return
+    fun markImported(work: DlsiteWork, playlistId: String, localPath: String, trackCount: Int) {
         blocking {
-            dlsiteRepository.markImported(normalizedWork, playlistId.orEmpty(), localPath.orEmpty(), trackCount)
+            dlsiteRepository.markImported(work, playlistId, localPath, trackCount)
         }
     }
 
-    fun markFailed(work: DlsiteWork?, error: String?) {
-        val normalizedWork = work?.takeIf { it.workId.isNotEmpty() } ?: return
+    fun markFailed(work: DlsiteWork, error: String?) {
         blocking {
-            dlsiteRepository.markFailed(normalizedWork, error)
+            dlsiteRepository.markFailed(work, error)
         }
     }
 
-    fun markCacheDeleted(work: DlsiteWork?) {
-        val normalizedWork = work?.takeIf { it.workId.isNotEmpty() } ?: return
+    fun markCacheDeleted(work: DlsiteWork) {
         blocking {
-            dlsiteRepository.markCacheDeleted(normalizedWork)
+            dlsiteRepository.markCacheDeleted(work)
         }
     }
 
-    fun markContentQueued(workId: String?, optionIds: List<String>) {
-        val normalizedWorkId = workId?.takeIf { it.isNotEmpty() } ?: return
+    fun markContentQueued(workId: String, optionIds: List<String>) {
         blocking {
-            dlsiteRepository.markContentQueued(normalizedWorkId, optionIds)
+            dlsiteRepository.markContentQueued(workId, optionIds)
         }
     }
 
-    fun markContentDownloading(workId: String?, optionId: String?) {
-        val normalizedWorkId = workId?.takeIf { it.isNotEmpty() } ?: return
+    fun markContentDownloading(workId: String, optionId: String) {
         blocking {
-            dlsiteRepository.markContentDownloading(normalizedWorkId, optionId.orEmpty())
+            dlsiteRepository.markContentDownloading(workId, optionId)
         }
     }
 
     fun markContentDownloaded(
-        workId: String?,
-        optionId: String?,
+        workId: String,
+        optionId: String,
         optionTitle: String?,
-        localPath: String?,
+        localPath: String,
         trackIds: List<String>,
         trackCount: Int,
     ) {
-        val normalizedWorkId = workId?.takeIf { it.isNotEmpty() } ?: return
         blocking {
             dlsiteRepository.markContentDownloaded(
-                normalizedWorkId,
-                optionId.orEmpty(),
+                workId,
+                optionId,
                 optionTitle,
-                localPath.orEmpty(),
+                localPath,
                 trackIds,
                 trackCount,
             )
         }
     }
 
-    fun markContentFailed(workId: String?, optionId: String?, error: String?) {
-        val normalizedWorkId = workId?.takeIf { it.isNotEmpty() } ?: return
+    fun markContentFailed(workId: String, optionId: String, error: String?) {
         blocking {
-            dlsiteRepository.markContentFailed(normalizedWorkId, optionId.orEmpty(), error)
+            dlsiteRepository.markContentFailed(workId, optionId, error)
         }
     }
 
-    fun markContentPaused(workId: String?, optionIds: List<String>) {
-        val normalizedWorkId = workId?.takeIf { it.isNotEmpty() } ?: return
+    fun markContentPaused(workId: String, optionIds: List<String>) {
         blocking {
-            dlsiteRepository.markContentPaused(normalizedWorkId, optionIds)
+            dlsiteRepository.markContentPaused(workId, optionIds)
         }
     }
 

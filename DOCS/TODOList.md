@@ -12,7 +12,7 @@
 - [x] 需要做：删除 `DbIo.runBlocking` 桥接层，Repository DB 写入和必要快照读取改为 `suspend` + IO 调度。
 - [x] 需要做：资料库和 DLsite ViewModel 删除命令式 `sync/refresh` DB 二次拉取，状态来源改为 Room `Flow`。
 - [x] 需要做：文件导入、文件夹导入、字幕绑定、曲目移动、DLsite 下载操作和 AI 设置写入改为 ViewModel coroutine 调用，并用事件回传一次性 UI 结果。
-- [x] 需要做：DLsite Java 下载服务/Task 通过明确的后台 blocking adapter 过渡，阻塞边界放在调度线程或下载 worker，不回到 UI 主线程。
+- [x] 需要做：DLsite 下载服务/Task 通过明确的后台 blocking adapter 过渡，阻塞边界放在调度线程或下载 worker，不回到 UI 主线程。
 - [x] 需要做：本轮触碰的热点 Kotlin 文件清理全家桶 wildcard import，并删除旧 `DbIoTest`。
 - [x] 需要做：Phase C 第一切片：`MediaSession.sessionExtras` 承载 playlist identity、字幕、悬浮窗和错误等自定义低频播放状态，`PlaybackViewModel` 优先使用 `PlaybackCommandClient` 快照。
 - [x] 需要做：Phase C 设置页切片：`SettingsViewModel` 的悬浮窗状态改为从 `PlaybackCommandClient.snapshots` 派生。
@@ -31,7 +31,7 @@
 - [x] 需要做：Phase D/A5 前台 Service dependency bundle 切片：`AppContainer` 为更新下载、AI 字幕生成和 DLsite 下载分别提供只含所需协作者的 Service dependencies，Service 不再逐个从容器挑 repository/store/API。
 - [x] 需要做：Phase D/A5 PlaybackService dependency bundle 切片：`AppContainer` 提供 `PlaybackServiceDependencies`，`PlaybackService` 通过该 bundle 获取 `PlaybackPlaylistResolver`，不再直接从容器挑 resolver。
 - [x] 需要做：Phase E/A7 第一切片：抽出 `DlsiteDownloadQueueRepository` 管理 DLsite 持久下载队列状态机，`RoomDlsiteRepository` 暂时保留队列 API 并委托给新 repository。
-- [x] 需要做：Phase E/A7 远程源切片：抽出 `DlsiteRemoteSource` 承接 DLsite 网络 adapter，`RoomDlsiteRepository` 只依赖远程源接口，并保留 `DlsiteApi` 作为 Java 下载服务/Task 兼容门面。
+- [x] 需要做：Phase E/A7 远程源切片：抽出 `DlsiteRemoteSource` 承接 DLsite 网络 adapter，`RoomDlsiteRepository` 只依赖远程源接口，并保留 `DlsiteApi` 作为下载服务/Task 兼容门面。
 - [x] 需要做：Phase E/A7 第二切片：抽出 `DlsiteLocalStore` 承接 DLsite Room/DB/Flow 本地存储职责，`RoomDlsiteRepository` 只保留协调门面并委托本地、远程、队列和下载状态依赖。
 - [x] 需要做：Phase E/D2 文件导入 use-case 第一片：`LibraryFileImportUseCase` 承接音频多选导入和文件夹导入 IO/业务编排，`LibraryViewModel` 保留原 public API 并只负责事件映射。
 - [x] 需要做：Phase E/D2 文件导入 use-case 第二片：字幕绑定 IO 编排已下沉到 `LibraryFileImportUseCase`，`LibraryViewModel` 保留原 public API 并只负责 pending target、选中列表刷新和 `SubtitleBound` 事件映射。
@@ -50,8 +50,8 @@
 - [x] 需要做：Phase F `data/download` 模块切片：`DlsiteDownloadService`、`DlsiteDownloadTask`、`DlsiteDownloadNotifications` 整体迁移为 Kotlin，保留前台下载 Service、队列状态机、通知、下载导入、进度聚合和 Java 单测字段 ABI。
 - [x] 需要做：Phase F `playback` 模块切片：`PlaybackIntents`、`SubtitleCue`、`SubtitleParser`、`SubtitleOverlayWindow` 整体迁移为 Kotlin，保留播放 intent、字幕解析/查找、悬浮字幕窗口和 `SubtitleCue` 字段 ABI。
 - [x] 需要做：Phase F legacy UI 切片：`AppThemeMode`、`AppThemePalette`、`AppUi` 和 `DlsiteLoginActivity` 迁移为 Kotlin，主源码 Java 文件清零，并保留主题静态字段、WebView 登录和系统栏行为。
-- [x] 需要做：Phase F/C3 第一切片：收紧 `LibraryRepository` nullable API 边界，playlist/track/subtitle/cover/selected playlist 相关入参改为非空 Kotlin 类型，Room 实现只保留空字符串业务校验；DLsite 下载 blocking adapter 保留 nullable 兼容入口并在 adapter 内过滤/归一化。
-- [x] 需要做：Phase F/C3 第二切片：收紧 `DlsiteRepository`、`DlsiteLocalStore` 和 `DlsiteDownloadQueueRepository` 的 identity/required nullable API 边界，`workId`、`taskId`、`optionId`、`DlsiteWork` 与 `saveWork(updatedWork)` 等入参改为非空 Kotlin 类型；`DlsiteDownloadBlockingAdapter` 保留 nullable 历史边界并在进入 repository 前过滤或归一化。
+- [x] 需要做：Phase F/C3 第一切片：收紧 `LibraryRepository` nullable API 边界，playlist/track/subtitle/cover/selected playlist 相关入参改为非空 Kotlin 类型，Room 实现只保留空字符串业务校验；DLsite 下载 blocking adapter 当时作为运行时边界继续归一化外部输入。
+- [x] 需要做：Phase F/C3 第二切片：收紧 `DlsiteRepository`、`DlsiteLocalStore` 和 `DlsiteDownloadQueueRepository` 的 identity/required nullable API 边界，`workId`、`taskId`、`optionId`、`DlsiteWork` 与 `saveWork(updatedWork)` 等入参改为非空 Kotlin 类型；后续切片继续把 `DlsiteDownloadBlockingAdapter` 从 nullable 历史边界收紧为内部非空链路。
 - [x] 需要做：Phase F/C3 Kotlin-native model 清理切片：`TrackItem` 与 `Playlist` 删除迁移期 `@JvmOverloads`、字段 `@JvmField` 和 nullable 构造语义，构造参数改为非空 Kotlin 类型并保留 `Playlist(id, name)`、`Playlist(id, name, tracks)`、`Playlist(id, name, coverUri, tracks)`、`copy(...)` 与 JSON 行为。
 - [x] 需要做：Phase F/C3 DLsite 下载 DTO Kotlin-native 清理切片：`DlsiteDownloadOption` 与 `DlsiteJsonParser.ContentCount`、`DlsiteZiptree`、`ContentFile` 删除迁移期字段 `@JvmField` 和 nullable 构造语义，唯一剩余 Java 单测迁为 Kotlin，`app/src` Java 文件清零。
 - [x] 需要做：Phase F/C3 DLsite 核心 model JVM ABI 清理切片：`DlsiteWork` 删除构造器 `@JvmOverloads` 和字段 `@JvmField`，`DlsiteDownloadQueueTask` 删除字段 `@JvmField`，保留 data class 默认参数、copy、JSON/static helper、队列 nullable 状态字段和状态转换语义。
@@ -60,8 +60,9 @@
 - [x] 需要做：Phase F/C3 主源码函数入口 ABI 清理切片：删除剩余 `@JvmStatic` 与 `@JvmOverloads`，主源码 JVM 兼容注解清零；保留 Kotlin 默认参数、`@Throws`、`const val`、object/companion 结构和所有现有 nullable 语义。
 - [x] 需要做：Phase F/C3 平台值 helper 清理切片：`SubtitleCue.text`、`DocumentFiles.FolderImportItem.audioName/audioUri/subtitleName` 与 `TreeDocument` 改为非空 Kotlin 构造语义，删除 `preserveJavaFieldValue`、`platformValue` 和 `platformFieldValue` helper；`subtitleUri` 继续保留可空表示没有匹配字幕。
 - [x] 需要做：Phase F/C3 DLsite facade 非空化切片：`DlsiteJsonParser` / `DlsiteLibraryJsonParser` / `DlsiteDownloadJsonParser` / `DlsiteWebvttJsonParser` 的完整 JSON 文本入参改为非空 `String`，`DlsiteJsonSupport.parse` 与 `JsonReader` 同步非空；JSON 字段层面的 `Any?` / `String?` 容错和 `toJsonArray` 空值编码语义保留。
-- [x] 需要做：Phase F/C3 DLsite 下载任务非空数据流切片：`DlsiteDownloadPlanner.optionsFor`、`DlsiteDownloadTask.downloadAndImport` 必填协作者、`DownloadProgressTracker`、`Result` / `ContentResult` / `DownloadedContent` / `ImportResult` 内部构造数据改为非空 Kotlin 类型；下载内容 `optionId`、回调边界和封面/错误等业务可缺失字段继续保留 nullable。
+- [x] 需要做：Phase F/C3 DLsite 下载任务非空数据流切片：`DlsiteDownloadPlanner.optionsFor`、`DlsiteDownloadTask.downloadAndImport` 必填协作者、`DownloadProgressTracker`、`Result` / `ContentResult` / `DownloadedContent` / `ImportResult` 内部构造数据改为非空 Kotlin 类型；下载内容 `optionId` 和封面/错误等业务可缺失字段在当时继续保留 nullable，后续切片已把任务回调收紧为非空。
 - [x] 需要做：Phase F/C3 DLsite remote client 非空化切片：`DlsiteClient`、`DlsiteContentRemote`、`DlsiteCoverRemote` 与 `DlsiteRemoteFiles` 的必填 `DlsiteWork`、目标文件、目录和 `DlsiteHttpClient` 注入改为非空；HTTP helper 容错和安全探测/清理 nullable 继续保留。
+- [x] 需要做：Phase F/C3 DLsite 下载内部链路非空化切片：`DlsiteDownloadBlockingAdapter`、`DownloadRequest` 和 `DlsiteDownloadTask.ContentListener` 的 required `workId`、`taskId`、`DlsiteWork`、playlist/local path、content option/result 等入参改为非空；Android Intent、伴生 intent helper、错误消息、删除入口 optionId 和文件清理入口继续作为真实 nullable 边界保留。
 - [ ] 后续做：Phase C 如继续评估播放位置/字幕链路，只处理状态边界和测试覆盖；`PlaybackCommandClient` UI position ticker 与 `PlaybackService` cue-boundary scheduler 属于不同 runtime 驱动，不作为“两个 250ms 轮询”合并。
 - [ ] 后续做：Phase D 继续处理其它剩余 service-locator 去耦，逐步收敛到注入的仓库/服务边界。
 - [ ] 后续做：Phase E 继续拆分 `ASMRPlayerApp.kt` 组合根和巨型 Screen 文件。

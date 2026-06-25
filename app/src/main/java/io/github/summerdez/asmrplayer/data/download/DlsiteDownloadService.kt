@@ -26,9 +26,9 @@ class DlsiteDownloadService : Service() {
     private val scheduler: ExecutorService = Executors.newSingleThreadExecutor { runnable ->
         Thread(runnable, "dlsite-download-scheduler")
     }
-    private var downloadRepository: DlsiteDownloadBlockingAdapter? = null
-    private var dlsiteApi: DlsiteApi? = null
-    private var dlsiteDownloadStateStore: DlsiteDownloadStateStore? = null
+    private lateinit var downloadRepository: DlsiteDownloadBlockingAdapter
+    private lateinit var dlsiteApi: DlsiteApi
+    private lateinit var dlsiteDownloadStateStore: DlsiteDownloadStateStore
     private var latestStartId = 0
     private var destroying = false
 
@@ -43,7 +43,7 @@ class DlsiteDownloadService : Service() {
         dlsiteApi = dependencies.dlsiteApi
         dlsiteDownloadStateStore = dependencies.dlsiteDownloadStateStore
         DlsiteDownloadNotifications.ensureChannel(this)
-        dispatchToScheduler({ downloadRepository!!.resetRunningDownloadQueue() }, 0)
+        dispatchToScheduler({ downloadRepository.resetRunningDownloadQueue() }, 0)
     }
 
     override fun onStartCommand(intent: Intent?, flags: Int, startId: Int): Int {
@@ -75,7 +75,7 @@ class DlsiteDownloadService : Service() {
                 optionIds.add(optionId)
             }
         }
-        val requestedOptionIds = ArrayList(optionIds)
+        val requestedOptionIds = ArrayList(optionIds.filter { it.isNotBlank() })
         dispatchToScheduler({ handleDownload(workId, requestedOptionIds, startId) }, startId)
         return START_NOT_STICKY
     }
@@ -123,7 +123,12 @@ class DlsiteDownloadService : Service() {
     }
 
     private fun handleDownload(workId: String?, optionIds: List<String>, startId: Int) {
-        val work = downloadRepository!!.getWork(workId)
+        val normalizedWorkId = workId?.takeIf { it.isNotEmpty() }
+        if (normalizedWorkId == null) {
+            stopSelf(startId)
+            return
+        }
+        val work = downloadRepository.getWork(normalizedWorkId)
         if (work == null) {
             stopSelf(startId)
             return
@@ -131,12 +136,12 @@ class DlsiteDownloadService : Service() {
         enqueueDownload(work, optionIds)
     }
 
-    private fun enqueueDownload(work: DlsiteWork, optionIds: List<String>?) {
+    private fun enqueueDownload(work: DlsiteWork, optionIds: List<String>) {
         synchronized(lock) {
-            val task = downloadRepository!!.enqueueDownload(
+            val task = downloadRepository.enqueueDownload(
                 work,
-                optionIds ?: emptyList(),
-                if (optionIds == null) "" else optionIds.size.toString() + " 个内容",
+                optionIds,
+                optionIds.size.toString() + " 个内容",
             )
             if (task == null) {
                 stopIfIdleLocked(latestStartId)
@@ -158,22 +163,22 @@ class DlsiteDownloadService : Service() {
             promoteToForeground()
         }
         while (runningWorkers.size < MAX_CONCURRENT_DOWNLOADS) {
-            val pendingTasks = downloadRepository!!.pendingDownloadQueueTasks(1)
+            val pendingTasks = downloadRepository.pendingDownloadQueueTasks(1)
             if (pendingTasks.isEmpty()) {
                 break
             }
             val pendingTask = pendingTasks[0]
             if (runningWorkers.containsKey(pendingTask.workId)) {
-                downloadRepository!!.markDownloadQueueTaskCanceled(pendingTask.taskId)
+                downloadRepository.markDownloadQueueTaskCanceled(pendingTask.taskId)
                 continue
             }
-            val work = downloadRepository!!.getWork(pendingTask.workId)
+            val work = downloadRepository.getWork(pendingTask.workId)
             if (work == null) {
-                downloadRepository!!.markDownloadQueueTaskFailed(pendingTask.taskId, "找不到作品记录")
-                dlsiteDownloadStateStore!!.remove(pendingTask.workId)
+                downloadRepository.markDownloadQueueTaskFailed(pendingTask.taskId, "找不到作品记录")
+                dlsiteDownloadStateStore.remove(pendingTask.workId)
                 continue
             }
-            val runningTask = downloadRepository!!.markDownloadQueueTaskRunning(pendingTask.taskId)
+            val runningTask = downloadRepository.markDownloadQueueTaskRunning(pendingTask.taskId)
             if (runningTask == null) {
                 continue
             }
@@ -193,10 +198,10 @@ class DlsiteDownloadService : Service() {
 
     private fun publishQueuePositionsLocked() {
         var index = 1
-        for (task in downloadRepository!!.pendingDownloadQueueTasks(Int.MAX_VALUE)) {
-            val work = downloadRepository!!.getWork(task.workId)
+        for (task in downloadRepository.pendingDownloadQueueTasks(Int.MAX_VALUE)) {
+            val work = downloadRepository.getWork(task.workId)
             val title = work?.displayTitle() ?: task.workId
-            dlsiteDownloadStateStore!!.publishQueued(task.workId, title, index)
+            dlsiteDownloadStateStore.publishQueued(task.workId, title, index)
             index++
         }
     }
@@ -215,7 +220,12 @@ class DlsiteDownloadService : Service() {
     }
 
     private fun handlePause(workId: String?, startId: Int) {
-        val work = downloadRepository!!.getWork(workId)
+        val normalizedWorkId = workId?.takeIf { it.isNotEmpty() }
+        if (normalizedWorkId == null) {
+            stopSelf(startId)
+            return
+        }
+        val work = downloadRepository.getWork(normalizedWorkId)
         if (work == null) {
             stopSelf(startId)
             return
@@ -224,23 +234,23 @@ class DlsiteDownloadService : Service() {
             val worker = runningWorkers[work.workId]
             if (worker != null) {
                 worker.stopRequest = STOP_PAUSE
-                dlsiteDownloadStateStore!!.publishPaused(work.workId, work.displayTitle())
+                dlsiteDownloadStateStore.publishPaused(work.workId, work.displayTitle())
                 if (isContentDownload(worker.request.optionIds)) {
-                    downloadRepository!!.markContentPaused(work.workId, worker.request.optionIds)
+                    downloadRepository.markContentPaused(work.workId, worker.request.optionIds)
                 } else {
                     markPausedSafely(work)
                 }
                 worker.interrupt()
                 return
             }
-            val queued = downloadRepository!!.pauseQueuedDownload(work.workId)
+            val queued = downloadRepository.pauseQueuedDownload(work.workId)
             if (queued != null) {
                 if (isContentDownload(queued.optionIdList())) {
-                    downloadRepository!!.markContentPaused(work.workId, queued.optionIdList())
+                    downloadRepository.markContentPaused(work.workId, queued.optionIdList())
                 } else {
                     markPausedSafely(work)
                 }
-                dlsiteDownloadStateStore!!.publishPaused(work.workId, work.displayTitle())
+                dlsiteDownloadStateStore.publishPaused(work.workId, work.displayTitle())
                 scheduleLocked()
                 stopIfIdleLocked(startId)
                 return
@@ -250,7 +260,12 @@ class DlsiteDownloadService : Service() {
     }
 
     private fun handleDelete(workId: String?, startId: Int) {
-        val work = downloadRepository!!.getWork(workId)
+        val normalizedWorkId = workId?.takeIf { it.isNotEmpty() }
+        if (normalizedWorkId == null) {
+            stopSelf(startId)
+            return
+        }
+        val work = downloadRepository.getWork(normalizedWorkId)
         if (work == null) {
             stopSelf(startId)
             return
@@ -259,20 +274,20 @@ class DlsiteDownloadService : Service() {
             val worker = runningWorkers[work.workId]
             if (worker != null) {
                 worker.stopRequest = STOP_DELETE
-                dlsiteDownloadStateStore!!.publishTask(
+                dlsiteDownloadStateStore.publishTask(
                     work.workId,
                     work.displayTitle(),
                     DlsiteDownloadTaskStatus.DOWNLOADING,
                     "删除中",
                 )
-                downloadRepository!!.markCacheDeleted(work)
+                downloadRepository.markCacheDeleted(work)
                 worker.interrupt()
                 return
             }
-            val queued = downloadRepository!!.cancelQueuedDownload(work.workId)
+            val queued = downloadRepository.cancelQueuedDownload(work.workId)
             if (queued != null) {
                 deleteCachedWork(work)
-                dlsiteDownloadStateStore!!.remove(work.workId)
+                dlsiteDownloadStateStore.remove(work.workId)
                 scheduleLocked()
                 stopIfIdleLocked(startId)
                 return
@@ -290,7 +305,7 @@ class DlsiteDownloadService : Service() {
     }
 
     private fun hasPendingDownloadsLocked(): Boolean {
-        return downloadRepository!!.pendingDownloadQueueTasks(1).isNotEmpty()
+        return downloadRepository.pendingDownloadQueueTasks(1).isNotEmpty()
     }
 
     private fun deleteCachedWork(work: DlsiteWork) {
@@ -298,7 +313,7 @@ class DlsiteDownloadService : Service() {
             DlsiteDownloadTask.deleteCache(this, work)
         } catch (ignored: Exception) {
         }
-        downloadRepository!!.markCacheDeleted(work)
+        downloadRepository.markCacheDeleted(work)
     }
 
     private fun deleteCachedWorkSafely(work: DlsiteWork) {
@@ -310,13 +325,13 @@ class DlsiteDownloadService : Service() {
 
     private fun markPausedSafely(work: DlsiteWork) {
         try {
-            downloadRepository!!.markPaused(work)
+            downloadRepository.markPaused(work)
         } catch (ignored: Exception) {
         }
     }
 
-    private fun isContentDownload(optionIds: List<String>?): Boolean {
-        return optionIds != null && optionIds.isNotEmpty()
+    private fun isContentDownload(optionIds: List<String>): Boolean {
+        return optionIds.isNotEmpty()
     }
 
     private fun stopForegroundSafely() {
@@ -331,19 +346,19 @@ class DlsiteDownloadService : Service() {
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
             startForeground(
                 DlsiteDownloadNotifications.NOTIFICATION_ID,
-                DlsiteDownloadNotifications.buildSummary(this, dlsiteDownloadStateStore!!.snapshot()),
+                DlsiteDownloadNotifications.buildSummary(this, dlsiteDownloadStateStore.snapshot()),
                 ServiceInfo.FOREGROUND_SERVICE_TYPE_DATA_SYNC,
             )
         } else {
             startForeground(
                 DlsiteDownloadNotifications.NOTIFICATION_ID,
-                DlsiteDownloadNotifications.buildSummary(this, dlsiteDownloadStateStore!!.snapshot()),
+                DlsiteDownloadNotifications.buildSummary(this, dlsiteDownloadStateStore.snapshot()),
             )
         }
     }
 
     private fun updateNotification() {
-        DlsiteDownloadNotifications.updateSummary(this, dlsiteDownloadStateStore!!.snapshot())
+        DlsiteDownloadNotifications.updateSummary(this, dlsiteDownloadStateStore.snapshot())
     }
 
     private fun shortError(exception: Exception?): String {
@@ -355,15 +370,12 @@ class DlsiteDownloadService : Service() {
     }
 
     private class DownloadRequest(
-        taskId: String?,
-        workId: String?,
-        title: String?,
-        optionIds: List<String>?,
+        val taskId: String,
+        val workId: String,
+        val title: String,
+        optionIds: List<String>,
     ) {
-        val taskId: String = taskId ?: ""
-        val workId: String = workId ?: ""
-        val title: String = title ?: ""
-        val optionIds: List<String> = if (optionIds == null) ArrayList() else ArrayList(optionIds)
+        val optionIds: List<String> = ArrayList(optionIds)
     }
 
     private inner class DownloadWorker(
@@ -377,15 +389,15 @@ class DlsiteDownloadService : Service() {
             val work = initialWork
             val contentDownload = isContentDownload(request.optionIds)
             try {
-                val api = dlsiteApi ?: throw IllegalStateException("DLsite API not initialized")
-                val repository = downloadRepository ?: throw IllegalStateException("DLsite download repository not initialized")
+                val api = dlsiteApi
+                val repository = downloadRepository
                 if (!contentDownload) {
                     repository.markDownloading(
                         work,
                         TextUtils.join("|", request.optionIds),
                         request.optionIds.size.toString() + " 个内容",
                     )
-                    dlsiteDownloadStateStore!!.publishTask(
+                    dlsiteDownloadStateStore.publishTask(
                         work.workId,
                         work.displayTitle(),
                         DlsiteDownloadTaskStatus.DOWNLOADING,
@@ -423,43 +435,43 @@ class DlsiteDownloadService : Service() {
                         )
                     }
                     repository.markDownloadQueueTaskCompleted(request.taskId)
-                    dlsiteDownloadStateStore!!.publishCompleted(work.workId, work.displayTitle())
+                    dlsiteDownloadStateStore.publishCompleted(work.workId, work.displayTitle())
                     updateNotification()
                 }
             } catch (exception: Exception) {
                 if (STOP_PAUSE == stopRequest) {
-                    downloadRepository!!.markDownloadQueueTaskPaused(request.taskId)
+                    downloadRepository.markDownloadQueueTaskPaused(request.taskId)
                     if (!contentDownload) {
                         markPausedSafely(work)
                     }
-                    downloadRepository!!.markContentPaused(work.workId, request.optionIds)
-                    dlsiteDownloadStateStore!!.publishPaused(work.workId, work.displayTitle())
+                    downloadRepository.markContentPaused(work.workId, request.optionIds)
+                    dlsiteDownloadStateStore.publishPaused(work.workId, work.displayTitle())
                 } else if (STOP_DELETE == stopRequest) {
-                    downloadRepository!!.markDownloadQueueTaskCanceled(request.taskId)
+                    downloadRepository.markDownloadQueueTaskCanceled(request.taskId)
                     deleteCachedWorkSafely(work)
-                    dlsiteDownloadStateStore!!.remove(work.workId)
+                    dlsiteDownloadStateStore.remove(work.workId)
                 } else if (STOP_RESCHEDULE == stopRequest) {
-                    downloadRepository!!.markDownloadQueueTaskPending(request.taskId)
+                    downloadRepository.markDownloadQueueTaskPending(request.taskId)
                     if (contentDownload) {
-                        downloadRepository!!.markContentQueued(work.workId, request.optionIds)
+                        downloadRepository.markContentQueued(work.workId, request.optionIds)
                     } else {
-                        downloadRepository!!.markQueued(
+                        downloadRepository.markQueued(
                             work,
                             request.optionIds,
                             request.optionIds.size.toString() + " 个内容",
                         )
                     }
-                    dlsiteDownloadStateStore!!.publishQueued(work.workId, work.displayTitle(), 1)
+                    dlsiteDownloadStateStore.publishQueued(work.workId, work.displayTitle(), 1)
                 } else {
                     val message = shortError(exception)
-                    downloadRepository!!.markDownloadQueueTaskFailed(request.taskId, message)
+                    downloadRepository.markDownloadQueueTaskFailed(request.taskId, message)
                     if (!contentDownload) {
-                        downloadRepository!!.markFailed(work, message)
+                        downloadRepository.markFailed(work, message)
                     }
                     for (optionId in request.optionIds) {
-                        downloadRepository!!.markContentFailed(work.workId, optionId, message)
+                        downloadRepository.markContentFailed(work.workId, optionId, message)
                     }
-                    dlsiteDownloadStateStore!!.publishFailed(work.workId, work.displayTitle(), message)
+                    dlsiteDownloadStateStore.publishFailed(work.workId, work.displayTitle(), message)
                 }
                 updateNotification()
             } finally {
@@ -467,17 +479,17 @@ class DlsiteDownloadService : Service() {
             }
         }
 
-        override fun onContentStarted(option: DlsiteDownloadOption?, contentDir: File?) {
-            downloadRepository!!.markContentDownloading(request.workId, option!!.id)
+        override fun onContentStarted(option: DlsiteDownloadOption, contentDir: File) {
+            downloadRepository.markContentDownloading(request.workId, option.id)
         }
 
         override fun onContentProgress(
-            option: DlsiteDownloadOption?,
+            option: DlsiteDownloadOption,
             contentFile: DlsiteJsonParser.ContentFile?,
             bytesDownloaded: Long,
             totalBytes: Long,
         ) {
-            dlsiteDownloadStateStore!!.publishTask(
+            dlsiteDownloadStateStore.publishTask(
                 request.workId,
                 initialWork.displayTitle(),
                 DlsiteDownloadTaskStatus.DOWNLOADING,
@@ -486,17 +498,17 @@ class DlsiteDownloadService : Service() {
                 bytesDownloaded,
                 totalBytes,
                 0L,
-                option!!.id,
+                option.id,
                 option.title,
             )
             updateNotification()
         }
 
-        override fun onContentFinished(option: DlsiteDownloadOption?, result: DlsiteDownloadTask.ContentResult?) {
-            downloadRepository!!.markContentDownloaded(
+        override fun onContentFinished(option: DlsiteDownloadOption, result: DlsiteDownloadTask.ContentResult) {
+            downloadRepository.markContentDownloaded(
                 request.workId,
-                option!!.id,
-                result!!.title,
+                option.id,
+                result.title,
                 result.localPath,
                 result.trackIds,
                 result.trackCount,

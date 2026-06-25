@@ -45,9 +45,7 @@ class DlsiteDownloadTask private constructor() {
             downloadOptionId: String?,
         ): Result {
             val optionIds = ArrayList<String>()
-            if (!TextUtils.isEmpty(downloadOptionId)) {
-                optionIds.add(downloadOptionId!!)
-            }
+            downloadOptionId?.takeIf { it.isNotEmpty() }?.let(optionIds::add)
             return downloadAndImport(context, dlsiteApi, repository, work, optionIds, null)
         }
 
@@ -201,8 +199,8 @@ class DlsiteDownloadTask private constructor() {
                 val audioUri = Uri.fromFile(audioFile).toString()
                 if (existingUris.contains(audioUri)) {
                     val existingTrackId = existingTrackIdsByUri[audioUri]
-                    if (!TextUtils.isEmpty(existingTrackId)) {
-                        trackIdsByPath[audioFile.absolutePath] = existingTrackId!!
+                    if (!existingTrackId.isNullOrEmpty()) {
+                        trackIdsByPath[audioFile.absolutePath] = existingTrackId
                     }
                     continue
                 }
@@ -310,10 +308,11 @@ class DlsiteDownloadTask private constructor() {
             }
             return try {
                 val uri = Uri.parse(work.coverUri)
-                if ("file" != uri.scheme || TextUtils.isEmpty(uri.path)) {
+                val path = uri.path
+                if ("file" != uri.scheme || path.isNullOrEmpty()) {
                     return null
                 }
-                val file = File(uri.path!!)
+                val file = File(path)
                 if (file.isFile) file else null
             } catch (exception: RuntimeException) {
                 null
@@ -501,16 +500,16 @@ class DlsiteDownloadTask private constructor() {
     }
 
     interface ContentListener {
-        fun onContentStarted(option: DlsiteDownloadOption?, contentDir: File?)
+        fun onContentStarted(option: DlsiteDownloadOption, contentDir: File)
 
         fun onContentProgress(
-            option: DlsiteDownloadOption?,
+            option: DlsiteDownloadOption,
             contentFile: DlsiteJsonParser.ContentFile?,
             bytesDownloaded: Long,
             totalBytes: Long,
         )
 
-        fun onContentFinished(option: DlsiteDownloadOption?, result: ContentResult?)
+        fun onContentFinished(option: DlsiteDownloadOption, result: ContentResult)
     }
 
     class TaskProgress(bytesDownloaded: Long, totalBytes: Long) {
