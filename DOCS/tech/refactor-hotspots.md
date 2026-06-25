@@ -80,11 +80,11 @@
 - **问题**：绝大多数未使用（如 `DbIo` 只需 `runBlocking/Dispatchers`），且让 **data 层 `import ui.*`、domain 层 `import ui.*`**，制造跨层耦合假象、可能掩盖真实非法依赖。这是「大量废弃代码」的**最大单一来源**，疑似某次批量移动文件自动生成。
 - **方向**：全仓库一次性清理为精确 import（IDE Optimize Imports / ktlint）。低风险高收益，可独立先做。
 
-### C2 · [P1] 4 个 Java 文件未完成 Kotlin 化（Java 4 / Kotlin 101，约 4%）
+### C2 · [P1] Java 文件已完成 Kotlin 化（Java 0 / Kotlin 105，0%）
 
-- **位置**：核心 model、`data/remote`、`data/files/DocumentFiles`、`data/download` 和 `playback/` 已迁移到 Kotlin，并保留 Java 调用点所需 ABI；剩余 Java 集中在 `ui/theme/`（`AppUi/AppThemePalette/AppThemeMode`）和 `ui/activity/DlsiteLoginActivity.java`。
-- **问题**：核心 model、远程层、文件工具、下载链路和播放/字幕工具的 Java 残留已解决，但旧 UI/theme 类和登录 Activity 仍让 Kotlin 调用失去完整空安全与数据建模能力。
-- **方向**：下一步按模块边界迁旧 UI/theme 与登录 Activity；nullable API 收紧应在对应 Java 调用点迁完后单独落地。
+- **位置**：`app/src/main/java/` 下主源码 Java 文件已清零；核心 model、`data/remote`、`data/files/DocumentFiles`、`data/download`、`playback/`、旧 `ui/theme` 与 `DlsiteLoginActivity` 均已迁移到 Kotlin，并保留迁移期 Java/ABI 兼容入口。
+- **问题**：语言统一阶段完成，但部分迁移期 API 仍保留 Java null 宽松边界、`@JvmField` 字段 ABI 和平台值兼容写法，尚未完全发挥 Kotlin 空安全和数据建模能力。
+- **方向**：C2 已完成；下一步转入 C3，按调用链收紧 nullable API，再单独做全仓 import cleanup 和迁移期兼容点清理。
 
 ### C3 · [P2] 接口/方法 nullable 参数泛滥 + 防御式 `if-null-return`（Java 移植味）
 

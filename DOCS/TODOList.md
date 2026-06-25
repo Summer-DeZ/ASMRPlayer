@@ -45,10 +45,11 @@
 - [x] 需要做：Phase F 文件工具切片：`DocumentFiles` 迁移为 Kotlin `object`，保留 Java 静态工具入口、`FolderImportItem` 字段 ABI、SAF intent/权限、文件夹音频导入匹配和媒体时长读取行为。
 - [x] 需要做：Phase F `data/download` 模块切片：`DlsiteDownloadService`、`DlsiteDownloadTask`、`DlsiteDownloadNotifications` 整体迁移为 Kotlin，保留前台下载 Service、队列状态机、通知、下载导入、进度聚合和 Java 单测字段 ABI。
 - [x] 需要做：Phase F `playback` 模块切片：`PlaybackIntents`、`SubtitleCue`、`SubtitleParser`、`SubtitleOverlayWindow` 整体迁移为 Kotlin，保留播放 intent、字幕解析/查找、悬浮字幕窗口和 `SubtitleCue` 字段 ABI。
+- [x] 需要做：Phase F legacy UI 切片：`AppThemeMode`、`AppThemePalette`、`AppUi` 和 `DlsiteLoginActivity` 迁移为 Kotlin，主源码 Java 文件清零，并保留主题静态字段、WebView 登录和系统栏行为。
 - [ ] 后续做：Phase C 继续评估 `PlaybackCommandClient` 播放位置 ticker 的收敛方式，并收敛重复快照数据类和手工字段搬运。
 - [ ] 后续做：Phase D 继续处理其它剩余 service-locator 去耦，逐步收敛到注入的仓库/服务边界。
 - [ ] 后续做：Phase E 继续拆分 `ASMRPlayerApp.kt` 组合根和巨型 Screen 文件。
-- [ ] 后续做：Phase F 按模块边界迁移旧 UI/theme Java 文件和 `DlsiteLoginActivity`；等 Java 调用点进一步收敛后再统一收紧 nullable API。
+- [ ] 后续做：Phase F 在 Java 清零后单独收紧 nullable API、清理迁移期 `@JvmField`/平台值兼容点，并做全仓 import cleanup。
 - [ ] 暂不做：本轮全仓 Optimize Imports；当前工作区已有多处 UI Probe 和界面改动，后续应单独做纯 import cleanup 变更。
 
 ### 2026-06-24
