@@ -115,9 +115,10 @@
 
 ### D1 · [P1] 三个高度重叠的播放数据类，字段靠手工搬运
 
-- **位置**：`PlaybackUiState`（`PlaybackViewModel.kt:26-47`，**32 字段**）、`PlaybackServiceSnapshot`（`PlaybackServiceState.kt:23-44`，**20 字段**）、`PlaybackControllerSnapshot`（`PlaybackCommandClient.kt:45-52`，6 字段）。
-- **问题**：字幕(`previous/current/nextSubtitle/subtitleLines/subtitleIndex`)、playlist、sleep 等字段在多个类重复定义，`emitState()`（`:245-270`）逐字段手工搬运三个源 → 极易漏改/不一致。
-- **方向**：A4 统一状态源后收敛为一份领域状态 + 一个 UI 映射，消除中间快照类。
+- **位置**：`PlaybackUiState`（`PlaybackViewModel.kt:20-35`）、`PlaybackServiceSnapshot`（`PlaybackServiceState.kt:6-25`）、`PlaybackControllerSnapshot`（`PlaybackCommandClient.kt:31-38`）。
+- **已改善**：`PlaybackUiState` 已去掉未消费的 `hasAudio`、`canPlayNext`、`previousSubtitle`、`currentSubtitle`、`nextSubtitle`、`overlayLocked` 和 `error` 重复播放状态字段；UI state 现在只保留标题/封面/playlist identity、播放状态与进度、字幕列表/index/空文案、悬浮窗请求等当前可见行为字段。
+- **剩余问题**：playlist identity、字幕列表/索引、悬浮窗请求、sleep 等状态仍在 Service 快照、Controller 快照和 UI 映射之间手工搬运，`emitState()` 还需要拼接 service identity、active track/context 与 controller 播放状态。
+- **方向**：下一步把 service identity → active track/context 抽成单一 helper 或领域状态，再逐步收敛为一份领域状态 + 一个 UI 映射，减少中间快照类和逐字段搬运。
 
 ### D2 · [P2] ViewModel 职责过载：直接编排文件 IO + 命令式返回业务结果给 UI
 

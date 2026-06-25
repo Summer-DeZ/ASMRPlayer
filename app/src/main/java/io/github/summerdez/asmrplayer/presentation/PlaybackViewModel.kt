@@ -11,7 +11,6 @@ import io.github.summerdez.asmrplayer.domain.PlaylistQueries
 import io.github.summerdez.asmrplayer.domain.model.Playlist
 import io.github.summerdez.asmrplayer.playback.PlaybackCommandClient
 import io.github.summerdez.asmrplayer.playback.PlaybackControllerSnapshot
-import io.github.summerdez.asmrplayer.playback.PlaybackError
 import io.github.summerdez.asmrplayer.playback.PlaybackServiceSnapshot
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
@@ -25,20 +24,13 @@ data class PlaybackUiState(
     val coverUri: String = "",
     val playlistId: String = "",
     val playlistIndex: Int = -1,
-    val hasAudio: Boolean = false,
     val isPlaying: Boolean = false,
-    val canPlayNext: Boolean = false,
     val durationMs: Int = 0,
     val positionMs: Int = 0,
-    val previousSubtitle: String = "",
-    val currentSubtitle: String = "",
-    val nextSubtitle: String = "",
     val subtitleLines: List<String> = emptyList(),
     val subtitleIndex: Int = -1,
     val subtitleEmptyText: String = "未载入字幕",
     val overlayRequested: Boolean = false,
-    val overlayLocked: Boolean = false,
-    val error: PlaybackError = PlaybackError.None,
 )
 
 class PlaybackViewModel(
@@ -237,20 +229,13 @@ class PlaybackViewModel(
             coverUri = playbackContextCoverUri(),
             playlistId = playbackSelection.playlistId(),
             playlistIndex = playbackSelection.playlistIndex(),
-            hasAudio = playbackSelection.hasAudio(),
             isPlaying = connected && currentIsPlaying(),
-            canPlayNext = controllerSnapshot.hasNextMediaItem || playbackSelection.hasNextIn(activePlaylistForNavigation()),
             durationMs = if (connected) currentDurationMs() else 0,
             positionMs = if (connected) currentPositionMs() else 0,
-            previousSubtitle = if (connected) snapshot.previousSubtitle else "",
-            currentSubtitle = if (connected) snapshot.currentSubtitle else "",
-            nextSubtitle = if (connected) snapshot.nextSubtitle else "",
             subtitleLines = if (connected) snapshot.subtitleLines else emptyList(),
             subtitleIndex = if (connected) snapshot.subtitleIndex else -1,
             subtitleEmptyText = if (snapshot.subtitleCount > 0) "等待字幕" else "未载入字幕",
             overlayRequested = connected && snapshot.overlayRequested,
-            overlayLocked = connected && snapshot.overlayLocked,
-            error = if (connected) snapshot.error else PlaybackError.None,
         )
     }
 

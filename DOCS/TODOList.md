@@ -20,6 +20,7 @@
 - [x] 需要做：Phase C 全局播放状态 bus 切片：`PlaybackViewModel` 移除旧 fallback 订阅，`PlaybackService` 只发布 `MediaSession.sessionExtras`，全局播放状态 bus 删除。
 - [x] 需要做：Phase C C4 字幕调度切片：`PlaybackService` 固定 250ms 字幕轮询改为 cue 边界定时，悬浮窗和 `sessionExtras` 字幕状态仍由 Service 维护。
 - [x] 需要做：Phase C/D1 快照去重切片：`PlaybackServiceSnapshot` 不再重复承载 `isPlaying`、`durationMs`、`positionMs`，播放三字段保留在 `PlaybackControllerSnapshot`。
+- [x] 需要做：Phase C/D1 `PlaybackUiState` 瘦身切片：删除未消费的 `hasAudio`、`canPlayNext`、`previousSubtitle`、`currentSubtitle`、`nextSubtitle`、`overlayLocked` 和 `error` 重复播放状态字段，只保留当前 UI 可见行为字段。
 - [x] 需要做：Phase D/A5 应用更新下载 bus 切片：`AppUpdateDownloadStateStore` 由 `AppContainer` 持有并注入 `SettingsViewModel` 与 `AppUpdateDownloadService`，设置页和前台下载服务共享同一个更新下载状态 store。
 - [x] 需要做：Phase D/A5 AI 字幕任务状态 store 命名收束：文件名、类名和文档概念统一为 `AiSubtitleTaskStateStore`，并继续由 `AppContainer` 注入 `AiSubtitleGenerationService` 与 `AiSubtitleTaskViewModel`。
 - [x] 需要做：Phase D/A5 DLsite 下载状态 bus 切片：`DlsiteDownloadStateStore` 由 `AppContainer` 持有并注入 `RoomDlsiteRepository` 与 `DlsiteDownloadService`，下载页和 Java 前台下载服务共享同一个多任务下载状态 store。
