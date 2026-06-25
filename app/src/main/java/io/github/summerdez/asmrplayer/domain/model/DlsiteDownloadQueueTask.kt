@@ -3,16 +3,16 @@ package io.github.summerdez.asmrplayer.domain.model
 import java.util.UUID
 
 data class DlsiteDownloadQueueTask(
-    @JvmField val taskId: String,
-    @JvmField val workId: String,
-    @JvmField val optionIds: String,
-    @JvmField val status: String,
-    @JvmField val queueOrder: Long,
-    @JvmField val createdAt: Long,
-    @JvmField val startedAt: Long? = null,
-    @JvmField val updatedAt: Long,
-    @JvmField val finishedAt: Long? = null,
-    @JvmField val errorMessage: String? = null,
+    val taskId: String,
+    val workId: String,
+    val optionIds: String,
+    val status: String,
+    val queueOrder: Long,
+    val createdAt: Long,
+    val startedAt: Long? = null,
+    val updatedAt: Long,
+    val finishedAt: Long? = null,
+    val errorMessage: String? = null,
 ) {
     fun optionIdList(): List<String> = optionIds.split(OPTION_ID_SEPARATOR).filter { it.isNotBlank() }
 

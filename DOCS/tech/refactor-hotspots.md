@@ -88,9 +88,9 @@
 
 ### C3 · [P2] 接口/model nullable 参数泛滥 + 防御式 `if-null-return`（Java 移植味）
 
-- **位置**：`LibraryRepository` 已完成 Phase F/C3 第一切片，playlist/track/subtitle/cover/selected playlist 相关入参改为非空 Kotlin 类型；`DlsiteRepository`、`DlsiteLocalStore` 与 `DlsiteDownloadQueueRepository` 已完成第二切片，`workId`、`taskId`、`optionId`、`DlsiteWork` 与 `saveWork(updatedWork)` 等 identity/required 入参改为非空 Kotlin 类型；核心资料库模型 `TrackItem` 与 `Playlist` 已删除迁移期 `@JvmOverloads`、字段 `@JvmField` 和 nullable 构造语义，构造参数收紧为非空 Kotlin 类型；DLsite 下载 DTO `DlsiteDownloadOption` 与 `DlsiteJsonParser.ContentCount` / `DlsiteZiptree` / `ContentFile` 已删除字段 `@JvmField` 和 nullable 构造语义，parser 层继续负责空值归一化。Room 实现继续保留空字符串业务校验；`DlsiteDownloadBlockingAdapter` 作为 Java/历史边界继续接收 nullable，并在 adapter 内过滤/归一化后调用 repository。
+- **位置**：`LibraryRepository` 已完成 Phase F/C3 第一切片，playlist/track/subtitle/cover/selected playlist 相关入参改为非空 Kotlin 类型；`DlsiteRepository`、`DlsiteLocalStore` 与 `DlsiteDownloadQueueRepository` 已完成第二切片，`workId`、`taskId`、`optionId`、`DlsiteWork` 与 `saveWork(updatedWork)` 等 identity/required 入参改为非空 Kotlin 类型；核心资料库模型 `TrackItem` 与 `Playlist` 已删除迁移期 `@JvmOverloads`、字段 `@JvmField` 和 nullable 构造语义，构造参数收紧为非空 Kotlin 类型；DLsite 下载 DTO `DlsiteDownloadOption` 与 `DlsiteJsonParser.ContentCount` / `DlsiteZiptree` / `ContentFile` 已删除字段 `@JvmField` 和 nullable 构造语义，parser 层继续负责空值归一化；DLsite 核心模型 `DlsiteWork` 与 `DlsiteDownloadQueueTask` 已删除迁移期 `@JvmOverloads` / 字段 `@JvmField`，保留 data class 默认参数、copy、JSON/static helper、队列 nullable 状态字段与状态转换语义。Room 实现继续保留空字符串业务校验；`DlsiteDownloadBlockingAdapter` 作为 Java/历史边界继续接收 nullable，并在 adapter 内过滤/归一化后调用 repository。
 - **问题**：Kotlin 侧本可用非空类型在编译期挡住，旧 Java 迁移边界把校验下沉到运行时、每个方法重复；如果继续扩大，会让业务缺失值和 null 兼容输入混在同一层。
-- **方向**：剩余 C3 工作转入其它 model/facade 兼容点；继续按调用链收紧真实 required 参数；`error`、`optionTitle` 这类“可缺失本身就是业务数据”的 nullable 保留；Java/历史入口继续在 adapter 或 facade 内部归一化。
+- **方向**：剩余 C3 工作转入其它 model/facade 兼容点；继续按调用链收紧真实 required 参数；`startedAt`、`finishedAt`、`errorMessage`、`optionTitle` 这类“可缺失本身就是业务数据”的 nullable 保留；Java/历史入口继续在 adapter 或 facade 内部归一化。
 
 ### C4 · [P2] 播放位置 ticker 与字幕 cue-boundary scheduler 的职责边界
 

@@ -4,21 +4,21 @@ import java.util.Locale
 import org.json.JSONException
 import org.json.JSONObject
 
-data class DlsiteWork @JvmOverloads constructor(
-    @JvmField val workId: String,
-    @JvmField val title: String,
-    @JvmField val detailUrl: String,
-    @JvmField val downloadUrl: String,
-    @JvmField val coverUrl: String = "",
-    @JvmField val coverUri: String = "",
-    @JvmField val status: String = STATUS_FOUND,
-    @JvmField val playlistId: String = "",
-    @JvmField val localPath: String = "",
-    @JvmField val error: String = "",
-    @JvmField val downloadOptionId: String = "",
-    @JvmField val downloadOptionTitle: String = "",
-    @JvmField val updatedAt: Long = System.currentTimeMillis(),
-    @JvmField val trackCount: Int = 0,
+data class DlsiteWork(
+    val workId: String,
+    val title: String,
+    val detailUrl: String,
+    val downloadUrl: String,
+    val coverUrl: String = "",
+    val coverUri: String = "",
+    val status: String = STATUS_FOUND,
+    val playlistId: String = "",
+    val localPath: String = "",
+    val error: String = "",
+    val downloadOptionId: String = "",
+    val downloadOptionTitle: String = "",
+    val updatedAt: Long = System.currentTimeMillis(),
+    val trackCount: Int = 0,
 ) {
     fun isDownloaded(): Boolean = status == STATUS_DOWNLOADED
 
