@@ -23,21 +23,21 @@ import kotlin.math.max
 
 class AppUi private constructor() {
     companion object {
-        @JvmField var ACCENT: Int = 0
-        @JvmField var SWITCH_ON: Int = 0
-        @JvmField var SWITCH_OFF: Int = 0
-        @JvmField var BG: Int = 0
-        @JvmField var GRAY6: Int = 0
-        @JvmField var GRAY5: Int = 0
-        @JvmField var GRAY4: Int = 0
-        @JvmField var GRAY3: Int = 0
-        @JvmField var LABEL: Int = 0
-        @JvmField var LABEL2: Int = 0
-        @JvmField var LABEL3: Int = 0
-        @JvmField var SEPARATOR: Int = 0
-        @JvmField var BAR_MATERIAL: Int = 0
-        @JvmField var SOLID_BAR: Int = 0
-        @JvmField var SHEET_MATERIAL: Int = 0
+        var ACCENT: Int = 0
+        var SWITCH_ON: Int = 0
+        var SWITCH_OFF: Int = 0
+        var BG: Int = 0
+        var GRAY6: Int = 0
+        var GRAY5: Int = 0
+        var GRAY4: Int = 0
+        var GRAY3: Int = 0
+        var LABEL: Int = 0
+        var LABEL2: Int = 0
+        var LABEL3: Int = 0
+        var SEPARATOR: Int = 0
+        var BAR_MATERIAL: Int = 0
+        var SOLID_BAR: Int = 0
+        var SHEET_MATERIAL: Int = 0
 
         const val TEXT_LARGE_TITLE: Int = 34
         const val TEXT_TITLE2: Int = 22

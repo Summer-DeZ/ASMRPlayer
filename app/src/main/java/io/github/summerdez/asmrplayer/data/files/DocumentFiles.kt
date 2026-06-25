@@ -295,12 +295,10 @@ object DocumentFiles {
         audioName: String?,
         audioUri: Uri?,
         subtitleName: String?,
-        @JvmField val subtitleUri: Uri?,
+        val subtitleUri: Uri?,
     ) {
-        @JvmField
         val audioName: String = audioName ?: ""
 
-        @JvmField
         val audioUri: Uri = run {
             @Suppress("UNCHECKED_CAST")
             fun <T> platformFieldValue(value: T?): T {
@@ -310,7 +308,6 @@ object DocumentFiles {
             platformFieldValue(audioUri)
         }
 
-        @JvmField
         val subtitleName: String = subtitleName ?: ""
 
         fun hasSubtitle(): Boolean {

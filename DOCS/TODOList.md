@@ -56,10 +56,11 @@
 - [x] 需要做：Phase F/C3 DLsite 下载 DTO Kotlin-native 清理切片：`DlsiteDownloadOption` 与 `DlsiteJsonParser.ContentCount`、`DlsiteZiptree`、`ContentFile` 删除迁移期字段 `@JvmField` 和 nullable 构造语义，唯一剩余 Java 单测迁为 Kotlin，`app/src` Java 文件清零。
 - [x] 需要做：Phase F/C3 DLsite 核心 model JVM ABI 清理切片：`DlsiteWork` 删除构造器 `@JvmOverloads` 和字段 `@JvmField`，`DlsiteDownloadQueueTask` 删除字段 `@JvmField`，保留 data class 默认参数、copy、JSON/static helper、队列 nullable 状态字段和状态转换语义。
 - [x] 需要做：Phase A/C1 全仓 import cleanup：清理主源码和单元测试中 46 个文件的自动生成全家桶 wildcard import，改为精确 import，保留必要的精确 `R` 资源 import。
+- [x] 需要做：Phase F/C3 主源码字段 ABI 清理切片：`DlsiteDownloadTask` 嵌套结果/进度 DTO、`SubtitleCue`、`PendingLibrarySelection.TrackSubtitleTarget`、`DocumentFiles.FolderImportItem`、`AppThemePalette` 与 `AppUi` 删除剩余字段 `@JvmField`，主源码 `@JvmField` 清零；继续保留必要业务 nullable 字段和 Kotlin property 访问。
 - [ ] 后续做：Phase C 如继续评估播放位置/字幕链路，只处理状态边界和测试覆盖；`PlaybackCommandClient` UI position ticker 与 `PlaybackService` cue-boundary scheduler 属于不同 runtime 驱动，不作为“两个 250ms 轮询”合并。
 - [ ] 后续做：Phase D 继续处理其它剩余 service-locator 去耦，逐步收敛到注入的仓库/服务边界。
 - [ ] 后续做：Phase E 继续拆分 `ASMRPlayerApp.kt` 组合根和巨型 Screen 文件。
-- [ ] 后续做：Phase F 继续清理迁移期 `@JvmField`、平台值兼容点和 model/facade nullable helper。
+- [ ] 后续做：Phase F 继续清理迁移期平台值兼容点、函数入口 JVM 兼容注解和 model/facade nullable helper；`@JvmField` 字段 ABI 已不再出现在主源码。
 - [ ] 暂不做：本轮不引入 ktlint/Spotless 自动格式化工具链；后续如需要再单独评估格式化配置。
 
 ### 2026-06-24

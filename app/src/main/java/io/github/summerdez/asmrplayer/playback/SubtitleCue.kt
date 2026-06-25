@@ -1,11 +1,10 @@
 package io.github.summerdez.asmrplayer.playback
 
 class SubtitleCue(
-    @JvmField val startMs: Long,
-    @JvmField val endMs: Long,
+    val startMs: Long,
+    val endMs: Long,
     text: String?,
 ) {
-    @JvmField
     val text: String = preserveJavaFieldValue(text)
 
     private companion object {

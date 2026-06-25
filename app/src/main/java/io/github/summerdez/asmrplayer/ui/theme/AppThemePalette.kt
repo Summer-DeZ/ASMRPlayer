@@ -1,22 +1,22 @@
 package io.github.summerdez.asmrplayer.ui.theme
 
 class AppThemePalette private constructor(
-    @JvmField val light: Boolean,
-    @JvmField val accent: Int,
-    @JvmField val switchOn: Int,
-    @JvmField val switchOff: Int,
-    @JvmField val bg: Int,
-    @JvmField val gray6: Int,
-    @JvmField val gray5: Int,
-    @JvmField val gray4: Int,
-    @JvmField val gray3: Int,
-    @JvmField val label: Int,
-    @JvmField val label2: Int,
-    @JvmField val label3: Int,
-    @JvmField val separator: Int,
-    @JvmField val barMaterial: Int,
-    @JvmField val solidBar: Int,
-    @JvmField val sheetMaterial: Int,
+    val light: Boolean,
+    val accent: Int,
+    val switchOn: Int,
+    val switchOff: Int,
+    val bg: Int,
+    val gray6: Int,
+    val gray5: Int,
+    val gray4: Int,
+    val gray3: Int,
+    val label: Int,
+    val label2: Int,
+    val label3: Int,
+    val separator: Int,
+    val barMaterial: Int,
+    val solidBar: Int,
+    val sheetMaterial: Int,
 ) {
     companion object {
         @JvmStatic

@@ -36,7 +36,7 @@ class PendingLibrarySelection {
     }
 
     data class TrackSubtitleTarget(
-        @JvmField val playlistId: String,
-        @JvmField val trackId: String,
+        val playlistId: String,
+        val trackId: String,
     )
 }

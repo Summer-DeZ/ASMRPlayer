@@ -503,19 +503,14 @@ class DlsiteDownloadTask private constructor() {
     }
 
     class Result {
-        @JvmField
         val playlistId: String
 
-        @JvmField
         val localPath: String
 
-        @JvmField
         val trackCount: Int
 
-        @JvmField
         val coverUri: String
 
-        @JvmField
         val contentResults: List<ContentResult>
 
         constructor(playlistId: String?, localPath: String?, trackCount: Int, coverUri: String?) : this(
@@ -559,10 +554,8 @@ class DlsiteDownloadTask private constructor() {
     }
 
     class TaskProgress(bytesDownloaded: Long, totalBytes: Long) {
-        @JvmField
         val bytesDownloaded: Long = bytesDownloaded.coerceAtLeast(0L)
 
-        @JvmField
         val totalBytes: Long = totalBytes
     }
 
@@ -714,23 +707,18 @@ class DlsiteDownloadTask private constructor() {
         trackIds: List<String>?,
         trackCount: Int,
     ) {
-        @JvmField
         val optionId: String = optionId ?: ""
 
-        @JvmField
         val title: String = title ?: ""
 
-        @JvmField
         val localPath: String = localPath ?: ""
 
-        @JvmField
         val trackIds: List<String> = if (trackIds == null) {
             Collections.emptyList()
         } else {
             ArrayList(trackIds)
         }
 
-        @JvmField
         val trackCount: Int = trackCount
     }
 
@@ -739,13 +727,10 @@ class DlsiteDownloadTask private constructor() {
         contentDir: File?,
         audioFiles: List<File>?,
     ) {
-        @JvmField
         val option: DlsiteDownloadOption? = option
 
-        @JvmField
         val contentDir: File? = contentDir
 
-        @JvmField
         val audioFiles: List<File> = if (audioFiles == null) {
             Collections.emptyList()
         } else {
@@ -754,16 +739,12 @@ class DlsiteDownloadTask private constructor() {
     }
 
     class ImportResult {
-        @JvmField
         val playlistId: String
 
-        @JvmField
         val addedTrackIds: List<String>
 
-        @JvmField
         val totalTrackCount: Int
 
-        @JvmField
         val trackIdsByPath: Map<String, String>
 
         constructor(playlistId: String?, addedTrackIds: List<String>?, totalTrackCount: Int) : this(
