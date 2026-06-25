@@ -80,11 +80,11 @@
 - **问题**：绝大多数未使用（如 `DbIo` 只需 `runBlocking/Dispatchers`），且让 **data 层 `import ui.*`、domain 层 `import ui.*`**，制造跨层耦合假象、可能掩盖真实非法依赖。这是「大量废弃代码」的**最大单一来源**，疑似某次批量移动文件自动生成。
 - **方向**：全仓库一次性清理为精确 import（IDE Optimize Imports / ktlint）。低风险高收益，可独立先做。
 
-### C2 · [P1] 8 个 Java 文件未完成 Kotlin 化（Java 8 / Kotlin 97，约 8%）
+### C2 · [P1] 4 个 Java 文件未完成 Kotlin 化（Java 4 / Kotlin 101，约 4%）
 
-- **位置**：核心 model、`data/remote`、`data/files/DocumentFiles` 和 `data/download` 已迁移到 Kotlin，并保留 Java 调用点所需 ABI；剩余 Java 集中在 `ui/theme/`（`AppUi/AppThemePalette/AppThemeMode`）、`ui/activity/DlsiteLoginActivity.java`、`playback/`（`SubtitleParser/SubtitleCue/SubtitleOverlayWindow/PlaybackIntents`）。
-- **问题**：核心 model、远程层、文件工具和下载链路的 Java 残留已解决，但字幕/窗口工具、旧 UI/theme 类和登录 Activity 仍让 Kotlin 调用失去完整空安全与数据建模能力。
-- **方向**：下一步按模块边界迁 `playback/`，再处理旧 UI/theme 与登录 Activity；nullable API 收紧应在对应 Java 调用点迁完后单独落地。
+- **位置**：核心 model、`data/remote`、`data/files/DocumentFiles`、`data/download` 和 `playback/` 已迁移到 Kotlin，并保留 Java 调用点所需 ABI；剩余 Java 集中在 `ui/theme/`（`AppUi/AppThemePalette/AppThemeMode`）和 `ui/activity/DlsiteLoginActivity.java`。
+- **问题**：核心 model、远程层、文件工具、下载链路和播放/字幕工具的 Java 残留已解决，但旧 UI/theme 类和登录 Activity 仍让 Kotlin 调用失去完整空安全与数据建模能力。
+- **方向**：下一步按模块边界迁旧 UI/theme 与登录 Activity；nullable API 收紧应在对应 Java 调用点迁完后单独落地。
 
 ### C3 · [P2] 接口/方法 nullable 参数泛滥 + 防御式 `if-null-return`（Java 移植味）
 
