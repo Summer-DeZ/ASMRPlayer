@@ -8,9 +8,6 @@ data class PlaybackServiceSnapshot(
     val playlistId: String = "",
     val playlistIndex: Int = -1,
     val audioUri: String = "",
-    val previousSubtitle: String = "",
-    val currentSubtitle: String = "",
-    val nextSubtitle: String = "",
     val subtitleLines: List<String> = emptyList(),
     val subtitleIndex: Int = -1,
     val subtitleCount: Int = 0,
@@ -46,9 +43,6 @@ internal fun PlaybackServiceSnapshot.toSessionExtras(): Bundle {
         putString(KEY_PLAYLIST_ID, playlistId)
         putInt(KEY_PLAYLIST_INDEX, playlistIndex)
         putString(KEY_AUDIO_URI, audioUri)
-        putString(KEY_PREVIOUS_SUBTITLE, previousSubtitle)
-        putString(KEY_CURRENT_SUBTITLE, currentSubtitle)
-        putString(KEY_NEXT_SUBTITLE, nextSubtitle)
         putStringArrayList(KEY_SUBTITLE_LINES, ArrayList(subtitleLines))
         putInt(KEY_SUBTITLE_INDEX, subtitleIndex)
         putInt(KEY_SUBTITLE_COUNT, subtitleCount)
@@ -71,9 +65,6 @@ internal fun playbackServiceSnapshotFromSessionExtras(extras: Bundle?): Playback
         playlistId = extras.getString(KEY_PLAYLIST_ID).orEmpty(),
         playlistIndex = extras.getInt(KEY_PLAYLIST_INDEX, -1),
         audioUri = extras.getString(KEY_AUDIO_URI).orEmpty(),
-        previousSubtitle = extras.getString(KEY_PREVIOUS_SUBTITLE).orEmpty(),
-        currentSubtitle = extras.getString(KEY_CURRENT_SUBTITLE).orEmpty(),
-        nextSubtitle = extras.getString(KEY_NEXT_SUBTITLE).orEmpty(),
         subtitleLines = extras.getStringArrayList(KEY_SUBTITLE_LINES).orEmpty(),
         subtitleIndex = extras.getInt(KEY_SUBTITLE_INDEX, -1),
         subtitleCount = extras.getInt(KEY_SUBTITLE_COUNT, 0),
@@ -92,9 +83,6 @@ private const val KEY_CONNECTED = KEY_PREFIX + "connected"
 private const val KEY_PLAYLIST_ID = KEY_PREFIX + "playlist_id"
 private const val KEY_PLAYLIST_INDEX = KEY_PREFIX + "playlist_index"
 private const val KEY_AUDIO_URI = KEY_PREFIX + "audio_uri"
-private const val KEY_PREVIOUS_SUBTITLE = KEY_PREFIX + "previous_subtitle"
-private const val KEY_CURRENT_SUBTITLE = KEY_PREFIX + "current_subtitle"
-private const val KEY_NEXT_SUBTITLE = KEY_PREFIX + "next_subtitle"
 private const val KEY_SUBTITLE_LINES = KEY_PREFIX + "subtitle_lines"
 private const val KEY_SUBTITLE_INDEX = KEY_PREFIX + "subtitle_index"
 private const val KEY_SUBTITLE_COUNT = KEY_PREFIX + "subtitle_count"

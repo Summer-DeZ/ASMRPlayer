@@ -60,7 +60,6 @@ class PlaybackService : MediaSessionService() {
     private var lastSessionExtrasSnapshot = PlaybackServiceSnapshot()
 
     private var currentAudioUri: Uri? = null
-    private var currentSubtitleUri: Uri? = null
     private var currentPlaylistId: String = ""
     private var currentPlaylistIndex: Int = -1
     private var trackTitle: String = DEFAULT_TRACK_TITLE
@@ -252,7 +251,6 @@ class PlaybackService : MediaSessionService() {
 
         lastError = ""
         currentAudioUri = audioUri
-        currentSubtitleUri = subtitleUri
         currentPlaylistId = playlistId.orEmpty()
         currentPlaylistIndex = playlistIndex
         trackTitle = title?.takeIf { it.isNotBlank() } ?: DEFAULT_TRACK_TITLE
@@ -412,7 +410,6 @@ class PlaybackService : MediaSessionService() {
     }
 
     private fun loadSubtitle(subtitleUri: Uri?) {
-        currentSubtitleUri = subtitleUri
         lastSubtitleText = ""
         if (subtitleUri == null) {
             subtitleCues = emptyList()
@@ -443,15 +440,6 @@ class PlaybackService : MediaSessionService() {
         lastSubtitleText = text.orEmpty()
         subtitleOverlayWindow?.updateText(lastSubtitleText)
         publishState()
-    }
-
-    private fun getSubtitleTextAtOffset(offset: Int): String {
-        val index = SubtitleParser.indexAt(subtitleCues, playerPositionMs().toLong())
-        val targetIndex = index + offset
-        if (targetIndex < 0 || targetIndex >= subtitleCues.size) {
-            return ""
-        }
-        return subtitleCues[targetIndex].text
     }
 
     private fun startSubtitleTicker() {
@@ -592,7 +580,7 @@ class PlaybackService : MediaSessionService() {
         return position.coerceAtMost(Int.MAX_VALUE.toLong()).toInt()
     }
 
-    private fun currentSubtitleIndex(): Int {
+    private fun activeSubtitleIndex(): Int {
         return SubtitleParser.indexAt(subtitleCues, playerPositionMs().toLong())
     }
 
@@ -617,11 +605,8 @@ class PlaybackService : MediaSessionService() {
             playlistId = currentPlaylistId,
             playlistIndex = currentPlaylistIndex,
             audioUri = currentAudioUri?.toString().orEmpty(),
-            previousSubtitle = getSubtitleTextAtOffset(-1),
-            currentSubtitle = lastSubtitleText,
-            nextSubtitle = getSubtitleTextAtOffset(1),
             subtitleLines = subtitleCues.map { it.text },
-            subtitleIndex = currentSubtitleIndex(),
+            subtitleIndex = activeSubtitleIndex(),
             subtitleCount = subtitleCues.size,
             overlayRequested = overlayRequested,
             overlayLocked = overlayLocked,
