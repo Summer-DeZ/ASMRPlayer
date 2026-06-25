@@ -8,16 +8,18 @@ class PlaybackSelection(
     private val defaultAudioTitle: String,
     private val defaultSubtitleTitle: String,
 ) {
-    private var audioUri: Uri? = null
-    private var subtitleUri: Uri? = null
+    private var audioUri: String = ""
+    private var subtitleUri: String = ""
     private var audioTitle: String = defaultAudioTitle
     private var subtitleTitle: String = defaultSubtitleTitle
     private var playlistId: String = ""
     private var playlistIndex: Int = -1
 
-    fun audioUri(): Uri? = audioUri
+    fun audioUri(): Uri? = audioUri.takeIf { it.isNotEmpty() }?.let(Uri::parse)
 
-    fun subtitleUri(): Uri? = subtitleUri
+    fun audioUriString(): String = audioUri
+
+    fun subtitleUri(): Uri? = subtitleUri.takeIf { it.isNotEmpty() }?.let(Uri::parse)
 
     fun audioTitle(): String = audioTitle
 
@@ -27,15 +29,15 @@ class PlaybackSelection(
 
     fun playlistIndex(): Int = playlistIndex
 
-    fun hasAudio(): Boolean = audioUri != null
+    fun hasAudio(): Boolean = audioUri.isNotEmpty()
 
     fun matchesPlaylistPosition(otherPlaylistId: String?, otherPlaylistIndex: Int): Boolean {
         return playlistId == otherPlaylistId.orEmpty() && playlistIndex == otherPlaylistIndex
     }
 
     fun selectTrack(playlist: Playlist, index: Int, track: TrackItem) {
-        audioUri = track.audioUri()
-        subtitleUri = track.subtitleUriOrNull()
+        audioUri = track.uri
+        subtitleUri = track.subtitleUri
         audioTitle = track.title
         subtitleTitle = track.subtitleTitleOr(defaultSubtitleTitle)
         playlistId = playlist.id
@@ -43,7 +45,7 @@ class PlaybackSelection(
     }
 
     fun updateSubtitle(uri: Uri?, title: String?) {
-        subtitleUri = uri
+        subtitleUri = uri?.toString().orEmpty()
         subtitleTitle = if (title.isNullOrEmpty()) defaultSubtitleTitle else title
     }
 

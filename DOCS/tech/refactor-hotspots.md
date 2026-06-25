@@ -113,12 +113,12 @@
 
 ## D. 设计层
 
-### D1 · [P1] 三个高度重叠的播放数据类，字段靠手工搬运
+### D1 · [P1] 播放展示状态已集中，快照数据类仍待继续收敛
 
-- **位置**：`PlaybackUiState`（`PlaybackViewModel.kt:20-35`）、`PlaybackServiceSnapshot`（`PlaybackServiceState.kt:6-25`）、`PlaybackControllerSnapshot`（`PlaybackCommandClient.kt:31-38`）。
-- **已改善**：`PlaybackUiState` 已去掉未消费的 `hasAudio`、`canPlayNext`、`previousSubtitle`、`currentSubtitle`、`nextSubtitle`、`overlayLocked` 和 `error` 重复播放状态字段；UI state 现在只保留标题/封面/playlist identity、播放状态与进度、字幕列表/index/空文案、悬浮窗请求等当前可见行为字段。
-- **剩余问题**：playlist identity、字幕列表/索引、悬浮窗请求、sleep 等状态仍在 Service 快照、Controller 快照和 UI 映射之间手工搬运，`emitState()` 还需要拼接 service identity、active track/context 与 controller 播放状态。
-- **方向**：下一步把 service identity → active track/context 抽成单一 helper 或领域状态，再逐步收敛为一份领域状态 + 一个 UI 映射，减少中间快照类和逐字段搬运。
+- **位置**：`PlaybackUiState` 与 `PlaybackPresentationState`（`PlaybackPresentationState.kt`）、`PlaybackServiceSnapshot`（`PlaybackServiceState.kt:6-25`）、`PlaybackControllerSnapshot`（`PlaybackCommandClient.kt:31-38`）。
+- **已改善**：`PlaybackUiState` 已去掉未消费的 `hasAudio`、`canPlayNext`、`previousSubtitle`、`currentSubtitle`、`nextSubtitle`、`overlayLocked` 和 `error` 重复播放状态字段；UI state 现在只保留标题/封面/playlist identity、播放状态与进度、字幕列表/index/空文案、悬浮窗请求等当前可见行为字段。`PlaybackPresentationState` 已承接 `PlaybackSelection`、playlist cache、`PlaybackControllerSnapshot`、service snapshot → active track/context 同步和 `PlaybackUiState` 投影，`PlaybackViewModel` 只保留 Flow collect、对外命令方法和 `PlaybackCommandClient` 调用。
+- **剩余问题**：`PlaybackUiState`、`PlaybackServiceSnapshot`、`PlaybackControllerSnapshot` 仍是三份边界数据；字幕、悬浮窗、sleep 等自定义状态仍经 service snapshot 进入 controller snapshot，再映射到 UI；播放位置 ticker 与 Service 字幕调度的进一步收敛仍未处理。
+- **方向**：后续在处理 C4/ticker 或继续压缩快照边界时，再评估是否把播放展示领域状态和 UI 映射进一步拆分，避免把字段搬运重新散回 ViewModel。
 
 ### D2 · [P2] ViewModel 职责过载：直接编排文件 IO + 命令式返回业务结果给 UI
 
@@ -153,7 +153,7 @@
 
 1. **Phase A（卫生，低风险先行）**：C1 全仓 wildcard import 清理与 C6 已完成；后续避免补回全家桶 import。
 2. **Phase B（根因，P0）**：A1 删 `DbIo` → 仓库读写转 `suspend`/`Flow`（A6）→ 删命令式 `refresh/sync`（A2）→ UI 写操作进协程（A3）。一条主线，解决 ANR 与双路径。
-3. **Phase C（播放状态收敛，P1）**：A4 统一到 `MediaController` → D1 合并数据类 → C4 合并 ticker。
+3. **Phase C（播放状态收敛，P1）**：A4 统一到 `MediaController` → D1 展示状态协调器已落地 → 后续继续评估 C4 ticker/字幕调度收敛。
 4. **Phase D（全局状态去耦，P1）**：A5 把 4 个 bus + service-locator 收敛进 DI。
 5. **Phase E（职责/体量，P2）**：A7 拆 `DlsiteRepository`、D2 下沉文件 IO、D3 拆组合根、D4 拆巨型 Screen。
 6. **Phase F（语言统一，P1/P2，可与上并行）**：C2 迁 Java→Kotlin（先 model 与 `data/remote`）→ C3 收紧 nullable。
