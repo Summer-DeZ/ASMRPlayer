@@ -37,6 +37,7 @@
 - [x] 需要做：Phase F 核心 model 小切片：`Playlist` 迁移为普通 Kotlin `class`（非 data class），构造器参数接受可空 Java 输入并归一化（`coverUri == null` → `""`），默认 `tracks` 仍保留可变 `ArrayList` 兼容旧 Java 字段语义，通过 `@JvmField` 保持 Java 直接字段访问、`@JvmOverloads` + `(id, name, tracks)` 次构造器覆盖原三种构造方式、`@JvmStatic` + `@Throws(JSONException)` 保持 `fromJson`/`toJson` 兼容，并手写 `copy(...)` 让 Kotlin 侧 `copy(name=…)`、`copy(coverUri=…)` 继续可用。
 - [x] 需要做：Phase F `data/remote` Kotlin 化第一切片：`DlsiteClient`、`DlsiteContentProgressListener`、`DlsiteRemoteConstants` 迁移为 Kotlin，保留 `DlsiteClient.LOGIN_URL` 与 `DlsiteRemoteConstants.*` Java 静态字段访问，回调接口仍保持 Java 单方法接口 ABI。
 - [x] 需要做：Phase F `data/remote` Kotlin 化第二切片：`DlsiteRemoteFiles`、`DlsiteDownloadJsonParser` 迁移为 Kotlin `object`，通过 `@JvmStatic` 保持 Java 静态工具方法调用形态，并保留文件下载工具的 null 宽松边界、checked exception 与 DLsite 下载 JSON 解析异常包装。
+- [x] 需要做：Phase F `data/remote` Kotlin 化第三切片：`DlsiteHtmlParser`、`DlsiteWebvttJsonParser` 迁移为 Kotlin `object`，通过 `@JvmStatic` 保持 Java/Kotlin 静态解析入口，保留 HTML 链接/封面解析、WebVTT JSON 时间轴转换和字幕解析异常包装语义。
 - [ ] 后续做：Phase C 继续评估 `PlaybackCommandClient` 播放位置 ticker 的收敛方式，并收敛重复快照数据类和手工字段搬运。
 - [ ] 后续做：Phase D 继续处理其它剩余 service-locator 去耦，逐步收敛到注入的仓库/服务边界。
 - [ ] 后续做：Phase E 继续拆分 `ASMRPlayerApp.kt` 组合根和巨型 Screen 文件。
