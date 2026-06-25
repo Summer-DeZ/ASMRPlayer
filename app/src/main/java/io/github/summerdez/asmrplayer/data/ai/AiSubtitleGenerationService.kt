@@ -66,6 +66,7 @@ class AiSubtitleGenerationService : Service() {
     private fun startGeneration(intent: Intent) {
         val target = AiSubtitleGenerationIntents.targetFrom(intent)
         val forceRegenerate = AiSubtitleGenerationIntents.forceRegenerateFrom(intent)
+        val forceRetranslate = AiSubtitleGenerationIntents.forceRetranslateFrom(intent)
         if (target.playlistId.isBlank() || target.trackId.isBlank() || target.audioUri.isBlank()) {
             stopSelf()
             return
@@ -82,7 +83,7 @@ class AiSubtitleGenerationService : Service() {
             )
             lateinit var job: Job
             job = scope.launch(start = CoroutineStart.LAZY) {
-                runGeneration(target, forceRegenerate, job)
+                runGeneration(target, forceRegenerate, forceRetranslate, job)
             }
             jobs[target.trackId] = job
             job.start()
@@ -92,6 +93,7 @@ class AiSubtitleGenerationService : Service() {
     private suspend fun runGeneration(
         target: SubtitleGenerationTarget,
         forceRegenerate: Boolean,
+        forceRetranslate: Boolean,
         job: Job,
     ) {
         try {
@@ -107,6 +109,10 @@ class AiSubtitleGenerationService : Service() {
             )
             if (forceRegenerate) {
                 clearAiSubtitleCaches(target.trackId, segmentCache, translationCache, sceneContextBuilder)
+            } else if (forceRetranslate) {
+                // 保留转写缓存，只清翻译与场景上下文，让流程跳过转写、仅重跑翻译。
+                translationCache.clear(target.trackId)
+                sceneContextBuilder.clear(target.trackId)
             }
             val sourceLines = segmentCache.load(target, transcriptionCacheKey)
                 ?.also { cachedLines ->
@@ -353,8 +359,9 @@ class AiSubtitleGenerationService : Service() {
             context: Context,
             target: SubtitleGenerationTarget,
             forceRegenerate: Boolean = false,
+            forceRetranslate: Boolean = false,
         ): Intent {
-            return AiSubtitleGenerationIntents.startIntent(context, target, forceRegenerate)
+            return AiSubtitleGenerationIntents.startIntent(context, target, forceRegenerate, forceRetranslate)
         }
 
         fun pauseIntent(context: Context, trackId: String): Intent {

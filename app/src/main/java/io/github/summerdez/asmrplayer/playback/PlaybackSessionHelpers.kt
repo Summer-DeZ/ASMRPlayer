@@ -37,7 +37,6 @@ internal fun buildPlaybackServiceSnapshot(
     sleepTimerActive: Boolean,
     sleepTimerAtEndOfTrack: Boolean,
     sleepTimerEndElapsedRealtimeMs: Long,
-    sleepTimerRemainingMs: Long,
     sleepTimerMinutes: Int,
 ): PlaybackServiceSnapshot {
     return PlaybackServiceSnapshot(
@@ -54,7 +53,6 @@ internal fun buildPlaybackServiceSnapshot(
         sleepTimerActive = sleepTimerActive,
         sleepTimerAtEndOfTrack = sleepTimerAtEndOfTrack,
         sleepTimerEndElapsedRealtimeMs = sleepTimerEndElapsedRealtimeMs,
-        sleepTimerRemainingMs = sleepTimerRemainingMs,
         sleepTimerMinutes = sleepTimerMinutes,
     )
 }

@@ -1,6 +1,7 @@
 package io.github.summerdez.asmrplayer.ui.screens
 
 import androidx.activity.compose.BackHandler
+import androidx.compose.foundation.ScrollState
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
@@ -11,8 +12,8 @@ import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.layout.statusBarsPadding
 import androidx.compose.foundation.layout.width
-import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
@@ -45,6 +46,7 @@ import io.github.summerdez.asmrplayer.ui.uiProbe
 @Composable
 internal fun AiSettingsPage(
     state: SettingsUiState,
+    scrollState: ScrollState,
     onBack: () -> Unit,
     onAiTranscriptionBackendSelected: (AiTranscriptionBackend) -> Unit,
     onAiEngineSelected: (AiTranslationEngine) -> Unit,
@@ -79,32 +81,47 @@ internal fun AiSettingsPage(
                     "transcriptionBackend" to settings.transcriptionBackend.name,
                 ),
             )
-            .verticalScroll(rememberScrollState())
+            .statusBarsPadding()
+            .verticalScroll(scrollState)
             .padding(horizontal = 22.dp, vertical = 8.dp),
         verticalArrangement = Arrangement.spacedBy(0.dp),
     ) {
         Row(
             modifier = Modifier
                 .fillMaxWidth()
-                .height(40.dp)
-                .uiProbe("settings.ai.back", "AI 设置返回按钮", "SettingsAiPage.kt")
-                .clickable(onClick = onBack),
+                .height(58.dp)
+                .uiProbe("settings.ai.header", "AI 设置二级页顶部栏", "SettingsAiPage.kt"),
             verticalAlignment = Alignment.CenterVertically,
         ) {
-            Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = "返回", tint = tokens.accent, modifier = Modifier.size(20.dp))
+            androidx.compose.foundation.layout.Box(
+                modifier = Modifier
+                    .size(42.dp)
+                    .uiProbe("settings.ai.back", "AI 设置返回按钮", "SettingsAiPage.kt")
+                    .clickable(onClick = onBack),
+                contentAlignment = Alignment.Center,
+            ) {
+                Icon(
+                    Icons.AutoMirrored.Filled.ArrowBack,
+                    contentDescription = "返回",
+                    tint = tokens.label,
+                    modifier = Modifier.size(24.dp),
+                )
+            }
             Spacer(Modifier.width(6.dp))
-            Text("设置", color = tokens.accent, fontSize = 15.sp, fontWeight = FontWeight.SemiBold)
+            Text(
+                text = "设置",
+                color = tokens.label,
+                fontSize = 34.sp,
+                lineHeight = 34.sp,
+                fontFamily = androidx.compose.ui.text.font.FontFamily.Serif,
+                fontWeight = FontWeight.Normal,
+                letterSpacing = 0.sp,
+                maxLines = 1,
+                overflow = TextOverflow.Ellipsis,
+            )
         }
 
-        Spacer(Modifier.height(8.dp))
-        Text(
-            text = "AI 字幕与翻译",
-            color = tokens.label,
-            fontSize = 26.sp,
-            fontWeight = FontWeight.Bold,
-        )
-
-        Spacer(Modifier.height(22.dp))
+        Spacer(Modifier.height(14.dp))
         InlineSectionTitle("AI翻译接口")
         SettingsSegmentedControl(
             labels = listOf("本地 Ollama", "OpenAI 兼容"),
@@ -283,8 +300,8 @@ private fun WhisperModelStatusRow(
             Spacer(Modifier.width(14.dp))
             Text(
                 "模型状态",
-                fontSize = 15.sp,
-                fontWeight = FontWeight.SemiBold,
+                fontSize = SettingsRowTitleFontSize,
+                fontWeight = SettingsRowTitleFontWeight,
                 color = tokens.label,
                 maxLines = 1,
                 overflow = TextOverflow.Ellipsis,
@@ -292,7 +309,7 @@ private fun WhisperModelStatusRow(
             )
             Text(
                 statusText,
-                fontSize = 13.sp,
+                fontSize = SettingsRowValueFontSize,
                 color = if (model.error.isNotBlank()) tokens.accent2 else tokens.label3,
                 maxLines = 1,
                 overflow = TextOverflow.Ellipsis,
@@ -316,7 +333,7 @@ private fun WhisperModelStatusRow(
                     if (model.downloaded) formatUpdateBytes(model.bytesDownloaded) else formatUpdateBytes(model.totalBytes)
                 },
                 color = tokens.label3,
-                fontSize = 13.sp,
+                fontSize = SettingsRowValueFontSize,
                 maxLines = 1,
                 overflow = TextOverflow.Ellipsis,
                 modifier = Modifier.weight(1f),
@@ -359,10 +376,16 @@ private fun RemoteWhisperTestRow(status: RemoteWhisperTestStatus, onClick: () ->
     ) {
         SettingsIcon(Icons.Default.Settings)
         Spacer(Modifier.width(14.dp))
-        Text("测试连接", fontSize = 15.sp, fontWeight = FontWeight.SemiBold, color = tokens.label, modifier = Modifier.weight(1f))
+        Text(
+            "测试连接",
+            fontSize = SettingsRowTitleFontSize,
+            fontWeight = SettingsRowTitleFontWeight,
+            color = tokens.label,
+            modifier = Modifier.weight(1f),
+        )
         when (status) {
             RemoteWhisperTestStatus.Idle -> {
-                Text("未测试", fontSize = 13.sp, color = tokens.label3)
+                Text("未测试", fontSize = SettingsRowValueFontSize, color = tokens.label3)
                 Spacer(Modifier.width(8.dp))
                 Icon(Icons.AutoMirrored.Filled.KeyboardArrowRight, contentDescription = null, tint = tokens.label3, modifier = Modifier.size(19.dp))
             }
@@ -374,13 +397,13 @@ private fun RemoteWhisperTestRow(status: RemoteWhisperTestStatus, onClick: () ->
                     strokeWidth = 2.dp,
                 )
                 Spacer(Modifier.width(8.dp))
-                Text("测试中…", fontSize = 13.sp, color = tokens.label3)
+                Text("测试中…", fontSize = SettingsRowValueFontSize, color = tokens.label3)
             }
             is RemoteWhisperTestStatus.Success -> {
-                Text(status.message, fontSize = 13.sp, color = tokens.accent, maxLines = 1, overflow = TextOverflow.Ellipsis)
+                Text(status.message, fontSize = SettingsRowValueFontSize, color = tokens.accent, maxLines = 1, overflow = TextOverflow.Ellipsis)
             }
             is RemoteWhisperTestStatus.Failed -> {
-                Text(status.message, fontSize = 13.sp, color = tokens.accent2, maxLines = 1, overflow = TextOverflow.Ellipsis)
+                Text(status.message, fontSize = SettingsRowValueFontSize, color = tokens.accent2, maxLines = 1, overflow = TextOverflow.Ellipsis)
             }
         }
     }

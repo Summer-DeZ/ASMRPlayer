@@ -5,6 +5,7 @@ import androidx.lifecycle.viewModelScope
 import io.github.summerdez.asmrplayer.playback.PlaybackCommandClient
 import io.github.summerdez.asmrplayer.playback.PlaybackControllerSnapshot
 import io.github.summerdez.asmrplayer.playback.PlaybackServiceSnapshot
+import io.github.summerdez.asmrplayer.playback.activeServiceSnapshotOrNull
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
@@ -54,10 +55,7 @@ class SleepTimerViewModel(
     }
 
     private fun PlaybackControllerSnapshot.toSleepTimerUiState(): SleepTimerUiState {
-        if (!connected) {
-            return SleepTimerUiState()
-        }
-        return serviceSnapshot.toSleepTimerUiState()
+        return activeServiceSnapshotOrNull()?.toSleepTimerUiState() ?: SleepTimerUiState()
     }
 
     private fun PlaybackServiceSnapshot.toSleepTimerUiState(): SleepTimerUiState {

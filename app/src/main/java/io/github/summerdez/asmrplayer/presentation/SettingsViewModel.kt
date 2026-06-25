@@ -21,6 +21,7 @@ import io.github.summerdez.asmrplayer.domain.model.AppThemeMode
 import io.github.summerdez.asmrplayer.domain.model.WhisperModelSpec
 import io.github.summerdez.asmrplayer.playback.PlaybackCommandClient
 import io.github.summerdez.asmrplayer.playback.PlaybackControllerSnapshot
+import io.github.summerdez.asmrplayer.playback.activeServiceSnapshotOrNull
 import kotlinx.coroutines.flow.MutableSharedFlow
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.SharedFlow
@@ -182,11 +183,12 @@ class SettingsViewModel(
 
     private fun updateState(snapshot: PlaybackControllerSnapshot) {
         val context = getApplication<Application>()
+        val serviceSnapshot = snapshot.activeServiceSnapshotOrNull()
         _state.update { current ->
             current.copy(
                 overlayPermissionGranted = Settings.canDrawOverlays(context),
-                overlayRequested = snapshot.connected && snapshot.serviceSnapshot.overlayRequested,
-                overlayLocked = snapshot.connected && snapshot.serviceSnapshot.overlayLocked,
+                overlayRequested = serviceSnapshot?.overlayRequested == true,
+                overlayLocked = serviceSnapshot?.overlayLocked == true,
                 notificationGranted = Build.VERSION.SDK_INT < Build.VERSION_CODES.TIRAMISU ||
                     ContextCompat.checkSelfPermission(
                         context,
@@ -198,11 +200,7 @@ class SettingsViewModel(
     }
 
     private fun currentOverlayRequested(snapshot: PlaybackControllerSnapshot): Boolean {
-        return if (snapshot.connected) {
-            snapshot.serviceSnapshot.overlayRequested
-        } else {
-            _state.value.overlayRequested
-        }
+        return snapshot.activeServiceSnapshotOrNull()?.overlayRequested ?: _state.value.overlayRequested
     }
 
     fun setThemeMode(mode: AppThemeMode) {

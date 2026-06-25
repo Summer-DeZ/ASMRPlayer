@@ -12,7 +12,6 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.filled.Bedtime
 import androidx.compose.material.icons.filled.GraphicEq
 import androidx.compose.material.icons.filled.MusicNote
 import androidx.compose.material3.HorizontalDivider
@@ -21,7 +20,6 @@ import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
-import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
@@ -45,19 +43,23 @@ fun SleepTab(
     onCancel: () -> Unit,
 ) {
     val tokens = LocalAmberTokens.current
-    var selectedMinutes by remember {
-        mutableIntStateOf(if (state.minutes > 0) state.minutes else 45)
+    var selectedMinutes: Int? by remember {
+        mutableStateOf(if (state.active && !state.atEndOfTrack && state.minutes > 0) state.minutes else null)
     }
     var fadeEnabled by remember { mutableStateOf(true) }
     var stopAfterCurrent by remember { mutableStateOf(state.active && state.atEndOfTrack) }
-    var sleepVolume by remember { mutableIntStateOf(64) }
     val context = LocalContext.current
     LaunchedEffect(state.active, state.atEndOfTrack, state.minutes) {
         if (state.active && !state.atEndOfTrack && state.minutes > 0) {
             selectedMinutes = state.minutes
         }
+        if (!state.active) {
+            selectedMinutes = null
+        }
         if (state.active) {
             stopAfterCurrent = state.atEndOfTrack
+        } else if (state.atEndOfTrack) {
+            stopAfterCurrent = false
         }
     }
     Column(
@@ -71,7 +73,7 @@ fun SleepTab(
                     "active" to state.active.toString(),
                     "atEndOfTrack" to state.atEndOfTrack.toString(),
                     "minutes" to state.minutes.toString(),
-                    "selectedMinutes" to selectedMinutes.toString(),
+                    "selectedMinutes" to (selectedMinutes?.toString() ?: ""),
                 ),
             )
             .verticalScroll(rememberScrollState())
@@ -90,6 +92,7 @@ fun SleepTab(
                     onClick = {
                         selectedMinutes = minutes
                         stopAfterCurrent = false
+                        onSetMinutes(minutes)
                     },
                 )
             }
@@ -99,7 +102,6 @@ fun SleepTab(
             SleepSwitchSettingRow(
                 icon = Icons.Default.GraphicEq,
                 title = "结束前淡出",
-                subtitle = "临近结束时缓缓降低音量",
                 checked = fadeEnabled,
                 onCheckedChange = {
                     fadeEnabled = !fadeEnabled
@@ -110,7 +112,6 @@ fun SleepTab(
             SleepSwitchSettingRow(
                 icon = Icons.Default.MusicNote,
                 title = "播完当前作品后停止",
-                subtitle = "忽略计时，听完整段",
                 checked = stopAfterCurrent,
                 onCheckedChange = {
                     val next = !stopAfterCurrent
@@ -122,41 +123,28 @@ fun SleepTab(
                     }
                 },
             )
-            HorizontalDivider(color = tokens.separator, modifier = Modifier.padding(start = 48.dp))
-            SleepVolumeSettingRow(
-                volume = sleepVolume,
-                onVolumeChange = { sleepVolume = it },
-            )
         }
         Spacer(Modifier.height(22.dp))
-        SleepPrimaryButton(
-            text = "开始睡眠定时",
-            icon = Icons.Default.Bedtime,
-            onClick = {
-                if (stopAfterCurrent) {
-                    onSetEndOfTrack()
-                } else {
-                    onSetMinutes(selectedMinutes)
-                }
-            },
-        )
         TextButton(
-            onClick = onCustom,
+            onClick = if (state.active) onCancel else onCustom,
             modifier = Modifier
-                .height(44.dp)
-                .uiProbe("sleep.custom-minutes", "自定义睡眠分钟按钮", "SleepScreen.kt"),
+                .height(54.dp)
+                .uiProbe(
+                    id = "sleep.timer-action",
+                    label = if (state.active) "取消睡眠定时按钮" else "自定义睡眠时间按钮",
+                    sourceHint = "SleepScreen.kt",
+                    metadata = mapOf(
+                        "active" to state.active.toString(),
+                        "text" to if (state.active) "取消定时" else "自定义时间",
+                    ),
+                ),
         ) {
-            Text("自定义分钟数", color = tokens.label3, fontSize = 13.sp, fontWeight = FontWeight.SemiBold)
-        }
-        if (state.active) {
-            TextButton(
-                onClick = onCancel,
-                modifier = Modifier
-                    .height(54.dp)
-                    .uiProbe("sleep.cancel", "取消睡眠定时按钮", "SleepScreen.kt"),
-            ) {
-                Text("取消睡眠定时", color = tokens.accent2, fontSize = 17.sp, fontWeight = FontWeight.Bold)
-            }
+            Text(
+                if (state.active) "取消定时" else "自定义时间",
+                color = if (state.active) tokens.switchOn else tokens.label3,
+                fontSize = 15.sp,
+                fontWeight = FontWeight.SemiBold,
+            )
         }
     }
 }

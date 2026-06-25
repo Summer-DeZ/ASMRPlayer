@@ -8,6 +8,7 @@ import androidx.room.PrimaryKey
 import androidx.room.Query
 import androidx.room.ForeignKey
 import androidx.room.Index
+import androidx.room.Upsert
 import kotlinx.coroutines.flow.Flow
 
 @Entity(tableName = "dlsite_works")
@@ -111,10 +112,10 @@ interface DlsiteDao {
     @Query("SELECT COALESCE(MAX(queueOrder), 0) + 1 FROM dlsite_download_queue")
     suspend fun nextDownloadQueueOrder(): Long
 
-    @Insert(onConflict = OnConflictStrategy.REPLACE)
+    @Upsert
     suspend fun upsert(work: DlsiteWorkEntity)
 
-    @Insert(onConflict = OnConflictStrategy.REPLACE)
+    @Upsert
     suspend fun upsertAll(works: List<DlsiteWorkEntity>)
 
     @Insert(onConflict = OnConflictStrategy.REPLACE)

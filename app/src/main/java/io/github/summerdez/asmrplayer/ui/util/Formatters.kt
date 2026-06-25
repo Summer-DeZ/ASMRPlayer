@@ -129,22 +129,9 @@ import androidx.compose.animation.slideOutVertically
 import androidx.compose.animation.togetherWith
 import androidx.compose.ui.window.Dialog
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
-import io.github.summerdez.asmrplayer.presentation.SleepTimerUiState
 import java.text.DateFormat
 import java.util.Date
 import kotlin.math.max
-
-fun sleepStatusText(state: SleepTimerUiState): String {
-    if (!state.active) {
-        return "未设置睡眠定时"
-    }
-    if (state.atEndOfTrack) {
-        return "将在当前曲目播放结束后暂停"
-    }
-    val minutes = (state.remainingMs / 60_000L).coerceAtLeast(0L)
-    val seconds = ((state.remainingMs / 1_000L) % 60L).coerceAtLeast(0L)
-    return "剩余 %02d:%02d".format(minutes, seconds)
-}
 
 data class LyricLine(val key: Int, val text: String, val translation: String, val current: Boolean)
 

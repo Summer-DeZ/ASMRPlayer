@@ -1,6 +1,7 @@
 package io.github.summerdez.asmrplayer.data.ai
 
 import android.content.Context
+import android.util.Log
 import io.github.summerdez.asmrplayer.domain.model.AiSubtitleSettings
 import io.github.summerdez.asmrplayer.domain.model.SubtitleGenerationTarget
 import io.github.summerdez.asmrplayer.domain.model.SubtitleLine
@@ -34,6 +35,7 @@ internal class SceneContextBuilder(
             if (error is CancellationException) {
                 throw error
             }
+            Log.w(TAG, "情景卡生成失败，退化为空上下文 track=${target.trackId}", error)
             SceneContext()
         }
     }
@@ -142,6 +144,7 @@ internal class SceneContextBuilder(
     }
 
     private companion object {
+        const val TAG = "SceneContextBuilder"
         const val HEADER = "ASMRPLAYER_AI_SCENE_CONTEXT_V1"
         const val KEY_TRACK_ID = "trackId"
         const val KEY_AUDIO_URI = "audioUri"

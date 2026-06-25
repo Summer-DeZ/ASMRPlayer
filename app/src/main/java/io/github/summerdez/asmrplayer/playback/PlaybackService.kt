@@ -446,7 +446,6 @@ class PlaybackService : MediaSessionService() {
                 sleepTimerActive = sleepAtEndOfTrack || sleepRemainingMs > 0L,
                 sleepTimerAtEndOfTrack = sleepAtEndOfTrack,
                 sleepTimerEndElapsedRealtimeMs = sleepTimer.endElapsedRealtimeMs(),
-                sleepTimerRemainingMs = sleepRemainingMs,
                 sleepTimerMinutes = sleepTimer.minutes(),
             ),
         )

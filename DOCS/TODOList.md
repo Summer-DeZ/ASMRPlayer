@@ -1,5 +1,5 @@
 > 当前软件版本：1.6.1（versionCode 22）
-> 文档更新日期：2026-06-25
+> 文档更新日期：2026-06-26
 
 # 1.6.1
 
@@ -9,21 +9,22 @@
 
 C 代码层：全仓 wildcard import 清零（含 `ExampleInstrumentedTest.kt` 的 `org.junit.Assert.*`）、Java 清零、nullable 参数全链路收紧（仓库/model/DTO/remote）、`!!` 清零、`@JvmField/@JvmStatic/@JvmOverloads` 清零、`SubtitleCueScheduler` 抽出；DLsite ziptree/content-file DTO 下沉到 `domain.model.DlsiteZiptree` / `DlsiteContentFile`，下载规划不再依赖 remote parser 内部 DTO。
 
-D 设计层：`LibraryFileImportUseCase` 完成（含 `LibraryImportFiles<T>` 端口/适配器）、`PlaybackPresentationState` 协调器落地。A7 尾段完成：`DlsiteRepository` 不再暴露/代理下载队列 API，`RoomDlsiteRepository` 只协调本地/远程/下载状态；`DlsiteDownloadQueueRepository` 显式注入 `DlsiteViewModel`、`DlsiteDownloadServiceDependencies` 和 `DlsiteDownloadBlockingAdapter`。主题设置完成持久化分层：`AppThemeMode` 归入 `domain.model`，`SettingsRepository` 通过 `app_settings.app_theme_mode` 暴露 `themeModeFlow`，重启后可恢复主题，`AppUi` 只负责 palette/system bars。
+D 设计层：`LibraryFileImportUseCase` 完成（含 `LibraryImportFiles<T>` 端口/适配器）、`PlaybackPresentationState` 协调器落地。A7 尾段完成：`DlsiteRepository` 不再暴露/代理下载队列 API，`RoomDlsiteRepository` 只协调本地/远程/下载状态；`DlsiteDownloadQueueRepository` 显式注入 `DlsiteViewModel`、`DlsiteDownloadServiceDependencies` 和 `DlsiteDownloadBlockingAdapter`。主题设置完成持久化分层：`AppThemeMode` 归入 `domain.model`，`SettingsRepository` 通过 `app_settings.app_theme_mode` 暴露 `themeModeFlow`，重启后可恢复主题，`AppUi` 只负责 palette/system bars。D1 前置拆分完成：`PlaybackControllerSnapshot.activeServiceSnapshotOrNull()` 统一有效 service snapshot 判断，Service 端不再构造/发布 `sleepTimerRemainingMs`，睡眠倒计时 remaining 继续由客户端按锚点派生。
 
-D3 大粒度拆分继续落地：`AppScaffold.kt` 抽出根 `UiProbeHost` / `Box` / `Scaffold` / `PageHeader` / `BottomPlaybackArea` / `content` / `dialogHost` slot，`AppTabHost.kt` 抽出 MEDIA / SETTINGS / SLEEP / DLSITE tab 分发；组合根仍保留状态与副作用编排，后续继续拆 launcher / state / effect host。
+D3 大粒度拆分继续落地：`AppScaffold.kt` 抽出根 `UiProbeHost` / `Box` / `Scaffold` / `PageHeader` / `BottomPlaybackArea` / `content` / `dialogHost` slot，`AppTabHost.kt` 抽出 MEDIA / SETTINGS / SLEEP / DLSITE tab 分发，`AppActivityLaunchers.kt` 抽出音频/文件夹/封面/字幕/DLsite 登录 launcher，`AppRootState.kt` 抽出根 overlay/dialog 状态与播放器/队列 `BackHandler`；组合根仍保留 VM collect、`LaunchedEffect`、derived state、host wiring 与业务 callback 编排。
 
-D4 大文件拆分按新完成标准达成：单个大文件不超过 500 行，不再要求 400 行。最终复审行数：`ASMRPlayerApp.kt` 407、`AppDialogHost.kt` 370、`AppScaffold.kt` 102、`AppTabHost.kt` 155、`SettingsScreen.kt` 252、`SettingsRows.kt` 456、`SettingsAiPage.kt` 403、`SettingsUpdateSection.kt` 267、`PlayerScreen.kt` 144、`PlayerControls.kt` 300、`PlayerMoreMenu.kt` 386、`PlayerTransport.kt` 267、`LibraryScreen.kt` 260、`LibraryRows.kt` 444、`LibrarySheets.kt` 422、`DlsiteScreen.kt` 116、`DlsiteRows.kt` 354、`DlsiteDialogs.kt` 210、`SleepScreen.kt` 162、`SleepComponents.kt` 366；`app/src/main/java` Kotlin 源文件无超过 500 行项，后续不为 400 行目标继续拆。
+D4 大文件拆分按新完成标准达成：单个大文件不超过 500 行，不再要求 400 行。最终复审行数：`ASMRPlayerApp.kt` 339、`AppDialogHost.kt` 370、`AppScaffold.kt` 102、`AppTabHost.kt` 155、`AppActivityLaunchers.kt` 106、`AppRootState.kt` 46、`SettingsScreen.kt` 252、`SettingsRows.kt` 456、`SettingsAiPage.kt` 403、`SettingsUpdateSection.kt` 267、`PlayerScreen.kt` 144、`PlayerControls.kt` 300、`PlayerMoreMenu.kt` 386、`PlayerTransport.kt` 267、`LibraryScreen.kt` 260、`LibraryRows.kt` 495、`LibrarySheets.kt` 422、`DlsiteScreen.kt` 116、`DlsiteRows.kt` 399、`DlsiteDialogs.kt` 237、`SleepScreen.kt` 162、`SleepComponents.kt` 366；`app/src/main/java` Kotlin 源文件无超过 500 行项，后续不为 400 行目标继续拆。
 
-C5 高风险异常路径补强：DLsite 取消传播、批量暂停、删除收尾、DocumentFiles 降级日志、远程下载中断重抛与播放 controller 构建失败重试均已修补。
+C5 高风险异常路径补强：DLsite 取消传播、批量暂停、删除收尾、下载 worker 中断识别/清理后恢复 interrupt、下载失败原始异常日志、DocumentFiles 降级日志、远程下载中断重抛、播放 controller 构建失败重试、AI 字幕 job 生命周期加锁、音频 decoder configure/start 失败释放路径、`SceneContextBuilder` 情景卡网络失败降级日志均已修补；单测开 `unitTests.isReturnDefaultValues = true` 以兼容生产 `Log` 调用。
 
-阶段验证：此前 `GRADLE_USER_HOME=/tmp/asrm-gradle ./gradlew --no-daemon --console=plain :app:clean :app:compileDebugKotlin` 通过；`AppThemeModeTest`、`DlsiteDownloadPlannerTest`、`DlsiteDownloadTaskTest`、`DlsiteJsonParserTest` 通过；`git diff --check` 通过。最终提交前只复核 `app/src/main/java` Kotlin 源文件无超过 500 行项，未重新运行编译/测试。
+D1/D3/C5 收口：D1 评估结论为**不合并**三份快照（IPC wire DTO / 客户端 runtime snapshot / UI 投影是三个真实边界），重复判断已抽成 `activeServiceSnapshotOrNull()`；D3 launcher/state/effect host 已抽出，组合根剩 VM collect 与 effect 属正常职责；C5 高风险路径已补强，剩余宽泛 `catch`/`runCatching` 多为字段级解析与可选缓存兜底，不计入高风险。
+
+收尾修复（衔接上一轮未编译完的中间态）：`DlsiteDialogs.kt`/`DlsiteRows.kt`/`LibraryRows.kt` 误生成的 `layout.weight`、`layout.align` 顶层 import 删除（scope 成员无需 import），`progressPercent` 智能转换改局部 val，`LibraryRows.kt` 补 `transcriptionDetailLabel` import，`PlaybackTrackSnapshotMapper.kt` 跟进 `QueueIdentity` 改名，`appUpdateDownloadUiStatus` 由 `private` 放宽为 `internal` 供测试访问。
+
+验证：`:app:compileDebugKotlin` 通过；`:app:testDebugUnitTest` 全绿（202 项）；`git diff --check` 通过。
 
 **待完成：**
 
-- [ ] D1（评估项）：`PlaybackServiceSnapshot` / `PlaybackControllerSnapshot` / `PlaybackUiState` 仍是三份独立边界快照；当前三快照格局功能正确，后续评估是否合并 service/controller 快照，或继续让 `PlaybackPresentationState` 接管更多映射逻辑。
-- [ ] D3：第二刀已落地，`AppScaffold.kt`（102 行）抽出根 `UiProbeHost` / `Box` / `Scaffold` / `PageHeader` / `BottomPlaybackArea` / `content` / `dialogHost` slot，`AppTabHost.kt`（155 行）抽出 MEDIA / SETTINGS / SLEEP / DLSITE tab 分发，`ASMRPlayerApp.kt` 降至 407 行，`AppDialogHost.kt` 保持 370 行；剩余为 VM collect、`LaunchedEffect`、ActivityResult launcher、`BackHandler`、dialog state、derived state、`AppDialogHost` wiring 与业务 callback 仍在组合根，后续再拆 launcher / state / effect host。
-- [ ] C5（非阻塞）：下载/远程/播放控制路径异常处理继续抽样；本轮已修补 `DlsiteViewModel.kt`（313 行）取消传播、`pauseAllDownloads` 单项失败不中断全部，`DlsiteDownloadService.kt`（498 行）删除失败收尾、运行中 pause/delete 同锁接管与 stopRequest 下晚到进度回调忽略，DocumentFiles 权限/非法 URI 增加降级日志，`DlsiteCoverRemote.kt`（257 行）/`DlsiteContentRemote.kt`（423 行）中断重抛，`PlaybackCommandClient.kt`（295 行）controller 构建失败可重试，`AiSubtitleGenerationService.kt`（368 行）job 生命周期加锁，`AudioPcmDecoder.kt`（267 行）configure/start 失败释放路径补齐；剩余继续抽样网络/下载路径 `catch` 与 `runCatching{}.getOrNull()`，确认无静默吞错。
 - [ ] 暂不做：本轮不引入 ktlint/Spotless；如后续需要再单独评估。
 
 ---

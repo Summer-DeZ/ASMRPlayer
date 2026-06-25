@@ -4,8 +4,6 @@ import androidx.compose.animation.animateColorAsState
 import androidx.compose.animation.core.animateFloatAsState
 import androidx.compose.animation.core.tween
 import androidx.compose.foundation.BorderStroke
-import androidx.compose.foundation.background
-import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.BoxWithConstraints
 import androidx.compose.foundation.layout.Column
@@ -14,7 +12,6 @@ import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
-import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
@@ -22,7 +19,6 @@ import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.itemsIndexed
 import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.foundation.shape.CircleShape
-import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.KeyboardArrowDown
 import androidx.compose.material.icons.filled.MoreVert
@@ -35,10 +31,7 @@ import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.draw.clip
 import androidx.compose.ui.draw.clipToBounds
-import androidx.compose.ui.graphics.Brush
-import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.TransformOrigin
 import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.text.font.FontWeight
@@ -48,7 +41,7 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import io.github.summerdez.asmrplayer.presentation.PlaybackUiState
 import io.github.summerdez.asmrplayer.ui.components.CoverBox
-import io.github.summerdez.asmrplayer.ui.components.EqualizerIcon
+import io.github.summerdez.asmrplayer.ui.components.noRippleClickable
 import io.github.summerdez.asmrplayer.ui.theme.LocalAmberTokens
 import io.github.summerdez.asmrplayer.ui.uiProbe
 import io.github.summerdez.asmrplayer.ui.util.splitSubtitle
@@ -57,6 +50,7 @@ import kotlin.math.max
 @Composable
 internal fun PlayerTopBar(
     contextTitle: String,
+    showContextTitle: Boolean,
     onClose: () -> Unit,
     onOpenMenu: () -> Unit,
 ) {
@@ -67,53 +61,39 @@ internal fun PlayerTopBar(
             .fillMaxWidth()
             .uiProbe("player.top-bar", "播放器顶部栏", "PlayerControls.kt"),
     ) {
-        Surface(
+        Box(
             modifier = Modifier
                 .size(44.dp)
                 .uiProbe("player.close", "播放器关闭按钮", "PlayerControls.kt")
-                .clickable(onClick = onClose),
-            shape = CircleShape,
-            color = tokens.glass,
-            border = BorderStroke(0.5.dp, tokens.separator),
-            shadowElevation = 0.dp,
+                .noRippleClickable(onClick = onClose),
+            contentAlignment = Alignment.Center,
         ) {
-            Box(contentAlignment = Alignment.Center) {
-                Icon(Icons.Default.KeyboardArrowDown, contentDescription = "关闭", tint = tokens.label, modifier = Modifier.size(28.dp))
+            Icon(Icons.Default.KeyboardArrowDown, contentDescription = "关闭", tint = tokens.label, modifier = Modifier.size(28.dp))
+        }
+        Box(
+            modifier = Modifier.weight(1f),
+            contentAlignment = Alignment.Center,
+        ) {
+            if (showContextTitle && contextTitle.isNotBlank()) {
+                Text(
+                    contextTitle,
+                    color = tokens.label2,
+                    maxLines = 1,
+                    overflow = TextOverflow.Ellipsis,
+                    fontSize = 13.sp,
+                    fontWeight = FontWeight.SemiBold,
+                    textAlign = TextAlign.Center,
+                )
             }
         }
-        Column(Modifier.weight(1f), horizontalAlignment = Alignment.CenterHorizontally) {
-            Text(
-                "正在播放",
-                color = tokens.label3,
-                fontSize = 11.sp,
-                fontWeight = FontWeight.Medium,
-                letterSpacing = 1.6.sp,
-                maxLines = 1,
-                overflow = TextOverflow.Ellipsis,
-            )
-            Text(
-                contextTitle,
-                color = tokens.label2,
-                maxLines = 1,
-                overflow = TextOverflow.Ellipsis,
-                fontSize = 13.sp,
-                fontWeight = FontWeight.SemiBold,
-                modifier = Modifier.padding(top = 2.dp),
-            )
-        }
-        Surface(
+        Box(
             modifier = Modifier
                 .size(44.dp)
                 .uiProbe("player.more", "播放器更多菜单按钮", "PlayerControls.kt")
-                .clickable(onClick = onOpenMenu),
-            shape = CircleShape,
-            color = tokens.glass,
-            border = BorderStroke(0.5.dp, tokens.separator),
-            shadowElevation = 0.dp,
+                .noRippleClickable(onClick = onOpenMenu),
+            contentAlignment = Alignment.Center,
         ) {
-            Box(contentAlignment = Alignment.Center) {
-                Icon(Icons.Default.MoreVert, contentDescription = "更多", tint = tokens.label, modifier = Modifier.size(22.dp))
-            }
+            Icon(Icons.Default.MoreVert, contentDescription = "更多", tint = tokens.label, modifier = Modifier.size(22.dp))
         }
     }
 }
@@ -150,14 +130,7 @@ internal fun PlayerSubtitleDisplay(
                 }
             }
         } else if (lines.isEmpty()) {
-            Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
-                Text(
-                    playbackState.subtitleEmptyText,
-                    color = tokens.label3,
-                    fontSize = 22.sp,
-                    fontWeight = FontWeight.Bold,
-                )
-            }
+            Box(Modifier.fillMaxSize())
         } else {
             val listState = rememberLazyListState()
             val centerPad = maxHeight * 0.40f
@@ -204,9 +177,6 @@ internal fun PlayerSubtitleDisplay(
                                 scaleY = scale
                                 transformOrigin = TransformOrigin(0.5f, 0.5f)
                             }
-                            .clip(RoundedCornerShape(18.dp))
-                            .background(if (active) tokens.label.copy(alpha = 0.05f) else Color.Transparent)
-                            .padding(horizontal = if (active) 16.dp else 0.dp)
                             .padding(vertical = if (active) 12.dp else 10.dp),
                         horizontalAlignment = Alignment.CenterHorizontally,
                     ) {
@@ -233,26 +203,6 @@ internal fun PlayerSubtitleDisplay(
                     }
                 }
             }
-            Box(
-                Modifier
-                    .align(Alignment.TopCenter)
-                    .fillMaxWidth()
-                    .height(60.dp)
-                    .background(Brush.verticalGradient(listOf(tokens.playerBase, Color.Transparent))),
-            )
-            Box(
-                Modifier
-                    .align(Alignment.BottomCenter)
-                    .fillMaxWidth()
-                    .height(60.dp)
-                    .background(Brush.verticalGradient(listOf(Color.Transparent, tokens.playerBase))),
-            )
-            EqualizerIcon(
-                Modifier
-                    .align(Alignment.BottomCenter)
-                    .padding(bottom = 12.dp)
-                    .size(width = 22.dp, height = 16.dp),
-            )
         }
     }
 }

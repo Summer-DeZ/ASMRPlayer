@@ -331,6 +331,7 @@ class DlsiteDownloadService : Service() {
         override fun run() {
             val work = initialWork
             val contentDownload = isContentDownload(request.optionIds)
+            var restoreInterrupt = false
             try {
                 val api = dlsiteApi
                 val repository = downloadRepository
@@ -359,89 +360,83 @@ class DlsiteDownloadService : Service() {
                     this,
                 )
                 synchronized(lock) {
-		                if (STOP_NONE == stopRequest) {
-		                    val downloadedWork = if (TextUtils.isEmpty(result.coverUri)) {
-		                        work
-		                    } else {
-	                        work.withCoverUri(result.coverUri)
+                    if (STOP_NONE == stopRequest) {
+                        val downloadedWork = if (TextUtils.isEmpty(result.coverUri)) {
+                            work
+                        } else {
+                            work.withCoverUri(result.coverUri)
+                        }
+                        if (contentDownload) {
+                            repository.markImported(
+                                downloadedWork,
+                                result.playlistId,
+                                result.localPath,
+                                result.trackCount,
+                            )
+                        } else {
+                            repository.markDownloaded(
+                                downloadedWork,
+                                result.playlistId,
+                                result.localPath,
+                                result.trackCount,
+                            )
+                        }
+                        repository.markDownloadQueueTaskCompleted(request.taskId)
+                        dlsiteDownloadStateStore.publishCompleted(work.workId, work.displayTitle())
+                        runningWorkers.remove(request.workId)
+                    } else {
+                        settleStopRequest(work, contentDownload)
                     }
-                    if (contentDownload) {
-                        repository.markImported(
-                            downloadedWork,
-                            result.playlistId,
-                            result.localPath,
-                            result.trackCount,
+                }
+                updateDlsiteDownloadNotification(dlsiteDownloadStateStore)
+            } catch (exception: Exception) {
+                restoreInterrupt = exception.isDlsiteDownloadInterruption()
+                synchronized(lock) {
+                    if (STOP_NONE == stopRequest) {
+                        markDlsiteDownloadFailed(
+                            downloadRepository, dlsiteDownloadStateStore, runningWorkers, request, work, contentDownload, exception,
                         )
                     } else {
-                        repository.markDownloaded(
-                            downloadedWork,
-                            result.playlistId,
-                            result.localPath,
-                            result.trackCount,
-                        )
-		                    }
-		                    repository.markDownloadQueueTaskCompleted(request.taskId)
-		                    dlsiteDownloadStateStore.publishCompleted(work.workId, work.displayTitle())
-                        runningWorkers.remove(request.workId)
-		                } else {
-		                    settleStopRequest(work, contentDownload)
-		                }
-                }
-		                updateDlsiteDownloadNotification(dlsiteDownloadStateStore)
-		            } catch (exception: Exception) {
-                synchronized(lock) {
-		                if (STOP_NONE == stopRequest) {
-		                    val message = shortDownloadError(exception)
-		                    downloadRepository.markDownloadQueueTaskFailed(request.taskId, message)
-	                    if (!contentDownload) {
-	                        downloadRepository.markFailed(work, message)
+                        settleStopRequest(work, contentDownload)
                     }
-                    for (optionId in request.optionIds) {
-	                        downloadRepository.markContentFailed(work.workId, optionId, message)
-		                    }
-		                    dlsiteDownloadStateStore.publishFailed(work.workId, work.displayTitle(), message)
-                        runningWorkers.remove(request.workId)
-		                } else {
-		                    settleStopRequest(work, contentDownload)
-		                }
                 }
-		                updateDlsiteDownloadNotification(dlsiteDownloadStateStore)
-		            } finally {
-		                finishWorker(this)
-	            }
-	        }
+                updateDlsiteDownloadNotification(dlsiteDownloadStateStore)
+            } finally {
+                finishDlsiteDownloadWorker(restoreInterrupt) { finishWorker(this) }
+            }
+        }
 
         private inline fun runIfActive(block: () -> Unit) = synchronized(lock) { if (STOP_NONE == stopRequest) block() }
 
-		        private fun settleStopRequest(work: DlsiteWork, contentDownload: Boolean) {
-	            when (stopRequest) {
-	                STOP_PAUSE -> {
-	                    downloadRepository.markDownloadQueueTaskPaused(request.taskId)
-	                    if (!contentDownload) markPausedSafely(work)
-	                    downloadRepository.markContentPaused(work.workId, request.optionIds)
-	                    dlsiteDownloadStateStore.publishPaused(work.workId, work.displayTitle())
-	                }
-	                STOP_DELETE -> if (deleteCachedWorkSafely(work)) {
-	                    downloadRepository.markDownloadQueueTaskCanceled(request.taskId)
-	                    dlsiteDownloadStateStore.remove(work.workId)
-	                } else {
-	                    publishDeleteFailed(downloadRepository, dlsiteDownloadStateStore, work, request.taskId, request.optionIds)
-	                }
-	                STOP_RESCHEDULE -> {
-	                    downloadRepository.markDownloadQueueTaskPending(request.taskId)
-	                    if (contentDownload) {
-	                        downloadRepository.markContentQueued(work.workId, request.optionIds)
-	                    } else {
-	                        downloadRepository.markQueued(work, request.optionIds, request.optionIds.size.toString() + " 个内容")
-	                    }
-	                    dlsiteDownloadStateStore.publishQueued(work.workId, work.displayTitle(), 1)
-	                }
-	            }
-	        }
+        private fun settleStopRequest(work: DlsiteWork, contentDownload: Boolean) {
+            when (stopRequest) {
+                STOP_PAUSE -> {
+                    downloadRepository.markDownloadQueueTaskPaused(request.taskId)
+                    if (!contentDownload) markPausedSafely(work)
+                    downloadRepository.markContentPaused(work.workId, request.optionIds)
+                    dlsiteDownloadStateStore.publishPaused(work.workId, work.displayTitle())
+                }
+                STOP_DELETE -> if (deleteCachedWorkSafely(work)) {
+                    downloadRepository.markDownloadQueueTaskCanceled(request.taskId)
+                    dlsiteDownloadStateStore.remove(work.workId)
+                } else {
+                    publishDeleteFailed(downloadRepository, dlsiteDownloadStateStore, work, request.taskId, request.optionIds)
+                }
+                STOP_RESCHEDULE -> {
+                    downloadRepository.markDownloadQueueTaskPending(request.taskId)
+                    if (contentDownload) {
+                        downloadRepository.markContentQueued(work.workId, request.optionIds)
+                    } else {
+                        downloadRepository.markQueued(work, request.optionIds, request.optionIds.size.toString() + " 个内容")
+                    }
+                    dlsiteDownloadStateStore.publishQueued(work.workId, work.displayTitle(), 1)
+                }
+            }
+        }
 
-		        override fun onContentStarted(option: DlsiteDownloadOption, contentDir: File) = runIfActive {
-		            downloadRepository.markContentDownloading(request.workId, option.id)
-		        }
+        override fun onContentStarted(option: DlsiteDownloadOption, contentDir: File) = runIfActive {
+            downloadRepository.markContentDownloading(request.workId, option.id)
+        }
 
         override fun onContentProgress(
             option: DlsiteDownloadOption,

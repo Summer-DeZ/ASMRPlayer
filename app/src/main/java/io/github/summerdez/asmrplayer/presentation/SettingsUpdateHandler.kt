@@ -164,7 +164,7 @@ internal class SettingsUpdateHandler(
     }
 }
 
-private fun appUpdateDownloadUiStatus(downloadState: AppUpdateDownloadState): AppUpdateDownloadStatus {
+internal fun appUpdateDownloadUiStatus(downloadState: AppUpdateDownloadState): AppUpdateDownloadStatus {
     val release = downloadState.release ?: return AppUpdateDownloadStatus.Idle
     return when (downloadState.status) {
         AppUpdateDownloadStateStatus.DOWNLOADING -> AppUpdateDownloadStatus.Downloading(

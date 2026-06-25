@@ -1,7 +1,9 @@
 > 当前软件版本：1.6.1（versionCode 22）
-> 文档更新日期：2026-06-25
+> 文档更新日期：2026-06-26
 
 # 重构热点清单
+
+> 全部热点已落地，1.6.1 重构清单收口。最新一轮 `:app:compileDebugKotlin` + `:app:testDebugUnitTest`（202 项）全绿，`git diff --check` 干净。
 
 ---
 
@@ -24,7 +26,10 @@
 | **C7** | DLsite ziptree/content-file DTO 已分层为 `domain.model.DlsiteZiptree` / `DlsiteContentFile`，remote parser 只解析并产出 domain 模型，下载规划不再依赖 parser 内部 DTO |
 | **S1** | 主题模式持久化与分层已完成：`AppThemeMode` 位于 `domain.model`，`SettingsRepository.themeModeFlow` 读取 `app_settings.app_theme_mode`，`AppUi` 不再参与 data 层持久化 |
 | **D2** | 文件导入下沉 `LibraryFileImportUseCase`（含 `LibraryImportFiles<T>` 端口/适配器），VM 已不碰 `DocumentFiles` |
+| **D3** | 组合根 `ASMRPlayerApp.kt` 降至约 340 行，launcher / state / effect host 已抽出（`AppActivityLaunchers` / `AppRootState` / `AppScaffold` / `AppTabHost` / `AppDialogHost`） |
 | **D4** | 巨型 Screen 文件拆分按 500 行标准已达成，最终复审见下方；后续不为 400 行目标继续拆 |
+| **D1** | 评估结论：三份快照**不合并**（service=IPC 可序列化契约 / controller=客户端叠加实时播放字段 / uiState=渲染投影，是三个真实边界）；重复的 `connected && serviceSnapshot.connected` 判断已抽成 `activeServiceSnapshotOrNull()` |
+| **C5** | 网络/下载/播放高风险路径已补强：取消传播、批量暂停不中断、删除收尾、中断重抛、controller 重试、`SceneContextBuilder` 情景卡降级日志；单测开 `unitTests.isReturnDefaultValues` 以兼容生产 `Log` 调用 |
 
 ---
 
@@ -34,10 +39,12 @@
 
 | 文件 | 行数 |
 |---|---:|
-| `ASMRPlayerApp.kt` | 407 |
+| `ASMRPlayerApp.kt` | 339 |
 | `AppDialogHost.kt` | 370 |
 | `AppScaffold.kt` | 102 |
 | `AppTabHost.kt` | 155 |
+| `AppActivityLaunchers.kt` | 106 |
+| `AppRootState.kt` | 46 |
 | `SettingsScreen.kt` | 252 |
 | `SettingsRows.kt` | 456 |
 | `SettingsAiPage.kt` | 403 |
@@ -47,11 +54,11 @@
 | `PlayerMoreMenu.kt` | 386 |
 | `PlayerTransport.kt` | 267 |
 | `LibraryScreen.kt` | 260 |
-| `LibraryRows.kt` | 444 |
+| `LibraryRows.kt` | 495 |
 | `LibrarySheets.kt` | 422 |
 | `DlsiteScreen.kt` | 116 |
-| `DlsiteRows.kt` | 354 |
-| `DlsiteDialogs.kt` | 210 |
+| `DlsiteRows.kt` | 399 |
+| `DlsiteDialogs.kt` | 237 |
 | `SleepScreen.kt` | 162 |
 | `SleepComponents.kt` | 366 |
 
@@ -59,35 +66,11 @@
 
 ---
 
-## 待完成
+## 收口说明
 
-### D1 · [P2] 三份边界快照类
-
-`PlaybackPresentationState.kt` 协调器已落地，负责快照聚合与 `PlaybackUiState` 投影。但 `PlaybackServiceSnapshot`（`PlaybackServiceState.kt`）/ `PlaybackControllerSnapshot`（`PlaybackCommandClient.kt`）/ `PlaybackUiState`（`PlaybackPresentationState.kt`）仍是三份独立数据结构，字幕/sleep 状态仍要经两次边界转换才到 UI。
-
-方向：评估是否合并 `PlaybackServiceSnapshot` 与 `PlaybackControllerSnapshot`，或进一步将 `PlaybackPresentationState` 接管全部映射逻辑；目前三快照格局功能正确，优先级低于 D3/D4。
-
----
-
-### D3 · [P2] `ASMRPlayerApp.kt` 组合根（`ASMRPlayerApp.kt` 407 行 + `AppDialogHost.kt` 370 行 + `AppScaffold.kt` 102 行 + `AppTabHost.kt` 155 行）
-
-第一刀已完成：顶层 dialog/sheet 渲染已抽到 `AppDialogHost.kt`，`ASMRPlayerApp.kt` 只保留一次 `AppDialogHost(...)` 调用。
-
-第二刀已完成：`AppScaffold.kt` 抽出根 `UiProbeHost` / `Box` / `Scaffold` / `PageHeader` / `BottomPlaybackArea` / `content` / `dialogHost` slot；`AppTabHost.kt` 抽出 MEDIA / SETTINGS / SLEEP / DLSITE tab 分发。
-
-剩余问题：`ASMRPlayerApp.kt` 仍承担 VM collect、`LaunchedEffect`、ActivityResult launcher、`BackHandler`、dialog state、derived state、`AppDialogHost` wiring 与业务 callback；dialog/sheet、根 scaffold 与 tab 分发已移出，但组合根仍偏向状态/副作用编排中心。
-
-方向：后续优先拆 launcher / state / effect host，并评估哪些局部状态可以继续下沉为 `rememberSaveable`。纯 UI 壳已完成，不再把导航/底栏作为 D3 主要问题。
-
----
-
-### C5 · [P3] 异常处理抽样（非阻塞）
-
-第一刀已完成：下载/远程路径静默异常已补 Log 线索；远程转写轮询 `IOException` 会通过 `detailText` 显示「远程状态请求失败，稍后重试」，控制流保持重试/超时策略不变；`DlsiteContentRemote.kt` 字幕下载降级 `catch` 现在会先重抛 `InterruptedIOException`，避免暂停/删除中断被普通字幕 `IOException` 降级吞掉，普通字幕失败仍 `Log.w` 并继续无字幕导入。
-
-本轮补充：`DlsiteViewModel.kt` 取消传播已修补，`pauseAllDownloads` 单项失败不再中断全部；`DlsiteDownloadService.kt` 运行中/排队/普通删除只有物理删除成功才清状态，删除失败会 failed 并收尾，pause/delete 接管与终态提交收进同一把锁，stopRequest 下的晚到进度回调会被忽略；DocumentFiles 权限/非法 URI 增加降级日志；`DlsiteCoverRemote.kt` 与 `DlsiteContentRemote.kt` 中断重抛；`PlaybackCommandClient.kt` 的 controller 构建失败已记录日志并清理 `controller` / `controllerFuture`，允许后续 `connect` 重试；`AiSubtitleGenerationService.kt` job 生命周期加锁，避免启动/收尾竞态；`AudioPcmDecoder.kt` 补齐 configure/start 失败释放路径。
-
-上一轮统计仍记录 82 处 `catch`、31 处 `runCatching`，本轮只修高风险样本，没有把 C5 清零。继续重点抽查网络与下载路径的 `runCatching{}.getOrNull()`。
+- **D1**：评估完成，结论是**不合并**三份快照。`PlaybackServiceSnapshot`（`sessionExtras` IPC wire DTO，必须可序列化）/ `PlaybackControllerSnapshot`（客户端把 IPC 数据叠加 `isPlaying`/`position`/`duration` 等不可序列化的实时播放字段）/ `PlaybackUiState`（Compose 渲染投影）是三个真实边界，强行合并会破坏 IPC 契约。重复的有效 service snapshot 判断已抽成 `activeServiceSnapshotOrNull()`；sleep remaining 由 Controller 客户端按 `elapsedRealtime` 派生，不走 wire。
+- **D3**：launcher（`AppActivityLaunchers`）、根 mutable state + `BackHandler`（`AppRootState`）、根 scaffold/tab/dialog（`AppScaffold`/`AppTabHost`/`AppDialogHost`）均已抽出，`ASMRPlayerApp.kt` 约 340 行。剩余的 VM collect / `LaunchedEffect` / derived state 属正常组合根职责，不再继续拆。
+- **C5**：网络/下载/播放高风险路径已补强（取消传播、批量暂停不中断、删除收尾、中断重抛、controller 重试、下载 worker 中断识别 `DlsiteDownloadWorkerErrors`、`SceneContextBuilder` 情景卡降级日志）。单测开 `unitTests.isReturnDefaultValues = true` 以兼容生产 `Log` 调用。剩余宽泛 `catch`/`runCatching` 多为字段级解析与可选缓存兜底，均会规范重抛或退化，不计入高风险；普通集合 `getOrNull(index)` 不计入 C5。
 
 ---
 

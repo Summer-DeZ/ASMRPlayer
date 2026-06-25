@@ -15,6 +15,7 @@ internal object AiSubtitleGenerationIntents {
     private const val EXTRA_AUDIO_URI = "audioUri"
     private const val EXTRA_CONTEXT_TITLE = "contextTitle"
     private const val EXTRA_FORCE_REGENERATE = "forceRegenerate"
+    private const val EXTRA_FORCE_RETRANSLATE = "forceRetranslate"
 
     fun targetFrom(intent: Intent): SubtitleGenerationTarget {
         return SubtitleGenerationTarget(
@@ -30,6 +31,10 @@ internal object AiSubtitleGenerationIntents {
         return intent.getBooleanExtra(EXTRA_FORCE_REGENERATE, false)
     }
 
+    fun forceRetranslateFrom(intent: Intent): Boolean {
+        return intent.getBooleanExtra(EXTRA_FORCE_RETRANSLATE, false)
+    }
+
     fun trackIdFrom(intent: Intent): String {
         return intent.getStringExtra(EXTRA_TRACK_ID).orEmpty()
     }
@@ -38,6 +43,7 @@ internal object AiSubtitleGenerationIntents {
         context: Context,
         target: SubtitleGenerationTarget,
         forceRegenerate: Boolean = false,
+        forceRetranslate: Boolean = false,
     ): Intent {
         return Intent(context, AiSubtitleGenerationService::class.java)
             .setAction(ACTION_START)
@@ -47,6 +53,7 @@ internal object AiSubtitleGenerationIntents {
             .putExtra(EXTRA_AUDIO_URI, target.audioUri)
             .putExtra(EXTRA_CONTEXT_TITLE, target.contextTitle)
             .putExtra(EXTRA_FORCE_REGENERATE, forceRegenerate)
+            .putExtra(EXTRA_FORCE_RETRANSLATE, forceRetranslate)
     }
 
     fun pauseIntent(context: Context, trackId: String): Intent {

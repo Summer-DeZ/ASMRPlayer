@@ -41,6 +41,11 @@ data class PlaybackControllerSnapshot(
     val serviceSnapshot: PlaybackServiceSnapshot = PlaybackServiceSnapshot(),
 )
 
+internal fun PlaybackControllerSnapshot.activeServiceSnapshotOrNull(): PlaybackServiceSnapshot? {
+    val activeServiceSnapshot = serviceSnapshot
+    return if (connected && activeServiceSnapshot.connected) activeServiceSnapshot else null
+}
+
 class PlaybackCommandClient(private val application: Application) {
     private val scope = CoroutineScope(SupervisorJob() + Dispatchers.Main.immediate)
     private val _snapshots = MutableStateFlow(PlaybackControllerSnapshot())

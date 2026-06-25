@@ -57,6 +57,37 @@ class UiProbeHitTesterTest {
     }
 
     @Test
+    fun scopesHitsToPlayerLayerWhenFullScreenPlayerIsPresent() {
+        val libraryRow = target(
+            key = 1,
+            order = 1L,
+            id = "library.playlist-row:default",
+            bounds = UiProbeBounds(left = 40f, top = 40f, right = 220f, bottom = 140f),
+        )
+        val playerRoot = target(
+            key = 2,
+            order = 2L,
+            id = "player.root",
+            bounds = UiProbeBounds(left = 0f, top = 0f, right = 300f, bottom = 300f),
+        )
+        val subtitleArea = target(
+            key = 3,
+            order = 3L,
+            id = "player.subtitle-area",
+            bounds = UiProbeBounds(left = 20f, top = 20f, right = 280f, bottom = 180f),
+        )
+
+        val hit = UiProbeHitTester.hit(
+            targets = listOf(libraryRow, playerRoot, subtitleArea),
+            x = 60f,
+            y = 60f,
+        )
+
+        assertEquals("player.subtitle-area", hit.selected?.id)
+        assertEquals(listOf("player.subtitle-area", "player.root"), hit.candidates.map { it.id })
+    }
+
+    @Test
     fun returnsNoSelectionForEmptyPoint() {
         val hit = UiProbeHitTester.hit(
             targets = listOf(

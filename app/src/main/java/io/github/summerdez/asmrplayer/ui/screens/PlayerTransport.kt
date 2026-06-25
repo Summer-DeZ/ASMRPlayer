@@ -1,6 +1,5 @@
 package io.github.summerdez.asmrplayer.ui.screens
 
-import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.gestures.detectDragGestures
 import androidx.compose.foundation.gestures.detectTapGestures
@@ -11,7 +10,6 @@ import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
-import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.QueueMusic
 import androidx.compose.material.icons.filled.Bedtime
@@ -22,9 +20,7 @@ import androidx.compose.material.icons.filled.SkipNext
 import androidx.compose.material.icons.filled.SkipPrevious
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
-import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
-import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -32,7 +28,6 @@ import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.geometry.Size
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.input.pointer.pointerInput
-import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import io.github.summerdez.asmrplayer.presentation.PlaybackUiState
@@ -136,7 +131,6 @@ internal fun PlayerTransportControls(
     onPlay: () -> Unit,
     onNext: () -> Unit,
 ) {
-    val tokens = LocalAmberTokens.current
     Row(
         Modifier
             .fillMaxWidth()
@@ -145,41 +139,51 @@ internal fun PlayerTransportControls(
         horizontalArrangement = Arrangement.SpaceEvenly,
         verticalAlignment = Alignment.CenterVertically,
     ) {
-        Surface(shape = CircleShape, color = tokens.card, border = BorderStroke(1.dp, tokens.separator)) {
-            IconButton(
-                onClick = onPrevious,
-                modifier = Modifier
-                    .size(58.dp)
-                    .uiProbe("player.previous", "上一首按钮", "PlayerTransport.kt"),
-            ) {
-                Icon(Icons.Default.SkipPrevious, contentDescription = "上一首", modifier = Modifier.size(30.dp), tint = tokens.label)
-            }
-        }
-        Surface(shape = CircleShape, color = tokens.accent, shadowElevation = 12.dp) {
-            IconButton(
-                onClick = onPlay,
-                modifier = Modifier
-                    .size(78.dp)
-                    .uiProbe("player.play-toggle", "播放/暂停按钮", "PlayerTransport.kt"),
-            ) {
-                Icon(
-                    if (playbackState.isPlaying) Icons.Default.Pause else Icons.Default.PlayArrow,
-                    contentDescription = "播放",
-                    tint = tokens.bg,
-                    modifier = Modifier.size(42.dp),
-                )
-            }
-        }
-        Surface(shape = CircleShape, color = tokens.card, border = BorderStroke(1.dp, tokens.separator)) {
-            IconButton(
-                onClick = onNext,
-                modifier = Modifier
-                    .size(58.dp)
-                    .uiProbe("player.next", "下一首按钮", "PlayerTransport.kt"),
-            ) {
-                Icon(Icons.Default.SkipNext, contentDescription = "下一首", modifier = Modifier.size(30.dp), tint = tokens.label)
-            }
-        }
+        PlayerTransportIconButton(
+            icon = Icons.Default.SkipPrevious,
+            contentDescription = "上一首",
+            probeId = "player.previous",
+            probeLabel = "上一首按钮",
+            onClick = onPrevious,
+        )
+        PlayerTransportIconButton(
+            icon = if (playbackState.isPlaying) Icons.Default.Pause else Icons.Default.PlayArrow,
+            contentDescription = "播放",
+            probeId = "player.play-toggle",
+            probeLabel = "播放/暂停按钮",
+            onClick = onPlay,
+        )
+        PlayerTransportIconButton(
+            icon = Icons.Default.SkipNext,
+            contentDescription = "下一首",
+            probeId = "player.next",
+            probeLabel = "下一首按钮",
+            onClick = onNext,
+        )
+    }
+}
+
+@Composable
+private fun PlayerTransportIconButton(
+    icon: ImageVector,
+    contentDescription: String,
+    probeId: String,
+    probeLabel: String,
+    onClick: () -> Unit,
+) {
+    val tokens = LocalAmberTokens.current
+    IconButton(
+        onClick = onClick,
+        modifier = Modifier
+            .size(64.dp)
+            .uiProbe(probeId, probeLabel, "PlayerTransport.kt"),
+    ) {
+        Icon(
+            icon,
+            contentDescription = contentDescription,
+            tint = tokens.label,
+            modifier = Modifier.size(34.dp),
+        )
     }
 }
 
@@ -224,44 +228,30 @@ private fun PlayerActionButton(
     enabled: Boolean = true,
     onClick: () -> Unit,
 ) {
-    val tokens = LocalAmberTokens.current
     val actionId = when (label) {
         "睡眠" -> "sleep"
         "混音" -> "mix"
         "队列" -> "queue"
         else -> label
     }
-    TextButton(
+    val tokens = LocalAmberTokens.current
+    IconButton(
         onClick = onClick,
         enabled = enabled,
-        modifier = Modifier.uiProbe(
-            id = "player.action.$actionId",
-            label = "播放器动作按钮：$label",
-            sourceHint = "PlayerTransport.kt",
-            metadata = mapOf("enabled" to enabled.toString(), "selected" to selected.toString()),
-        ),
+        modifier = Modifier
+            .size(64.dp)
+            .uiProbe(
+                id = "player.action.$actionId",
+                label = "播放器动作按钮：$label",
+                sourceHint = "PlayerTransport.kt",
+                metadata = mapOf("enabled" to enabled.toString(), "selected" to selected.toString()),
+            ),
     ) {
-        Column(horizontalAlignment = Alignment.CenterHorizontally) {
-            Icon(
-                icon,
-                contentDescription = null,
-                tint = when {
-                    selected -> tokens.accent
-                    enabled -> tokens.label3
-                    else -> tokens.label3.copy(alpha = 0.45f)
-                },
-                modifier = Modifier.size(30.dp),
-            )
-            Text(
-                label,
-                color = when {
-                    selected -> tokens.accent
-                    enabled -> tokens.label3
-                    else -> tokens.label3.copy(alpha = 0.45f)
-                },
-                fontSize = 14.sp,
-                modifier = Modifier.padding(top = 6.dp),
-            )
-        }
+        Icon(
+            icon,
+            contentDescription = label,
+            tint = if (enabled) tokens.label else tokens.label.copy(alpha = 0.45f),
+            modifier = Modifier.size(34.dp),
+        )
     }
 }

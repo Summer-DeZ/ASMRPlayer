@@ -1,10 +1,23 @@
 package io.github.summerdez.asmrplayer.ui
 
+import androidx.compose.animation.AnimatedVisibility
+import androidx.compose.animation.core.CubicBezierEasing
+import androidx.compose.animation.core.tween
+import androidx.compose.animation.expandVertically
+import androidx.compose.animation.shrinkVertically
+import androidx.compose.animation.slideInVertically
+import androidx.compose.animation.slideOutVertically
+import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.ModalBottomSheet
 import androidx.compose.material3.rememberModalBottomSheetState
 import androidx.compose.runtime.Composable
+import androidx.compose.ui.Alignment
+import androidx.compose.ui.Modifier
+import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.unit.dp
 import androidx.core.content.ContextCompat
 import io.github.summerdez.asmrplayer.data.ai.AiSubtitleGenerationService
 import io.github.summerdez.asmrplayer.domain.PlaylistQueries
@@ -88,31 +101,58 @@ internal fun AppDialogHost(
 ) {
     val context = LocalContext.current
     val tokens = LocalAmberTokens.current
+    val miniPlayerHeightPx = with(LocalDensity.current) { 64.dp.roundToPx() }
+    val playerTransformEasing = CubicBezierEasing(0.20f, 0f, 0f, 1f)
 
-    if (playerOpen) {
-        SubtitlePlayerScreen(
-            playbackState = playbackState,
-            aiSubtitleTask = currentAiSubtitleTask,
-            currentTrackIsLocal = currentTrackIsLocal,
-            onClose = { onPlayerOpenChange(false) },
-            onPrevious = { playbackViewModel.playRelativeTrack(-1)?.let(toast) },
-            onPlay = { playbackViewModel.onPlayClicked()?.let(toast) },
-            onNext = { playbackViewModel.playRelativeTrack(1)?.let(toast) },
-            onSeek = playbackViewModel::seekTo,
-            onQueue = { onQueueOpenChange(true) },
-            onGenerateAiSubtitle = startAiSubtitleForCurrentTrack,
-            onOpenAiSubtitleProgress = openAiSubtitleProgressForCurrentTrack,
-            onSleepTimer = { onCustomSleepDialogChange(true) },
-            onMixLayers = { toast("混音层叠暂未实现") },
-            onDownloadTrack = {
-                if (currentTrackIsLocal) {
-                    toast("当前已在本地")
-                } else {
-                    toast("下载到本地暂未实现")
-                }
-            },
-            onRemoveFromQueue = { toast("从队列中移除暂未实现") },
-        )
+    Box(
+        modifier = Modifier.fillMaxSize(),
+        contentAlignment = Alignment.BottomCenter,
+    ) {
+        AnimatedVisibility(
+            visible = playerOpen,
+            enter = expandVertically(
+                animationSpec = tween(durationMillis = 460, easing = playerTransformEasing),
+                expandFrom = Alignment.Bottom,
+                initialHeight = { miniPlayerHeightPx },
+                clip = true,
+            ) + slideInVertically(
+                animationSpec = tween(durationMillis = 460, easing = playerTransformEasing),
+                initialOffsetY = { it / 5 },
+            ),
+            exit = shrinkVertically(
+                animationSpec = tween(durationMillis = 340, easing = playerTransformEasing),
+                shrinkTowards = Alignment.Bottom,
+                targetHeight = { miniPlayerHeightPx },
+                clip = true,
+            ) + slideOutVertically(
+                animationSpec = tween(durationMillis = 340, easing = playerTransformEasing),
+                targetOffsetY = { it / 5 },
+            ),
+        ) {
+            SubtitlePlayerScreen(
+                playbackState = playbackState,
+                aiSubtitleTask = currentAiSubtitleTask,
+                currentTrackIsLocal = currentTrackIsLocal,
+                onClose = { onPlayerOpenChange(false) },
+                onPrevious = { playbackViewModel.playRelativeTrack(-1)?.let(toast) },
+                onPlay = { playbackViewModel.onPlayClicked()?.let(toast) },
+                onNext = { playbackViewModel.playRelativeTrack(1)?.let(toast) },
+                onSeek = playbackViewModel::seekTo,
+                onQueue = { onQueueOpenChange(true) },
+                onGenerateAiSubtitle = startAiSubtitleForCurrentTrack,
+                onOpenAiSubtitleProgress = openAiSubtitleProgressForCurrentTrack,
+                onSleepTimer = { onCustomSleepDialogChange(true) },
+                onMixLayers = { toast("混音层叠暂未实现") },
+                onDownloadTrack = {
+                    if (currentTrackIsLocal) {
+                        toast("当前已在本地")
+                    } else {
+                        toast("下载到本地暂未实现")
+                    }
+                },
+                onRemoveFromQueue = { toast("从队列中移除暂未实现") },
+            )
+        }
     }
 
     if (queueOpen) {
@@ -190,6 +230,16 @@ internal fun AppDialogHost(
                                 context = context,
                                 target = task.target,
                                 forceRegenerate = true,
+                            ),
+                        )
+                    },
+                    onRetranslate = {
+                        ContextCompat.startForegroundService(
+                            context,
+                            AiSubtitleGenerationService.startIntent(
+                                context = context,
+                                target = task.target,
+                                forceRetranslate = true,
                             ),
                         )
                     },

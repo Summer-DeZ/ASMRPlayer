@@ -69,8 +69,6 @@ import androidx.compose.material.icons.filled.Subtitles
 import androidx.compose.material.icons.filled.Timer
 import androidx.compose.material.icons.filled.UploadFile
 import androidx.compose.material3.Button
-import androidx.compose.material3.DropdownMenu
-import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
@@ -111,7 +109,6 @@ import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
-import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
@@ -156,12 +153,6 @@ fun PageHeader(
         "设置" -> "settings"
         else -> title
     }
-    val eyebrow = when (title) {
-        "资料库" -> "本地播放"
-        "睡眠模式" -> "温柔入眠"
-        "DLsite" -> "连接账户"
-        else -> ""
-    }
     Row(
         modifier = Modifier
             .fillMaxWidth()
@@ -171,18 +162,6 @@ fun PageHeader(
         verticalAlignment = Alignment.Bottom,
     ) {
         Column(Modifier.weight(1f)) {
-            if (eyebrow.isNotEmpty()) {
-                Text(
-                    text = eyebrow,
-                    color = tokens.labelFaint,
-                    fontSize = 12.sp,
-                    fontWeight = FontWeight.Medium,
-                    letterSpacing = 2.16.sp,
-                    maxLines = 1,
-                    overflow = TextOverflow.Ellipsis,
-                    modifier = Modifier.padding(bottom = 4.dp),
-                )
-            }
             Text(
                 text = displayTitle,
                 color = tokens.label,
@@ -193,6 +172,7 @@ fun PageHeader(
                 letterSpacing = 0.sp,
                 maxLines = 1,
                 overflow = TextOverflow.Ellipsis,
+                modifier = Modifier.fillMaxWidth(),
             )
         }
         if (showMenu) {
@@ -201,38 +181,35 @@ fun PageHeader(
                     modifier = Modifier
                         .size(42.dp)
                         .uiProbe("app.header.media-menu", "资料库顶部菜单按钮", "PageHeader.kt")
-                        .clip(CircleShape)
-                        .background(Brush.linearGradient(listOf(tokens.gray5, tokens.switchOff)))
-                        .border(BorderStroke(1.dp, tokens.separator), CircleShape)
                         .noRippleClickable { onMenuExpandedChange(true) },
                     contentAlignment = Alignment.Center,
                 ) {
                     Icon(Icons.Default.MoreVert, contentDescription = "菜单", tint = tokens.label, modifier = Modifier.size(22.dp))
                 }
-                DropdownMenu(
+                AmberDropdownMenu(
                     expanded = menuExpanded,
                     onDismissRequest = { onMenuExpandedChange(false) },
-                    modifier = Modifier.background(tokens.sheet),
+                    modifier = Modifier.uiProbe("app.header.media-menu.popup", "资料库顶部菜单弹窗", "PageHeader.kt"),
                 ) {
-                    DropdownMenuItem(
-                        text = { Text("新建播放列表", color = tokens.label) },
-                        leadingIcon = { Icon(Icons.Default.Add, null, tint = tokens.accent) },
+                    AmberDropdownMenuItem(
+                        text = "新建播放列表",
+                        icon = Icons.Default.Add,
                         onClick = {
                             onMenuExpandedChange(false)
                             onCreatePlaylist()
                         },
                     )
-                    DropdownMenuItem(
-                        text = { Text("导入媒体", color = tokens.label) },
-                        leadingIcon = { Icon(Icons.Default.UploadFile, null, tint = tokens.accent) },
+                    AmberDropdownMenuItem(
+                        text = "导入媒体",
+                        icon = Icons.Default.UploadFile,
                         onClick = {
                             onMenuExpandedChange(false)
                             onImportAudio()
                         },
                     )
-                    DropdownMenuItem(
-                        text = { Text("从文件夹导入", color = tokens.label) },
-                        leadingIcon = { Icon(Icons.Default.FolderOpen, null, tint = tokens.accent) },
+                    AmberDropdownMenuItem(
+                        text = "从文件夹导入",
+                        icon = Icons.Default.FolderOpen,
                         onClick = {
                             onMenuExpandedChange(false)
                             onImportFolder()

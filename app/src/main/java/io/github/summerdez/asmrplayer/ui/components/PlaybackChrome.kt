@@ -172,7 +172,7 @@ fun BottomPlaybackArea(
             color = tokens.glass,
             border = BorderStroke(1.dp, tokens.separator),
             tonalElevation = 0.dp,
-            shadowElevation = 18.dp,
+            shadowElevation = 0.dp,
         ) {
             Row(
                 modifier = Modifier
@@ -264,7 +264,8 @@ fun MiniPlayerIconButton(
 fun DockButton(tab: MainTab, icon: AsmrIconName, selectedTab: MainTab, onTabSelected: (MainTab) -> Unit) {
     val tokens = LocalAmberTokens.current
     val selected = tab == selectedTab
-    val contentColor = if (selected) tokens.accent else tokens.labelFaint
+    val selectedPink = Color(0xFFF2759F)
+    val contentColor = if (selected) selectedPink else tokens.labelFaint
     Column(
         horizontalAlignment = Alignment.CenterHorizontally,
         modifier = Modifier

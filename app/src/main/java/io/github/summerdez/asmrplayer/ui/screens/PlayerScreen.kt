@@ -1,8 +1,7 @@
 package io.github.summerdez.asmrplayer.ui.screens
 
 import androidx.compose.foundation.background
-import androidx.compose.foundation.clickable
-import androidx.compose.foundation.interaction.MutableInteractionSource
+import androidx.compose.foundation.gestures.awaitEachGesture
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Spacer
@@ -21,7 +20,10 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.input.pointer.PointerEventPass
+import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.zIndex
 import io.github.summerdez.asmrplayer.domain.model.AiSubtitleTaskState
 import io.github.summerdez.asmrplayer.presentation.PlaybackUiState
 import io.github.summerdez.asmrplayer.ui.theme.LocalAmberTokens
@@ -46,32 +48,43 @@ fun SubtitlePlayerScreen(
     onRemoveFromQueue: () -> Unit,
 ) {
     val tokens = LocalAmberTokens.current
+    val backgroundColors = rememberPlayerBackgroundColors(
+        coverUri = playbackState.coverUri,
+        defaultBase = tokens.playerBase,
+        defaultPrimaryGlow = tokens.accent,
+        defaultSecondaryGlow = tokens.accent2,
+    )
     var menuOpen by remember { mutableStateOf(false) }
     var subtitlesVisible by remember { mutableStateOf(true) }
-    val rootInteractionSource = remember { MutableInteractionSource() }
+    val hasPlaybackContent = playbackState.playlistId.isNotBlank() && playbackState.playlistIndex >= 0
     LaunchedEffect(playbackState.playlistId, playbackState.playlistIndex, playbackState.subtitleTitle) {
         subtitlesVisible = true
     }
     Box(
         modifier = Modifier
             .fillMaxSize()
-            .clickable(
-                interactionSource = rootInteractionSource,
-                indication = null,
-                onClick = {},
+            .zIndex(20f)
+            .consumeUnclaimedPointerInput()
+            .uiProbe(
+                id = "player.root",
+                label = "全屏播放器",
+                sourceHint = "PlayerScreen.kt",
+                metadata = mapOf(
+                    "coverUri" to playbackState.coverUri,
+                    "dynamicBackground" to backgroundColors.fromCover.toString(),
+                ),
             )
-            .uiProbe("player.root", "全屏播放器", "PlayerScreen.kt")
-            .background(tokens.playerBase)
+            .background(backgroundColors.base)
             .background(
                 Brush.radialGradient(
-                    colors = listOf(tokens.accent.copy(alpha = 0.18f), Color.Transparent),
+                    colors = listOf(backgroundColors.glowPrimary.copy(alpha = 0.24f), Color.Transparent),
                     center = Offset(180f, 140f),
                     radius = 520f,
                 ),
             )
             .background(
                 Brush.radialGradient(
-                    colors = listOf(tokens.accent2.copy(alpha = 0.18f), Color.Transparent),
+                    colors = listOf(backgroundColors.glowSecondary.copy(alpha = 0.22f), Color.Transparent),
                     center = Offset(880f, 260f),
                     radius = 640f,
                 ),
@@ -85,6 +98,7 @@ fun SubtitlePlayerScreen(
         ) {
             PlayerTopBar(
                 contextTitle = playbackState.contextTitle,
+                showContextTitle = hasPlaybackContent,
                 onClose = onClose,
                 onOpenMenu = { menuOpen = true },
             )
@@ -140,5 +154,18 @@ fun SubtitlePlayerScreen(
                 onClose = { menuOpen = false },
             )
         }
+    }
+}
+
+private fun Modifier.consumeUnclaimedPointerInput(): Modifier = pointerInput(Unit) {
+    awaitEachGesture {
+        do {
+            val event = awaitPointerEvent(PointerEventPass.Final)
+            event.changes.forEach { change ->
+                if (!change.isConsumed) {
+                    change.consume()
+                }
+            }
+        } while (event.changes.any { it.pressed })
     }
 }

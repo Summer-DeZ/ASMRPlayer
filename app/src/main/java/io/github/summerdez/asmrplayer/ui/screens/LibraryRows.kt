@@ -1,28 +1,80 @@
 package io.github.summerdez.asmrplayer.ui.screens
 
 import android.widget.Toast
-import androidx.compose.animation.*
-import androidx.compose.animation.core.*
-import androidx.compose.foundation.*
-import androidx.compose.foundation.layout.*
-import androidx.compose.foundation.shape.*
+import androidx.compose.animation.AnimatedVisibility
+import androidx.compose.animation.animateColorAsState
+import androidx.compose.animation.expandVertically
+import androidx.compose.animation.fadeIn
+import androidx.compose.animation.fadeOut
+import androidx.compose.animation.shrinkVertically
+import androidx.compose.animation.core.RepeatMode
+import androidx.compose.animation.core.animateFloat
+import androidx.compose.animation.core.animateFloatAsState
+import androidx.compose.animation.core.infiniteRepeatable
+import androidx.compose.animation.core.rememberInfiniteTransition
+import androidx.compose.animation.core.tween
+import androidx.compose.foundation.BorderStroke
+import androidx.compose.foundation.background
+import androidx.compose.foundation.clickable
+import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.layout.fillMaxHeight
+import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.shape.CircleShape
+import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.QueueMusic
-import androidx.compose.material.icons.filled.*
-import androidx.compose.material3.*
-import androidx.compose.runtime.*
-import androidx.compose.ui.*
+import androidx.compose.material.icons.filled.Delete
+import androidx.compose.material.icons.filled.Download
+import androidx.compose.material.icons.filled.Edit
+import androidx.compose.material.icons.filled.KeyboardArrowDown
+import androidx.compose.material.icons.filled.LibraryMusic
+import androidx.compose.material.icons.filled.MoreVert
+import androidx.compose.material.icons.filled.MusicNote
+import androidx.compose.material.icons.filled.Pause
+import androidx.compose.material.icons.filled.PlayArrow
+import androidx.compose.material.icons.filled.Search
+import androidx.compose.material.icons.filled.Subtitles
+import androidx.compose.material3.HorizontalDivider
+import androidx.compose.material3.Icon
+import androidx.compose.material3.IconButton
+import androidx.compose.material3.OutlinedTextField
+import androidx.compose.material3.OutlinedTextFieldDefaults
+import androidx.compose.material3.Surface
+import androidx.compose.material3.Text
+import androidx.compose.runtime.Composable
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
+import androidx.compose.ui.Alignment
+import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
-import androidx.compose.ui.geometry.*
-import androidx.compose.ui.graphics.*
 import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.platform.LocalContext
-import androidx.compose.ui.text.font.*
-import androidx.compose.ui.text.style.*
-import androidx.compose.ui.unit.*
-import io.github.summerdez.asmrplayer.domain.model.*
+import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.style.TextOverflow
+import androidx.compose.ui.unit.Dp
+import androidx.compose.ui.unit.dp
+import androidx.compose.ui.unit.sp
+import io.github.summerdez.asmrplayer.domain.model.AiSubtitleStage
+import io.github.summerdez.asmrplayer.domain.model.AiSubtitleTaskState
+import io.github.summerdez.asmrplayer.domain.model.Playlist
+import io.github.summerdez.asmrplayer.domain.model.TrackItem
+import io.github.summerdez.asmrplayer.domain.model.transcriptionDetailLabel
 import io.github.summerdez.asmrplayer.presentation.PlaybackUiState
+import io.github.summerdez.asmrplayer.ui.components.AmberDropdownMenu
+import io.github.summerdez.asmrplayer.ui.components.AmberDropdownMenuItem
 import io.github.summerdez.asmrplayer.ui.components.CoverBox
+import io.github.summerdez.asmrplayer.ui.components.WaveBars
 import io.github.summerdez.asmrplayer.ui.theme.LocalAmberTokens
 import io.github.summerdez.asmrplayer.ui.uiProbe
 import io.github.summerdez.asmrplayer.ui.util.formatDuration
@@ -74,19 +126,19 @@ internal fun LibraryDlsiteEmptyState() {
                 color = tokens.label,
                 fontSize = 26.sp,
                 lineHeight = 28.sp,
-                fontFamily = FontFamily.Serif,
+                fontFamily = androidx.compose.ui.text.font.FontFamily.Serif,
                 fontWeight = FontWeight.Normal,
-                textAlign = TextAlign.Center,
+                textAlign = androidx.compose.ui.text.style.TextAlign.Center,
             )
             Text(
                 "连接你的 DLsite 账户，把已购买的音声作品同步到这里；也可以继续用右上角菜单导入本地音频。",
                 color = tokens.label2,
                 fontSize = 14.5.sp,
                 lineHeight = 21.sp,
-                textAlign = TextAlign.Center,
+                textAlign = androidx.compose.ui.text.style.TextAlign.Center,
                 modifier = Modifier.fillMaxWidth(0.90f),
             )
-            Button(
+            androidx.compose.material3.Button(
                 onClick = { Toast.makeText(context, "请切换到底部 DLsite 页连接账户", Toast.LENGTH_SHORT).show() },
                 modifier = Modifier.padding(top = 6.dp).height(48.dp),
             ) {
@@ -103,7 +155,7 @@ private fun LibraryAnimatedAudioLines(modifier: Modifier = Modifier) {
     val tokens = LocalAmberTokens.current
     val transition = rememberInfiniteTransition(label = "libraryAudioLines")
     val phase by transition.animateFloat(0f, 1f, infiniteRepeatable(tween(820), RepeatMode.Restart), label = "libraryAudioPhase")
-    Canvas(modifier) {
+    androidx.compose.foundation.Canvas(modifier) {
         val barCount = 4
         val gap = size.width * 0.10f
         val barWidth = (size.width - gap * (barCount - 1)) / barCount
@@ -111,7 +163,7 @@ private fun LibraryAnimatedAudioLines(modifier: Modifier = Modifier) {
             val pulse = ((sin((phase * 6.28318f + index * 1.35f).toDouble()).toFloat() + 1f) / 2f)
             val height = size.height * (0.34f + pulse * 0.58f)
             val x = index * (barWidth + gap)
-            drawRoundRect(tokens.accent, Offset(x, size.height - height), Size(barWidth, height), androidx.compose.ui.geometry.CornerRadius(barWidth / 2f, barWidth / 2f))
+            drawRoundRect(tokens.accent, androidx.compose.ui.geometry.Offset(x, size.height - height), androidx.compose.ui.geometry.Size(barWidth, height), androidx.compose.ui.geometry.CornerRadius(barWidth / 2f, barWidth / 2f))
         }
     }
 }
@@ -132,8 +184,8 @@ private fun ContinueListeningCard(
 ) {
     val tokens = LocalAmberTokens.current
     val shape = RoundedCornerShape(28.dp)
-    Surface(modifier.fillMaxWidth().height(150.dp).clickable(onClick = onClick), shape, Color.Transparent, border = BorderStroke(1.dp, tokens.separator), shadowElevation = 6.dp) {
-        Box(Modifier.clip(shape).background(Brush.linearGradient(listOf(tokens.cardTop, tokens.cardBottom))).padding(18.dp)) {
+    Surface(modifier.fillMaxWidth().height(150.dp).clickable(onClick = onClick), shape, androidx.compose.ui.graphics.Color.Transparent, border = BorderStroke(1.dp, tokens.separator), shadowElevation = 6.dp) {
+        Box(Modifier.clip(shape).background(androidx.compose.ui.graphics.Brush.linearGradient(listOf(tokens.cardTop, tokens.cardBottom))).padding(18.dp)) {
             Row(verticalAlignment = Alignment.CenterVertically, modifier = Modifier.fillMaxSize()) {
                 CoverBox(playlist.coverUri, Modifier.size(98.dp))
                 Spacer(Modifier.width(18.dp))
@@ -144,7 +196,7 @@ private fun ContinueListeningCard(
                         color = tokens.label,
                         fontSize = 26.sp,
                         lineHeight = 29.sp,
-                        fontFamily = FontFamily.Serif,
+                        fontFamily = androidx.compose.ui.text.font.FontFamily.Serif,
                         fontWeight = FontWeight.Normal,
                         maxLines = 2,
                         overflow = TextOverflow.Ellipsis,
@@ -190,6 +242,9 @@ fun PlaylistRow(
     val tokens = LocalAmberTokens.current
     val shape = RoundedCornerShape(18.dp)
     val workActive = playbackState.playlistId == playlist.id && playbackState.playlistIndex in playlist.tracks.indices
+    val workPlaying = workActive && playbackState.isPlaying
+    val highlighted = selected || workActive
+    val selectionPink = androidx.compose.ui.graphics.Color(0xFFF2759F)
     val chevronRotation by animateFloatAsState(if (expanded) 180f else 0f, tween(220), label = "playlistChevron")
     Surface(
         modifier = Modifier.fillMaxWidth().uiProbe(
@@ -198,12 +253,12 @@ fun PlaylistRow(
             sourceHint = "LibraryRows.kt",
             metadata = mapOf("playlistId" to playlist.id, "trackCount" to playlist.tracks.size.toString(), "expanded" to expanded.toString()),
         ),
-        color = Color.Transparent,
+        color = androidx.compose.ui.graphics.Color.Transparent,
         shape = shape,
-        border = BorderStroke(1.dp, when { workActive -> tokens.accent.copy(alpha = 0.35f); selected -> tokens.accent.copy(alpha = 0.18f); else -> tokens.separator }),
-        shadowElevation = if (workActive) 6.dp else 0.dp,
+        border = BorderStroke(1.dp, tokens.separator),
+        shadowElevation = 0.dp,
     ) {
-        Column(Modifier.clip(shape).background(Brush.linearGradient(listOf(tokens.cardTop, tokens.cardBottom)))) {
+        Column(Modifier.clip(shape).background(androidx.compose.ui.graphics.Brush.linearGradient(listOf(tokens.cardTop, tokens.cardBottom)))) {
             Row(
                 modifier = Modifier.fillMaxWidth().clickable(onClick = onPlaylistClicked).padding(start = 14.dp, end = 8.dp, top = 13.dp, bottom = 13.dp),
                 verticalAlignment = Alignment.CenterVertically,
@@ -217,30 +272,38 @@ fun PlaylistRow(
                             fontSize = 15.sp,
                             lineHeight = 19.sp,
                             fontWeight = FontWeight.SemiBold,
-                            color = animateColorAsState(if (workActive) tokens.accent else tokens.label, tween(220), label = "playlistName").value,
+                            color = animateColorAsState(if (highlighted) selectionPink else tokens.label, tween(220), label = "playlistName").value,
                             maxLines = 1,
                             overflow = TextOverflow.Ellipsis,
                             modifier = Modifier.weight(1f, fill = false),
                         )
-                        if (workActive) {
+                        if (workPlaying) {
                             Spacer(Modifier.width(7.dp))
-                            LibraryAnimatedAudioLines(Modifier.size(width = 18.dp, height = 14.dp))
+                            WaveBars(
+                                modifier = Modifier.size(width = 24.dp, height = 16.dp),
+                                playing = true,
+                                color = selectionPink,
+                            )
                         }
                     }
                     Row(verticalAlignment = Alignment.CenterVertically, modifier = Modifier.padding(top = 4.dp)) {
                         Text("播放列表", color = tokens.label2, fontSize = 12.sp, maxLines = 1)
                         Text(" · ${playlist.tracks.size} 段", color = tokens.label2, fontSize = 12.sp, maxLines = 1)
-                        if (workActive) Text(" · 正在播放", color = tokens.accent, fontSize = 12.sp, fontWeight = FontWeight.SemiBold, maxLines = 1)
+                        if (workActive) Text(if (workPlaying) " · 正在播放" else " · 当前作品", color = selectionPink, fontSize = 12.sp, fontWeight = FontWeight.SemiBold, maxLines = 1)
                     }
                 }
                 Box {
                     IconButton(onClick = { menuExpanded = true }, modifier = Modifier.size(38.dp)) {
                         Icon(Icons.Default.MoreVert, "播放列表操作", tint = tokens.label3, modifier = Modifier.size(20.dp))
                     }
-                    DropdownMenu(menuExpanded, { menuExpanded = false }) {
-                        DropdownMenuItem({ Text("更换封面") }, leadingIcon = { Icon(Icons.Default.MusicNote, null) }, onClick = { menuExpanded = false; onCoverClicked() })
-                        DropdownMenuItem({ Text("重命名") }, leadingIcon = { Icon(Icons.Default.Edit, null) }, onClick = { menuExpanded = false; onRenamePlaylist() })
-                        DropdownMenuItem({ Text("删除") }, leadingIcon = { Icon(Icons.Default.Delete, null) }, onClick = { menuExpanded = false; onDeletePlaylist() })
+                    AmberDropdownMenu(
+                        expanded = menuExpanded,
+                        onDismissRequest = { menuExpanded = false },
+                        modifier = Modifier.uiProbe("library.playlist-menu-popup:${playlist.id}", "播放列表操作菜单", "LibraryRows.kt"),
+                    ) {
+                        AmberDropdownMenuItem("更换封面", Icons.Default.MusicNote, onClick = { menuExpanded = false; onCoverClicked() })
+                        AmberDropdownMenuItem("重命名", Icons.Default.Edit, onClick = { menuExpanded = false; onRenamePlaylist() })
+                        AmberDropdownMenuItem("删除", Icons.Default.Delete, destructive = true, onClick = { menuExpanded = false; onDeletePlaylist() })
                     }
                 }
                 Box(Modifier.size(26.dp).graphicsLayer { rotationZ = chevronRotation }, Alignment.Center) {
@@ -302,18 +365,23 @@ private fun LibrarySegmentRow(
             label = "展开曲目行：${track.title}",
             sourceHint = "LibraryRows.kt",
             metadata = mapOf("trackId" to track.id, "index" to index.toString(), "active" to active.toString()),
-        ).background(if (active) tokens.accentSoft.copy(alpha = 0.38f) else Color.Transparent),
+        ),
     ) {
         Row(
             modifier = Modifier.fillMaxWidth().clickable(onClick = onClick).padding(start = 18.dp, end = 6.dp, top = 11.dp, bottom = 11.dp),
             verticalAlignment = Alignment.CenterVertically,
         ) {
             Box(Modifier.width(26.dp), Alignment.Center) {
-                if (active) LibraryAnimatedAudioLines(Modifier.size(width = 17.dp, height = 14.dp)) else Text("%02d".format(index + 1), color = tokens.label3, fontSize = 12.sp, fontWeight = FontWeight.Medium)
+                Text(
+                    "%02d".format(index + 1),
+                    color = if (active) androidx.compose.ui.graphics.Color(0xFFF2759F) else tokens.label3,
+                    fontSize = 12.sp,
+                    fontWeight = FontWeight.Medium,
+                )
             }
             Spacer(Modifier.width(13.dp))
             Column(Modifier.weight(1f)) {
-                Text(track.title, maxLines = 1, overflow = TextOverflow.Ellipsis, fontSize = 14.5.sp, lineHeight = 20.sp, fontWeight = if (active) FontWeight.SemiBold else FontWeight.Normal, color = if (active) tokens.accent else tokens.label)
+                Text(track.title, maxLines = 1, overflow = TextOverflow.Ellipsis, fontSize = 14.5.sp, lineHeight = 20.sp, fontWeight = if (active) FontWeight.SemiBold else FontWeight.Normal, color = if (active) androidx.compose.ui.graphics.Color(0xFFF2759F) else tokens.label)
                 aiSubtitleTask?.let { task ->
                     Text(aiSubtitleStatusText(task), color = if (task.stage == AiSubtitleStage.FAILED) tokens.accent2 else tokens.label3, maxLines = 1, overflow = TextOverflow.Ellipsis, fontSize = 11.5.sp, modifier = Modifier.padding(top = 2.dp))
                 }
@@ -354,7 +422,7 @@ fun TrackRow(
             sourceHint = "LibraryRows.kt",
             metadata = mapOf("trackId" to track.id, "active" to active.toString()),
         ).padding(vertical = if (elevated) 6.dp else 2.dp),
-        color = if (active || elevated) tokens.accentSoft.copy(alpha = if (active) 0.62f else 0.28f) else Color.Transparent,
+        color = if (active || elevated) tokens.accentSoft.copy(alpha = if (active) 0.62f else 0.28f) else androidx.compose.ui.graphics.Color.Transparent,
         shape = rowShape,
         border = if (active || elevated) BorderStroke(1.dp, tokens.separator) else null,
     ) {
@@ -405,15 +473,19 @@ private fun TrackActionMenu(
         IconButton(onClick = { menuExpanded = true }, modifier = iconModifier) {
             Icon(Icons.Default.MoreVert, "曲目操作", tint = tokens.label3, modifier = iconSize?.let { Modifier.size(it) } ?: Modifier)
         }
-        DropdownMenu(menuExpanded, { menuExpanded = false }) {
-            DropdownMenuItem(
-                text = { Text(if (aiSubtitleTask == null) "自动生成字幕" else "查看生成进度") },
-                leadingIcon = { Icon(Icons.Default.Subtitles, null) },
+        AmberDropdownMenu(
+            expanded = menuExpanded,
+            onDismissRequest = { menuExpanded = false },
+            modifier = Modifier.uiProbe("library.track-menu-popup", "曲目操作菜单", "LibraryRows.kt"),
+        ) {
+            AmberDropdownMenuItem(
+                text = if (aiSubtitleTask == null) "自动生成字幕" else "查看生成进度",
+                icon = Icons.Default.Subtitles,
                 onClick = { menuExpanded = false; if (aiSubtitleTask == null) onGenerateSubtitle() else onOpenSubtitleGeneration() },
             )
-            DropdownMenuItem({ Text("重命名") }, leadingIcon = { Icon(Icons.Default.Edit, null) }, onClick = { menuExpanded = false; onRename() })
-            DropdownMenuItem({ Text("移动到...") }, leadingIcon = { Icon(Icons.AutoMirrored.Filled.QueueMusic, null) }, onClick = { menuExpanded = false; onMove() })
-            DropdownMenuItem({ Text("删除") }, leadingIcon = { Icon(Icons.Default.Delete, null) }, onClick = { menuExpanded = false; onDelete() })
+            AmberDropdownMenuItem("重命名", Icons.Default.Edit, onClick = { menuExpanded = false; onRename() })
+            AmberDropdownMenuItem("移动到...", Icons.AutoMirrored.Filled.QueueMusic, onClick = { menuExpanded = false; onMove() })
+            AmberDropdownMenuItem("删除", Icons.Default.Delete, destructive = true, onClick = { menuExpanded = false; onDelete() })
         }
     }
 }

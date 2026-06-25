@@ -80,7 +80,6 @@ import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Switch
-import androidx.compose.material3.SwitchDefaults
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.material3.darkColorScheme
@@ -130,6 +129,7 @@ import androidx.compose.animation.togetherWith
 import androidx.compose.ui.window.Dialog
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import io.github.summerdez.asmrplayer.ui.theme.LocalAmberTokens
+import io.github.summerdez.asmrplayer.ui.theme.amberSwitchColors
 import java.text.DateFormat
 import java.util.Date
 import kotlin.math.max
@@ -186,14 +186,7 @@ fun SettingsSwitchRow(title: String, checked: Boolean, onClick: () -> Unit) {
         Switch(
             checked = checked,
             onCheckedChange = { onClick() },
-            colors = SwitchDefaults.colors(
-                checkedTrackColor = tokens.switchOn,
-                uncheckedTrackColor = tokens.label.copy(alpha = 0.10f),
-                checkedThumbColor = Color(0xFF0A0A0B),
-                uncheckedThumbColor = tokens.label2,
-                uncheckedBorderColor = Color.Transparent,
-                checkedBorderColor = Color.Transparent,
-            ),
+            colors = amberSwitchColors(),
         )
     }
 }
@@ -271,22 +264,16 @@ fun ThemeChip(text: String, selected: Boolean, onClick: () -> Unit) {
 @Composable
 private fun SettingLeadingIcon(icon: ImageVector, alt: Boolean = false) {
     val tokens = LocalAmberTokens.current
-    Surface(
-        modifier = Modifier.size(34.dp),
-        shape = RoundedCornerShape(12.dp),
-        color = if (alt) tokens.accent2Soft else tokens.label.copy(alpha = 0.06f),
-        border = BorderStroke(1.dp, if (alt) tokens.accent2.copy(alpha = 0.28f) else tokens.separator),
-        tonalElevation = 0.dp,
-        shadowElevation = 0.dp,
+    Box(
+        modifier = Modifier.size(42.dp),
+        contentAlignment = Alignment.Center,
     ) {
-        Box(contentAlignment = Alignment.Center) {
-            Icon(
-                icon,
-                contentDescription = null,
-                tint = if (alt) tokens.accent2 else tokens.label2,
-                modifier = Modifier.size(18.dp),
-            )
-        }
+        Icon(
+            icon,
+            contentDescription = null,
+            tint = if (alt) tokens.accent2 else Color(0xFFF2759F),
+            modifier = Modifier.size(30.dp),
+        )
     }
 }
 

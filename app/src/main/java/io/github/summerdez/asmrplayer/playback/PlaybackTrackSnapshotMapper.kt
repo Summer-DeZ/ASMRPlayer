@@ -56,7 +56,7 @@ internal data class PlaybackTrackMetadataSnapshot(
     val title: String?,
 )
 
-private fun Playlist?.toPlaybackTrackSnapshot(identity: PlaybackMediaQueue.PlaylistIdentity): PlaybackTrackSnapshot? {
+private fun Playlist?.toPlaybackTrackSnapshot(identity: PlaybackMediaQueue.QueueIdentity): PlaybackTrackSnapshot? {
     val track = this?.tracks?.getOrNull(identity.index) ?: return null
     return PlaybackTrackSnapshot(
         playlistId = identity.playlistId,

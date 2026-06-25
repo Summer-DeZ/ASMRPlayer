@@ -35,6 +35,7 @@ fun AppScaffold(
     onPlayClicked: () -> Unit,
     onNextClicked: () -> Unit,
     onTabSelected: (MainTab) -> Unit,
+    showHeader: Boolean,
     content: @Composable () -> Unit,
     dialogHost: @Composable () -> Unit,
 ) {
@@ -81,15 +82,17 @@ fun AppScaffold(
                         .padding(innerPadding)
                         .background(pageBackground),
                 ) {
-                    PageHeader(
-                        title = selectedTab.title,
-                        showMenu = selectedTab == MainTab.MEDIA,
-                        menuExpanded = showLibraryMenu,
-                        onMenuExpandedChange = onLibraryMenuExpandedChange,
-                        onCreatePlaylist = onCreatePlaylist,
-                        onImportAudio = onImportAudio,
-                        onImportFolder = onImportFolder,
-                    )
+                    if (showHeader) {
+                        PageHeader(
+                            title = selectedTab.title,
+                            showMenu = selectedTab == MainTab.MEDIA,
+                            menuExpanded = showLibraryMenu,
+                            onMenuExpandedChange = onLibraryMenuExpandedChange,
+                            onCreatePlaylist = onCreatePlaylist,
+                            onImportAudio = onImportAudio,
+                            onImportFolder = onImportFolder,
+                        )
+                    }
                     Box(Modifier.weight(1f)) {
                         content()
                     }

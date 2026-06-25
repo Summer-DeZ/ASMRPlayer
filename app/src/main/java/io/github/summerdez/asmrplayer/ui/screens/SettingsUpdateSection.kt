@@ -16,7 +16,6 @@ import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.automirrored.filled.KeyboardArrowRight
 import androidx.compose.material.icons.filled.Close
 import androidx.compose.material.icons.filled.Download
 import androidx.compose.material3.CircularProgressIndicator
@@ -57,9 +56,13 @@ internal fun UpdateCheckRow(status: AppUpdateStatus, onClick: () -> Unit) {
             .padding(start = 16.dp, end = 16.dp),
         verticalAlignment = Alignment.CenterVertically,
     ) {
-        SettingsIcon(Icons.Default.Download)
-        Spacer(Modifier.width(14.dp))
-        Text("检查更新", fontSize = 15.sp, fontWeight = FontWeight.SemiBold, color = tokens.label, modifier = Modifier.weight(1f))
+        Text(
+            "检查更新",
+            fontSize = SettingsRowTitleFontSize,
+            fontWeight = SettingsRowTitleFontWeight,
+            color = tokens.label,
+            modifier = Modifier.weight(1f),
+        )
         when (status) {
             AppUpdateStatus.Checking -> {
                 CircularProgressIndicator(
@@ -69,7 +72,7 @@ internal fun UpdateCheckRow(status: AppUpdateStatus, onClick: () -> Unit) {
                     strokeWidth = 2.dp,
                 )
                 Spacer(Modifier.width(8.dp))
-                Text("正在检查…", fontSize = 13.sp, color = tokens.label3)
+                Text("正在检查…", fontSize = SettingsRowValueFontSize, color = tokens.label3)
             }
             is AppUpdateStatus.Available -> {
                 Box(
@@ -80,29 +83,23 @@ internal fun UpdateCheckRow(status: AppUpdateStatus, onClick: () -> Unit) {
                 Spacer(Modifier.width(8.dp))
                 Text(
                     text = "有新版本 ${status.release.versionName}",
-                    fontSize = 13.sp,
+                    fontSize = SettingsRowValueFontSize,
                     color = tokens.accent,
                     maxLines = 1,
                     overflow = TextOverflow.Ellipsis,
                 )
-                Spacer(Modifier.width(8.dp))
-                Icon(Icons.AutoMirrored.Filled.KeyboardArrowRight, contentDescription = null, tint = tokens.label3, modifier = Modifier.size(19.dp))
             }
-            AppUpdateStatus.UpToDate -> Text("已是最新", fontSize = 13.sp, color = tokens.label3)
+            AppUpdateStatus.UpToDate -> Text("已是最新", fontSize = SettingsRowValueFontSize, color = tokens.label3)
             is AppUpdateStatus.Failed -> {
                 Text(
                     text = status.message.ifBlank { "检查失败" },
-                    fontSize = 13.sp,
+                    fontSize = SettingsRowValueFontSize,
                     color = tokens.accent2,
                     maxLines = 1,
                     overflow = TextOverflow.Ellipsis,
                 )
-                Spacer(Modifier.width(8.dp))
-                Icon(Icons.AutoMirrored.Filled.KeyboardArrowRight, contentDescription = null, tint = tokens.label3, modifier = Modifier.size(19.dp))
             }
-            AppUpdateStatus.Idle -> {
-                Icon(Icons.AutoMirrored.Filled.KeyboardArrowRight, contentDescription = null, tint = tokens.label3, modifier = Modifier.size(19.dp))
-            }
+            AppUpdateStatus.Idle -> Unit
         }
     }
 }
@@ -172,8 +169,8 @@ internal fun UpdateDownloadCard(
                 Text(
                     text = if (failed) "更新下载失败" else "正在下载 v${release.versionName}",
                     color = tokens.label,
-                    fontSize = 15.sp,
-                    fontWeight = FontWeight.SemiBold,
+                    fontSize = SettingsRowTitleFontSize,
+                    fontWeight = SettingsRowTitleFontWeight,
                     modifier = Modifier.weight(1f),
                     maxLines = 1,
                     overflow = TextOverflow.Ellipsis,
@@ -213,7 +210,7 @@ internal fun UpdateDownloadCard(
                 Text(
                     text = failureMessage ?: formatUpdateBytes(speedBytesPerSecond) + "/s",
                     color = if (failed) tokens.accent2 else tokens.label2,
-                    fontSize = 13.sp,
+                    fontSize = SettingsRowValueFontSize,
                     modifier = Modifier.weight(1f),
                     maxLines = 1,
                     overflow = TextOverflow.Ellipsis,
@@ -221,7 +218,7 @@ internal fun UpdateDownloadCard(
                 Text(
                     text = "${formatUpdateBytes(bytesDownloaded)} / ${formatUpdateBytes(totalBytes)}",
                     color = tokens.label2,
-                    fontSize = 13.sp,
+                    fontSize = SettingsRowValueFontSize,
                     maxLines = 1,
                     overflow = TextOverflow.Ellipsis,
                 )

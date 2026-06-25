@@ -147,7 +147,12 @@ object UiProbeHitTester {
                     .thenByDescending { it.registeredOrder },
             )
             .toList()
-        return UiProbeHit(selected = candidates.firstOrNull(), candidates = candidates)
+        val visibleLayerCandidates = if (candidates.any { it.id == "player.root" }) {
+            candidates.filter { it.id.startsWith("player.") }
+        } else {
+            candidates
+        }
+        return UiProbeHit(selected = visibleLayerCandidates.firstOrNull(), candidates = visibleLayerCandidates)
     }
 }
 
@@ -270,7 +275,7 @@ private fun UiProbeHighlight(target: UiProbeTarget) {
                 width = with(density) { bounds.width.toDp() },
                 height = with(density) { bounds.height.toDp() },
             )
-            .border(BorderStroke(2.dp, Color(0xFFFFB45D)), RoundedCornerShape(8.dp)),
+            .border(BorderStroke(2.dp, Color(0xFF8E8E93)), RoundedCornerShape(8.dp)),
     )
 }
 
@@ -285,7 +290,7 @@ private fun UiProbeControl(
     Surface(
         modifier = modifier,
         shape = CircleShape,
-        color = if (armed) Color(0xFFFFB45D) else Color(0xCC1C1C1F),
+        color = if (armed) Color(0xFF8E8E93) else Color(0xCC1C1C1F),
         border = BorderStroke(1.dp, Color(0x66FFFFFF)),
         shadowElevation = 10.dp,
     ) {
@@ -323,7 +328,7 @@ private fun UiProbeInfoSheet(selection: UiProbeSelection, modifier: Modifier = M
         shadowElevation = 18.dp,
     ) {
         Column(Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(6.dp)) {
-            Text("选中区域", color = Color(0xFFFFB45D), fontSize = 12.sp, fontWeight = FontWeight.SemiBold)
+            Text("选中区域", color = Color(0xFF8E8E93), fontSize = 12.sp, fontWeight = FontWeight.SemiBold)
             Text(
                 selection.selected.label,
                 color = Color.White,

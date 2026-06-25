@@ -66,6 +66,8 @@ fun AppTabHost(
     onDownloadWhisperModel: () -> Unit,
     onCancelWhisperModelDownload: () -> Unit,
     onDeleteWhisperModel: () -> Unit,
+    settingsAiOpen: Boolean,
+    onSettingsAiOpenChange: (Boolean) -> Unit,
     onSetMinutes: (Int) -> Unit,
     onSetEndOfTrack: () -> Unit,
     onCustom: () -> Unit,
@@ -128,6 +130,8 @@ fun AppTabHost(
             onDownloadWhisperModel = onDownloadWhisperModel,
             onCancelWhisperModelDownload = onCancelWhisperModelDownload,
             onDeleteWhisperModel = onDeleteWhisperModel,
+            aiSettingsOpen = settingsAiOpen,
+            onAiSettingsOpenChange = onSettingsAiOpenChange,
         )
         MainTab.SLEEP -> SleepTab(
             state = sleepState,

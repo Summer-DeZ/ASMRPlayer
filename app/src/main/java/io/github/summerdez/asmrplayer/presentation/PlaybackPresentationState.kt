@@ -7,6 +7,7 @@ import io.github.summerdez.asmrplayer.domain.PlaylistQueries
 import io.github.summerdez.asmrplayer.domain.model.Playlist
 import io.github.summerdez.asmrplayer.playback.PlaybackControllerSnapshot
 import io.github.summerdez.asmrplayer.playback.PlaybackServiceSnapshot
+import io.github.summerdez.asmrplayer.playback.activeServiceSnapshotOrNull
 
 data class PlaybackUiState(
     val audioTitle: String = "未选择音频",
@@ -226,12 +227,7 @@ internal class PlaybackPresentationState(
     }
 
     private fun activeServiceSnapshot(): PlaybackServiceSnapshot {
-        val controllerServiceSnapshot = controllerSnapshot.serviceSnapshot
-        return if (controllerSnapshot.connected && controllerServiceSnapshot.connected) {
-            controllerServiceSnapshot
-        } else {
-            PlaybackServiceSnapshot()
-        }
+        return controllerSnapshot.activeServiceSnapshotOrNull() ?: PlaybackServiceSnapshot()
     }
 
     private companion object {

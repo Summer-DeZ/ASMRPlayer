@@ -27,7 +27,6 @@ import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Switch
-import androidx.compose.material3.SwitchDefaults
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.remember
@@ -47,6 +46,7 @@ import io.github.summerdez.asmrplayer.domain.model.transcriptionDetailLabel
 import io.github.summerdez.asmrplayer.presentation.PlaybackUiState
 import io.github.summerdez.asmrplayer.ui.components.CoverBox
 import io.github.summerdez.asmrplayer.ui.theme.LocalAmberTokens
+import io.github.summerdez.asmrplayer.ui.theme.amberSwitchColors
 import io.github.summerdez.asmrplayer.ui.uiProbe
 
 @Composable
@@ -203,12 +203,7 @@ internal fun PlayerMoreMenuSheet(
                                             onGenerateAiSubtitle()
                                         }
                                     },
-                                    colors = SwitchDefaults.colors(
-                                        checkedThumbColor = tokens.bg,
-                                        checkedTrackColor = tokens.accent,
-                                        uncheckedThumbColor = tokens.label3,
-                                        uncheckedTrackColor = tokens.gray5,
-                                    ),
+                                    colors = amberSwitchColors(),
                                 )
                             }
                         },
