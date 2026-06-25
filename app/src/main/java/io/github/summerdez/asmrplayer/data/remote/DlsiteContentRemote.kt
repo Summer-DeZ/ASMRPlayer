@@ -11,25 +11,22 @@ import java.io.FileOutputStream
 import java.io.IOException
 import java.util.Locale
 
-class DlsiteContentRemote(private val httpClient: DlsiteHttpClient?) {
+class DlsiteContentRemote(private val httpClient: DlsiteHttpClient) {
     @Throws(IOException::class)
-    fun downloadTo(work: DlsiteWork?, targetFile: File?) {
-        val sourceWork = work ?: throw NullPointerException("work")
-        val downloadUrl = resolveDownloadUrl(sourceWork)
+    fun downloadTo(work: DlsiteWork, targetFile: File) {
+        val downloadUrl = resolveDownloadUrl(work)
         if (TextUtils.isEmpty(downloadUrl)) {
             throw IOException("没有找到下载入口")
         }
 
-        val outputFile = targetFile ?: throw NullPointerException("targetFile")
-        val parent = outputFile.parentFile
+        val parent = targetFile.parentFile
         if (parent != null && !parent.exists() && !parent.mkdirs()) {
             throw IOException("无法创建下载目录")
         }
 
-        val client = httpClient ?: throw NullPointerException("httpClient")
-        client.execute(
+        httpClient.execute(
             downloadUrl,
-            sourceWork.detailUrl,
+            work.detailUrl,
             "application/zip,application/octet-stream,*/*",
             "GET",
             null,
@@ -41,7 +38,7 @@ class DlsiteContentRemote(private val httpClient: DlsiteHttpClient?) {
             }
             val responseBody = response.body ?: throw IOException("下载失败: 响应为空")
             BufferedInputStream(responseBody.byteStream()).use { input ->
-                FileOutputStream(outputFile).use { output ->
+                FileOutputStream(targetFile).use { output ->
                     val buffer = ByteArray(64 * 1024)
                     while (true) {
                         val count = input.read(buffer)
@@ -57,8 +54,8 @@ class DlsiteContentRemote(private val httpClient: DlsiteHttpClient?) {
     }
 
     @Throws(IOException::class)
-    fun fetchDownloadOptions(work: DlsiteWork?): List<DlsiteDownloadOption> {
-        val workId = work?.workId ?: ""
+    fun fetchDownloadOptions(work: DlsiteWork): List<DlsiteDownloadOption> {
+        val workId = work.workId
         if (TextUtils.isEmpty(workId)) {
             throw IOException("作品编号为空")
         }
@@ -67,23 +64,22 @@ class DlsiteContentRemote(private val httpClient: DlsiteHttpClient?) {
     }
 
     @Throws(IOException::class)
-    fun downloadWorkFiles(work: DlsiteWork?, workDir: File?, downloadOptionId: String?): List<File> {
+    fun downloadWorkFiles(work: DlsiteWork, workDir: File, downloadOptionId: String): List<File> {
         return downloadWorkFiles(work, workDir, downloadOptionId, null)
     }
 
     @Throws(IOException::class)
     fun downloadWorkFiles(
-        work: DlsiteWork?,
-        workDir: File?,
-        downloadOptionId: String?,
+        work: DlsiteWork,
+        workDir: File,
+        downloadOptionId: String,
         progressListener: DlsiteContentProgressListener?,
     ): List<File> {
-        val workId = work?.workId ?: ""
+        val workId = work.workId
         if (TextUtils.isEmpty(workId)) {
             throw IOException("作品编号为空")
         }
-        val directory = workDir ?: throw NullPointerException("workDir")
-        if (!directory.exists() && !directory.mkdirs() && !directory.isDirectory) {
+        if (!workDir.exists() && !workDir.mkdirs() && !workDir.isDirectory) {
             throw IOException("无法创建作品目录")
         }
 
@@ -108,7 +104,7 @@ class DlsiteContentRemote(private val httpClient: DlsiteHttpClient?) {
         for (contentFile in selectedContentFiles) {
             DlsiteRemoteFiles.throwIfInterrupted()
             val audioFile = DlsiteRemoteFiles.uniqueTarget(
-                DlsiteRemoteFiles.localFileFor(directory, contentFile.displayPath),
+                DlsiteRemoteFiles.localFileFor(workDir, contentFile.displayPath),
                 usedTargets,
             )
             downloadSignedContentFile(
@@ -142,7 +138,7 @@ class DlsiteContentRemote(private val httpClient: DlsiteHttpClient?) {
     @Throws(IOException::class)
     private fun selectedContentFiles(
         ziptree: DlsiteJsonParser.DlsiteZiptree,
-        downloadOptionId: String?,
+        downloadOptionId: String,
     ): List<DlsiteJsonParser.ContentFile> {
         if (TextUtils.isEmpty(downloadOptionId)) {
             return ziptree.audioFiles
@@ -233,11 +229,11 @@ class DlsiteContentRemote(private val httpClient: DlsiteHttpClient?) {
         return "/content/work/$site/$bucketName/$workId"
     }
 
-    private fun sitePathForWorkId(workId: String?): String {
+    private fun sitePathForWorkId(workId: String): String {
         if (TextUtils.isEmpty(workId)) {
             return "doujin"
         }
-        val first = workId?.get(0)
+        val first = workId[0]
         if (first == 'B') {
             return "books"
         }
@@ -250,19 +246,17 @@ class DlsiteContentRemote(private val httpClient: DlsiteHttpClient?) {
     @Throws(IOException::class)
     private fun downloadSignedContentFile(
         url: String,
-        targetFile: File?,
+        targetFile: File,
         accept: String,
         contentFile: DlsiteJsonParser.ContentFile,
         progressListener: DlsiteContentProgressListener?,
     ) {
-        val outputFile = targetFile ?: throw NullPointerException("targetFile")
-        val parent = outputFile.parentFile
+        val parent = targetFile.parentFile
         if (parent != null && !parent.exists() && !parent.mkdirs()) {
             throw IOException("无法创建下载目录")
         }
-        val tempFile = File(parent ?: outputFile.parentFile, outputFile.name + ".part")
-        val client = httpClient ?: throw NullPointerException("httpClient")
-        client.execute(
+        val tempFile = File(parent ?: targetFile.parentFile, targetFile.name + ".part")
+        httpClient.execute(
             url,
             DlsiteRemoteConstants.PLAY_BASE_URL + "/library",
             accept,
@@ -318,24 +312,22 @@ class DlsiteContentRemote(private val httpClient: DlsiteHttpClient?) {
             }
             throw IOException("DLsite 返回了网页，未拿到媒体文件")
         }
-        if (outputFile.exists() && !outputFile.delete()) {
+        if (targetFile.exists() && !targetFile.delete()) {
             throw IOException("无法替换旧文件")
         }
-        if (!tempFile.renameTo(outputFile)) {
+        if (!tempFile.renameTo(targetFile)) {
             throw IOException("无法保存下载文件")
         }
     }
 
     @Throws(IOException::class)
-    private fun downloadSignedSubtitleFile(url: String, targetFile: File?) {
-        val outputFile = targetFile ?: throw NullPointerException("targetFile")
-        val parent = outputFile.parentFile
+    private fun downloadSignedSubtitleFile(url: String, targetFile: File) {
+        val parent = targetFile.parentFile
         if (parent != null && !parent.exists() && !parent.mkdirs()) {
             throw IOException("无法创建下载目录")
         }
-        val tempFile = File(parent ?: outputFile.parentFile, outputFile.name + ".part")
-        val client = httpClient ?: throw NullPointerException("httpClient")
-        client.execute(
+        val tempFile = File(parent ?: targetFile.parentFile, targetFile.name + ".part")
+        httpClient.execute(
             url,
             DlsiteRemoteConstants.PLAY_BASE_URL + "/library",
             "text/vtt,text/plain,application/json,*/*",
@@ -394,18 +386,17 @@ class DlsiteContentRemote(private val httpClient: DlsiteHttpClient?) {
             }
         }
 
-        if (outputFile.exists() && !outputFile.delete()) {
+        if (targetFile.exists() && !targetFile.delete()) {
             throw IOException("无法替换旧字幕文件")
         }
-        if (!tempFile.renameTo(outputFile)) {
+        if (!tempFile.renameTo(targetFile)) {
             throw IOException("无法保存字幕文件")
         }
     }
 
     @Throws(IOException::class)
     private fun get(pathOrUrl: String?, referer: String?, accept: String?): String {
-        val client = httpClient ?: throw NullPointerException("httpClient")
-        return client.text(
+        return httpClient.text(
             pathOrUrl,
             referer,
             accept,

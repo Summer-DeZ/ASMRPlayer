@@ -61,6 +61,7 @@
 - [x] 需要做：Phase F/C3 平台值 helper 清理切片：`SubtitleCue.text`、`DocumentFiles.FolderImportItem.audioName/audioUri/subtitleName` 与 `TreeDocument` 改为非空 Kotlin 构造语义，删除 `preserveJavaFieldValue`、`platformValue` 和 `platformFieldValue` helper；`subtitleUri` 继续保留可空表示没有匹配字幕。
 - [x] 需要做：Phase F/C3 DLsite facade 非空化切片：`DlsiteJsonParser` / `DlsiteLibraryJsonParser` / `DlsiteDownloadJsonParser` / `DlsiteWebvttJsonParser` 的完整 JSON 文本入参改为非空 `String`，`DlsiteJsonSupport.parse` 与 `JsonReader` 同步非空；JSON 字段层面的 `Any?` / `String?` 容错和 `toJsonArray` 空值编码语义保留。
 - [x] 需要做：Phase F/C3 DLsite 下载任务非空数据流切片：`DlsiteDownloadPlanner.optionsFor`、`DlsiteDownloadTask.downloadAndImport` 必填协作者、`DownloadProgressTracker`、`Result` / `ContentResult` / `DownloadedContent` / `ImportResult` 内部构造数据改为非空 Kotlin 类型；下载内容 `optionId`、回调边界和封面/错误等业务可缺失字段继续保留 nullable。
+- [x] 需要做：Phase F/C3 DLsite remote client 非空化切片：`DlsiteClient`、`DlsiteContentRemote`、`DlsiteCoverRemote` 与 `DlsiteRemoteFiles` 的必填 `DlsiteWork`、目标文件、目录和 `DlsiteHttpClient` 注入改为非空；HTTP helper 容错和安全探测/清理 nullable 继续保留。
 - [ ] 后续做：Phase C 如继续评估播放位置/字幕链路，只处理状态边界和测试覆盖；`PlaybackCommandClient` UI position ticker 与 `PlaybackService` cue-boundary scheduler 属于不同 runtime 驱动，不作为“两个 250ms 轮询”合并。
 - [ ] 后续做：Phase D 继续处理其它剩余 service-locator 去耦，逐步收敛到注入的仓库/服务边界。
 - [ ] 后续做：Phase E 继续拆分 `ASMRPlayerApp.kt` 组合根和巨型 Screen 文件。

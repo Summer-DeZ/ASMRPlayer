@@ -39,8 +39,8 @@ object DlsiteRemoteFiles {
         }
     }
 
-    fun localFileFor(workDir: File?, relativePath: String?): File? {
-        val segments = if (relativePath == null) emptyArray() else pathSeparator.split(relativePath)
+    fun localFileFor(workDir: File, relativePath: String): File {
+        val segments = pathSeparator.split(relativePath)
         var current = workDir
         for (segment in segments) {
             val safe = safeFileName(segment)
@@ -51,17 +51,15 @@ object DlsiteRemoteFiles {
         return current
     }
 
-    fun uniqueTarget(targetFile: File?, usedTargets: MutableSet<String>?): File {
-        val source = targetFile ?: throw NullPointerException("targetFile")
-        val targets = usedTargets ?: throw NullPointerException("usedTargets")
-        var candidate = source
+    fun uniqueTarget(targetFile: File, usedTargets: MutableSet<String>): File {
+        var candidate = targetFile
         var index = 2
-        while (!targets.add(candidate.absolutePath)) {
-            val name = source.name
+        while (!usedTargets.add(candidate.absolutePath)) {
+            val name = targetFile.name
             val dot = name.lastIndexOf('.')
             val base = if (dot > 0) name.substring(0, dot) else name
             val extension = if (dot > 0) name.substring(dot) else ""
-            candidate = File(source.parentFile, "$base $index$extension")
+            candidate = File(targetFile.parentFile, "$base $index$extension")
             index++
         }
         return candidate
@@ -111,7 +109,7 @@ object DlsiteRemoteFiles {
     }
 
     @Throws(IOException::class)
-    fun readTextFile(file: File?): String {
+    fun readTextFile(file: File): String {
         val builder = StringBuilder()
         BufferedReader(InputStreamReader(FileInputStream(file), StandardCharsets.UTF_8)).use { reader ->
             val buffer = CharArray(16 * 1024)
@@ -127,9 +125,9 @@ object DlsiteRemoteFiles {
     }
 
     @Throws(IOException::class)
-    fun writeTextFile(file: File?, text: String?) {
+    fun writeTextFile(file: File, text: String) {
         FileOutputStream(file).use { output ->
-            output.write((text ?: "").toByteArray(StandardCharsets.UTF_8))
+            output.write(text.toByteArray(StandardCharsets.UTF_8))
         }
     }
 

@@ -13,12 +13,9 @@ import java.net.URLEncoder
 import java.nio.charset.StandardCharsets
 import java.util.Locale
 
-class DlsiteCoverRemote(private val httpClient: DlsiteHttpClient?) {
+class DlsiteCoverRemote(private val httpClient: DlsiteHttpClient) {
     @Throws(IOException::class)
-    fun downloadCover(work: DlsiteWork?, targetDir: File?): File {
-        if (work == null) {
-            throw IOException("没有找到封面地址")
-        }
+    fun downloadCover(work: DlsiteWork, targetDir: File): File {
         val coverWork = work.withEnsuredCoverUrl()
         var firstFailure: IOException? = null
         if (!TextUtils.isEmpty(coverWork.coverUrl)) {
@@ -40,19 +37,17 @@ class DlsiteCoverRemote(private val httpClient: DlsiteHttpClient?) {
     }
 
     @Throws(IOException::class)
-    private fun downloadCoverUrl(work: DlsiteWork, coverUrl: String?, targetDir: File?): File {
+    private fun downloadCoverUrl(work: DlsiteWork, coverUrl: String?, targetDir: File): File {
         if (TextUtils.isEmpty(coverUrl)) {
             throw IOException("没有找到封面地址")
         }
-        val outputDir = targetDir ?: throw NullPointerException("targetDir")
-        if (!outputDir.exists() && !outputDir.mkdirs() && !outputDir.isDirectory) {
+        if (!targetDir.exists() && !targetDir.mkdirs() && !targetDir.isDirectory) {
             throw IOException("无法创建封面目录")
         }
 
-        val tempFile = File(outputDir, "cover.part")
+        val tempFile = File(targetDir, "cover.part")
         var contentType: String? = null
-        val client = httpClient ?: throw NullPointerException("httpClient")
-        client.execute(
+        httpClient.execute(
             coverUrl,
             if (TextUtils.isEmpty(work.detailUrl)) {
                 DlsiteRemoteConstants.PLAY_BASE_URL + "/library"
@@ -102,7 +97,7 @@ class DlsiteCoverRemote(private val httpClient: DlsiteHttpClient?) {
             }
         }
 
-        val targetFile = File(outputDir, "cover" + coverExtension(coverUrl, contentType))
+        val targetFile = File(targetDir, "cover" + coverExtension(coverUrl, contentType))
         if (looksLikeHtml(tempFile) || looksLikeJson(tempFile)) {
             deleteQuietly(tempFile)
             throw IOException("DLsite 返回了网页或错误信息，未拿到封面")
@@ -116,9 +111,8 @@ class DlsiteCoverRemote(private val httpClient: DlsiteHttpClient?) {
         return targetFile
     }
 
-    private fun resolveCoverUrl(work: DlsiteWork?): String {
-        val sourceWork = work ?: return ""
-        val workId = sourceWork.workId
+    private fun resolveCoverUrl(work: DlsiteWork): String {
+        val workId = work.workId
         if (TextUtils.isEmpty(workId)) {
             return ""
         }
@@ -132,7 +126,7 @@ class DlsiteCoverRemote(private val httpClient: DlsiteHttpClient?) {
             val detail = DlsiteJsonParser.parseWorkDetail(detailJson)
             if (detail != null &&
                 !TextUtils.isEmpty(detail.coverUrl) &&
-                detail.coverUrl != sourceWork.coverUrl
+                detail.coverUrl != work.coverUrl
             ) {
                 return detail.coverUrl
             }
@@ -143,7 +137,7 @@ class DlsiteCoverRemote(private val httpClient: DlsiteHttpClient?) {
             try {
                 val html = getCoverPage(publicUrl)
                 val coverUrl = DlsiteHtmlParser.findCoverUrl(html, publicUrl, workId)
-                if (!TextUtils.isEmpty(coverUrl) && coverUrl != sourceWork.coverUrl) {
+                if (!TextUtils.isEmpty(coverUrl) && coverUrl != work.coverUrl) {
                     return coverUrl
                 }
             } catch (ignored: IOException) {
@@ -174,8 +168,7 @@ class DlsiteCoverRemote(private val httpClient: DlsiteHttpClient?) {
 
     @Throws(IOException::class)
     private fun get(pathOrUrl: String?, referer: String?, accept: String?): String {
-        val client = httpClient ?: throw NullPointerException("httpClient")
-        return client.text(
+        return httpClient.text(
             pathOrUrl,
             referer,
             accept,
@@ -188,8 +181,7 @@ class DlsiteCoverRemote(private val httpClient: DlsiteHttpClient?) {
 
     @Throws(IOException::class)
     private fun getCoverPage(url: String?): String {
-        val client = httpClient ?: throw NullPointerException("httpClient")
-        return client.text(
+        return httpClient.text(
             url,
             DlsiteRemoteConstants.DL_SITE_COOKIE_URL,
             "text/html,application/xhtml+xml,*/*",

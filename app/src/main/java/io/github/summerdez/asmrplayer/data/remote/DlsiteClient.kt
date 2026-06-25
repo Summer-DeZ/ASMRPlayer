@@ -33,35 +33,35 @@ class DlsiteClient {
     }
 
     @Throws(IOException::class)
-    fun downloadTo(work: DlsiteWork?, targetFile: File?) {
+    fun downloadTo(work: DlsiteWork, targetFile: File) {
         contentRemote.downloadTo(work, targetFile)
     }
 
     @Throws(IOException::class)
-    fun downloadCover(work: DlsiteWork?, targetDir: File?): File {
+    fun downloadCover(work: DlsiteWork, targetDir: File): File {
         return coverRemote.downloadCover(work, targetDir)
     }
 
     @Throws(IOException::class)
-    fun fetchDownloadOptions(work: DlsiteWork?): List<DlsiteDownloadOption> {
+    fun fetchDownloadOptions(work: DlsiteWork): List<DlsiteDownloadOption> {
         return contentRemote.fetchDownloadOptions(work)
     }
 
     @Throws(IOException::class)
-    fun downloadWorkFiles(work: DlsiteWork?, workDir: File?): List<File> {
+    fun downloadWorkFiles(work: DlsiteWork, workDir: File): List<File> {
         return contentRemote.downloadWorkFiles(work, workDir, "")
     }
 
     @Throws(IOException::class)
-    fun downloadWorkFiles(work: DlsiteWork?, workDir: File?, downloadOptionId: String?): List<File> {
+    fun downloadWorkFiles(work: DlsiteWork, workDir: File, downloadOptionId: String): List<File> {
         return contentRemote.downloadWorkFiles(work, workDir, downloadOptionId)
     }
 
     @Throws(IOException::class)
     fun downloadWorkFiles(
-        work: DlsiteWork?,
-        workDir: File?,
-        downloadOptionId: String?,
+        work: DlsiteWork,
+        workDir: File,
+        downloadOptionId: String,
         progressListener: DlsiteContentProgressListener?,
     ): List<File> {
         return contentRemote.downloadWorkFiles(work, workDir, downloadOptionId, progressListener)
