@@ -37,7 +37,7 @@ class DlsiteCoverRemote(private val httpClient: DlsiteHttpClient) {
     }
 
     @Throws(IOException::class)
-    private fun downloadCoverUrl(work: DlsiteWork, coverUrl: String?, targetDir: File): File {
+    private fun downloadCoverUrl(work: DlsiteWork, coverUrl: String, targetDir: File): File {
         if (TextUtils.isEmpty(coverUrl)) {
             throw IOException("没有找到封面地址")
         }

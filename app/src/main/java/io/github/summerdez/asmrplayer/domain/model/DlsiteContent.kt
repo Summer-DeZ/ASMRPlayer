@@ -29,10 +29,10 @@ data class DlsiteContent(
 
     fun asPaused(): DlsiteContent = copy(status = STATUS_PAUSED, error = "", updatedAt = System.currentTimeMillis())
 
-    fun asDownloaded(localPath: String?, trackIds: List<String>, trackCount: Int): DlsiteContent {
+    fun asDownloaded(localPath: String, trackIds: List<String>, trackCount: Int): DlsiteContent {
         return copy(
             status = STATUS_DOWNLOADED,
-            localPath = localPath.orEmpty(),
+            localPath = localPath,
             trackIds = trackIds.joinToString("|"),
             trackCount = trackCount,
             error = "",

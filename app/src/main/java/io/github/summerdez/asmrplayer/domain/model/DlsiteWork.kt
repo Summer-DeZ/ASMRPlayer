@@ -43,8 +43,8 @@ data class DlsiteWork(
         }
     }
 
-    fun mergedWithDiscovery(discovered: DlsiteWork?): DlsiteWork {
-        if (discovered == null || workId != discovered.workId) {
+    fun mergedWithDiscovery(discovered: DlsiteWork): DlsiteWork {
+        if (workId != discovered.workId) {
             return this
         }
         return copy(
@@ -61,18 +61,18 @@ data class DlsiteWork(
         return if (coverUrl.isEmpty()) copy(coverUrl = inferredCoverUrl(workId)) else this
     }
 
-    fun withTitle(value: String?): DlsiteWork = copy(title = safe(value))
+    fun withTitle(value: String): DlsiteWork = copy(title = trimRequired(value))
 
-    fun withDetailUrl(value: String?): DlsiteWork = copy(detailUrl = safe(value))
+    fun withDetailUrl(value: String): DlsiteWork = copy(detailUrl = trimRequired(value))
 
-    fun withDownloadUrl(value: String?): DlsiteWork = copy(downloadUrl = safe(value))
+    fun withDownloadUrl(value: String): DlsiteWork = copy(downloadUrl = trimRequired(value))
 
-    fun withCoverUrl(value: String?): DlsiteWork = copy(coverUrl = safe(value))
+    fun withCoverUrl(value: String): DlsiteWork = copy(coverUrl = trimRequired(value))
 
-    fun withCoverUri(value: String?): DlsiteWork = copy(coverUri = safe(value))
+    fun withCoverUri(value: String): DlsiteWork = copy(coverUri = trimRequired(value))
 
-    fun withDownloadOption(optionId: String?, optionTitle: String?): DlsiteWork {
-        return copy(downloadOptionId = safe(optionId), downloadOptionTitle = safe(optionTitle))
+    fun withDownloadOption(optionId: String, optionTitle: String?): DlsiteWork {
+        return copy(downloadOptionId = trimRequired(optionId), downloadOptionTitle = trimOptional(optionTitle))
     }
 
     fun asDownloading(): DlsiteWork {
@@ -87,11 +87,11 @@ data class DlsiteWork(
         return copy(status = STATUS_PAUSED, error = "", updatedAt = System.currentTimeMillis())
     }
 
-    fun asDownloaded(playlistId: String?, localPath: String?, trackCount: Int): DlsiteWork {
+    fun asDownloaded(playlistId: String, localPath: String, trackCount: Int): DlsiteWork {
         return copy(
             status = STATUS_DOWNLOADED,
-            playlistId = safe(playlistId),
-            localPath = safe(localPath),
+            playlistId = trimRequired(playlistId),
+            localPath = trimRequired(localPath),
             trackCount = trackCount,
             error = "",
             updatedAt = System.currentTimeMillis(),
@@ -101,7 +101,7 @@ data class DlsiteWork(
     fun asFailed(error: String?): DlsiteWork {
         return copy(
             status = STATUS_FAILED,
-            error = safe(error).ifEmpty { "下载失败" },
+            error = trimOptional(error).ifEmpty { "下载失败" },
             updatedAt = System.currentTimeMillis(),
         )
     }
@@ -165,7 +165,7 @@ data class DlsiteWork(
             )
         }
 
-        fun inferredCoverUrl(workId: String?): String {
+        fun inferredCoverUrl(workId: String): String {
             val bucketName = imageBucketName(workId)
             if (bucketName.isEmpty()) {
                 return ""
@@ -179,10 +179,12 @@ data class DlsiteWork(
                 "_img_main.jpg"
         }
 
-        fun safe(value: String?): String = value?.trim().orEmpty()
+        private fun trimRequired(value: String): String = value.trim()
 
-        private fun imageBucketName(workId: String?): String {
-            if (workId == null || workId.length <= 2) {
+        private fun trimOptional(value: String?): String = value?.trim().orEmpty()
+
+        private fun imageBucketName(workId: String): String {
+            if (workId.length <= 2) {
                 return ""
             }
             val prefix = workId.substring(0, 2).uppercase(Locale.US)
@@ -192,8 +194,8 @@ data class DlsiteWork(
             return prefix + String.format(Locale.US, "%0${digits.length}d", bucket)
         }
 
-        private fun imageSitePathForWorkId(workId: String?): String {
-            if (workId.isNullOrEmpty()) {
+        private fun imageSitePathForWorkId(workId: String): String {
+            if (workId.isEmpty()) {
                 return "doujin"
             }
             return when (workId.first().uppercaseChar()) {

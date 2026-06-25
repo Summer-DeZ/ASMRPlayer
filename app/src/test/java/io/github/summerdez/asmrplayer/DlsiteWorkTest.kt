@@ -26,7 +26,18 @@ class DlsiteWorkTest {
         )
         assertTrue(downloaded.isDownloaded())
         assertEquals("file:///cover.jpg", downloaded.coverUri)
+        assertEquals("playlist-1", downloaded.playlistId)
+        assertEquals("/work", downloaded.localPath)
         assertEquals("已导入 3 首", downloaded.statusLabel())
+    }
+
+    @Test
+    fun inferredCoverUrlKeepsEmptyWorkIdAndDlsiteBuckets() {
+        assertEquals("", DlsiteWork.inferredCoverUrl(""))
+        assertEquals(
+            "https://img.dlsite.jp/modpub/images2/work/doujin/RJ433000/RJ432317_img_main.jpg",
+            DlsiteWork.inferredCoverUrl("RJ432317"),
+        )
     }
 
     @Test
