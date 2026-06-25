@@ -16,33 +16,33 @@ interface DlsiteLocalStore {
     val contentsFlow: Flow<List<DlsiteContent>>
     val lastSyncMsFlow: Flow<Long>
 
-    suspend fun getWork(workId: String?): DlsiteWork?
-    suspend fun getContents(workId: String?): List<DlsiteContent>
+    suspend fun getWork(workId: String): DlsiteWork?
+    suspend fun getContents(workId: String): List<DlsiteContent>
     suspend fun mergeDiscoveredWorks(discoveredWorks: List<DlsiteWork>): List<DlsiteWork>
-    suspend fun saveWork(updatedWork: DlsiteWork?)
+    suspend fun saveWork(updatedWork: DlsiteWork)
     suspend fun saveDownloadOptions(work: DlsiteWork, options: List<DlsiteDownloadOption>): List<DlsiteContent>
     suspend fun markDownloading(work: DlsiteWork)
-    suspend fun markDownloading(work: DlsiteWork, optionId: String?, optionTitle: String?)
+    suspend fun markDownloading(work: DlsiteWork, optionId: String, optionTitle: String?)
     suspend fun markQueued(work: DlsiteWork, optionIds: List<String>, optionTitle: String?)
     suspend fun markPaused(work: DlsiteWork)
-    suspend fun markDownloaded(work: DlsiteWork, playlistId: String?, localPath: String?, trackCount: Int)
-    suspend fun markImported(work: DlsiteWork, playlistId: String?, localPath: String?, trackCount: Int)
+    suspend fun markDownloaded(work: DlsiteWork, playlistId: String, localPath: String, trackCount: Int)
+    suspend fun markImported(work: DlsiteWork, playlistId: String, localPath: String, trackCount: Int)
     suspend fun markFailed(work: DlsiteWork, error: String?)
     suspend fun markInterruptedDownloads(error: String?): Int
     suspend fun markCacheDeleted(work: DlsiteWork)
-    suspend fun markContentQueued(workId: String?, optionIds: List<String>)
-    suspend fun markContentDownloading(workId: String?, optionId: String?)
+    suspend fun markContentQueued(workId: String, optionIds: List<String>)
+    suspend fun markContentDownloading(workId: String, optionId: String)
     suspend fun markContentDownloaded(
-        workId: String?,
-        optionId: String?,
+        workId: String,
+        optionId: String,
         optionTitle: String?,
-        localPath: String?,
+        localPath: String,
         trackIds: List<String>,
         trackCount: Int,
     )
-    suspend fun markContentFailed(workId: String?, optionId: String?, error: String?)
-    suspend fun markContentPaused(workId: String?, optionIds: List<String>)
-    suspend fun markContentCacheDeleted(workId: String?, optionId: String?)
+    suspend fun markContentFailed(workId: String, optionId: String, error: String?)
+    suspend fun markContentPaused(workId: String, optionIds: List<String>)
+    suspend fun markContentCacheDeleted(workId: String, optionId: String)
 }
 
 class RoomDlsiteLocalStore(
@@ -61,8 +61,8 @@ class RoomDlsiteLocalStore(
     override val lastSyncMsFlow: Flow<Long> =
         settingsDao.valueFlow(KEY_LAST_SYNC_MS).map { it?.toLongOrNull() ?: 0L }
 
-    override suspend fun getWork(workId: String?): DlsiteWork? {
-        if (workId.isNullOrEmpty()) {
+    override suspend fun getWork(workId: String): DlsiteWork? {
+        if (workId.isEmpty()) {
             return null
         }
         return withContext(ioDispatcher) {
@@ -70,8 +70,8 @@ class RoomDlsiteLocalStore(
         }
     }
 
-    override suspend fun getContents(workId: String?): List<DlsiteContent> {
-        if (workId.isNullOrEmpty()) {
+    override suspend fun getContents(workId: String): List<DlsiteContent> {
+        if (workId.isEmpty()) {
             return emptyList()
         }
         return withContext(ioDispatcher) {
@@ -98,8 +98,8 @@ class RoomDlsiteLocalStore(
         }
     }
 
-    override suspend fun saveWork(updatedWork: DlsiteWork?) {
-        if (updatedWork == null || updatedWork.workId.isEmpty()) {
+    override suspend fun saveWork(updatedWork: DlsiteWork) {
+        if (updatedWork.workId.isEmpty()) {
             return
         }
         withContext(ioDispatcher) {
@@ -146,7 +146,7 @@ class RoomDlsiteLocalStore(
         saveWork(work.asDownloading())
     }
 
-    override suspend fun markDownloading(work: DlsiteWork, optionId: String?, optionTitle: String?) {
+    override suspend fun markDownloading(work: DlsiteWork, optionId: String, optionTitle: String?) {
         markDownloading(work.withDownloadOption(optionId, optionTitle))
     }
 
@@ -162,15 +162,15 @@ class RoomDlsiteLocalStore(
         saveWork(work.asPaused())
     }
 
-    override suspend fun markDownloaded(work: DlsiteWork, playlistId: String?, localPath: String?, trackCount: Int) {
+    override suspend fun markDownloaded(work: DlsiteWork, playlistId: String, localPath: String, trackCount: Int) {
         saveWork(work.asDownloaded(playlistId, localPath, trackCount))
     }
 
-    override suspend fun markImported(work: DlsiteWork, playlistId: String?, localPath: String?, trackCount: Int) {
+    override suspend fun markImported(work: DlsiteWork, playlistId: String, localPath: String, trackCount: Int) {
         val updated = work.copy(
             status = DlsiteWork.STATUS_FOUND,
-            playlistId = playlistId.orEmpty(),
-            localPath = localPath.orEmpty(),
+            playlistId = playlistId,
+            localPath = localPath,
             trackCount = trackCount,
             error = "",
             downloadOptionId = "",
@@ -208,46 +208,46 @@ class RoomDlsiteLocalStore(
         }
     }
 
-    override suspend fun markContentQueued(workId: String?, optionIds: List<String>) {
+    override suspend fun markContentQueued(workId: String, optionIds: List<String>) {
         updateContents(workId, optionIds) { it.asQueued() }
     }
 
-    override suspend fun markContentDownloading(workId: String?, optionId: String?) {
-        updateContents(workId, listOf(optionId.orEmpty())) { it.asDownloading() }
+    override suspend fun markContentDownloading(workId: String, optionId: String) {
+        updateContents(workId, listOf(optionId)) { it.asDownloading() }
     }
 
     override suspend fun markContentDownloaded(
-        workId: String?,
-        optionId: String?,
+        workId: String,
+        optionId: String,
         optionTitle: String?,
-        localPath: String?,
+        localPath: String,
         trackIds: List<String>,
         trackCount: Int,
     ) {
-        updateContents(workId, listOf(optionId.orEmpty()), defaultTitle = optionTitle) {
+        updateContents(workId, listOf(optionId), defaultTitle = optionTitle) {
             it.asDownloaded(localPath, trackIds, trackCount)
         }
     }
 
-    override suspend fun markContentFailed(workId: String?, optionId: String?, error: String?) {
-        updateContents(workId, listOf(optionId.orEmpty())) { it.asFailed(error) }
+    override suspend fun markContentFailed(workId: String, optionId: String, error: String?) {
+        updateContents(workId, listOf(optionId)) { it.asFailed(error) }
     }
 
-    override suspend fun markContentPaused(workId: String?, optionIds: List<String>) {
+    override suspend fun markContentPaused(workId: String, optionIds: List<String>) {
         updateContents(workId, optionIds) { it.asPaused() }
     }
 
-    override suspend fun markContentCacheDeleted(workId: String?, optionId: String?) {
-        updateContents(workId, listOf(optionId.orEmpty())) { it.asCacheDeleted() }
+    override suspend fun markContentCacheDeleted(workId: String, optionId: String) {
+        updateContents(workId, listOf(optionId)) { it.asCacheDeleted() }
     }
 
     private suspend fun updateContents(
-        workId: String?,
+        workId: String,
         optionIds: List<String>,
         defaultTitle: String? = null,
         transform: (DlsiteContent) -> DlsiteContent,
     ) {
-        if (workId.isNullOrEmpty()) {
+        if (workId.isEmpty()) {
             return
         }
         withContext(ioDispatcher) {
@@ -296,11 +296,11 @@ class RoomDlsiteLocalStore(
     }
 
     private suspend fun updateContentsInCurrentTransaction(
-        workId: String?,
+        workId: String,
         optionIds: List<String>,
         transform: (DlsiteContent) -> DlsiteContent,
     ) {
-        if (workId.isNullOrEmpty()) {
+        if (workId.isEmpty()) {
             return
         }
         val ids = optionIds.ifEmpty { listOf("") }.toSet()

@@ -294,7 +294,9 @@ class DlsiteViewModel(
             } catch (exception: Exception) {
                 val message = shortDlsiteError(exception)
                 withContext(Dispatchers.IO) {
-                    dlsiteRepository.markDownloadQueueTaskFailed(queuedTask?.taskId, message)
+                    queuedTask?.let { task ->
+                        dlsiteRepository.markDownloadQueueTaskFailed(task.taskId, message)
+                    }
                     dlsiteRepository.markFailed(work, message)
                 }
                 setBusy(false)

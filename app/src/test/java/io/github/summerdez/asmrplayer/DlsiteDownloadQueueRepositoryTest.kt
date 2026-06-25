@@ -34,12 +34,13 @@ class DlsiteDownloadQueueRepositoryTest {
 
         val first = repository.enqueueDownload(work, emptyList(), null)
         val second = repository.enqueueDownload(work, listOf("mp3"), "MP3")
+        val firstTask = requireNotNull(first)
 
         assertNotNull(first)
-        assertEquals(first, second)
+        assertEquals(firstTask, second)
         assertEquals(1, dao.queue.size)
         assertEquals(2, transactionRunner.runCount)
-        assertEquals(DlsiteDownloadQueueTask.STATUS_PENDING, first?.status)
+        assertEquals(DlsiteDownloadQueueTask.STATUS_PENDING, firstTask.status)
         assertEquals(DlsiteWork.STATUS_QUEUED, dao.workById(work.workId)?.toWork()?.status)
         assertEquals(DlsiteContent.STATUS_QUEUED, dao.contentById(work.workId, "")?.toContent()?.status)
     }
@@ -49,12 +50,12 @@ class DlsiteDownloadQueueRepositoryTest {
         val dao = FakeDlsiteDao()
         val repository = repository(dao)
 
-        val first = repository.enqueueDownload(work("RJ00000001"), emptyList(), null)
-        val second = repository.enqueueDownload(work("RJ00000002"), emptyList(), null)
+        val first = requireNotNull(repository.enqueueDownload(work("RJ00000001"), emptyList(), null))
+        val second = requireNotNull(repository.enqueueDownload(work("RJ00000002"), emptyList(), null))
         repository.enqueueDownload(work("RJ00000003"), emptyList(), null)
 
         assertEquals(
-            listOf(first?.taskId, second?.taskId),
+            listOf(first.taskId, second.taskId),
             repository.pendingDownloadQueueTasks(limit = 2).map { it.taskId },
         )
         assertEquals(emptyList<DlsiteDownloadQueueTask>(), repository.pendingDownloadQueueTasks(limit = 0))
@@ -64,11 +65,11 @@ class DlsiteDownloadQueueRepositoryTest {
     fun resetRunningTasksRestoresPendingState() = runBlocking {
         val dao = FakeDlsiteDao()
         val repository = repository(dao)
-        val task = repository.enqueueDownload(work("RJ00000001"), emptyList(), null)
+        val task = requireNotNull(repository.enqueueDownload(work("RJ00000001"), emptyList(), null))
 
-        val running = repository.markDownloadQueueTaskRunning(task?.taskId)
+        val running = repository.markDownloadQueueTaskRunning(task.taskId)
         val resetCount = repository.resetRunningDownloadQueue()
-        val reset = dao.downloadQueueByTaskId(task?.taskId.orEmpty())
+        val reset = dao.downloadQueueByTaskId(task.taskId)
 
         assertEquals(DlsiteDownloadQueueTask.STATUS_RUNNING, running?.status)
         assertEquals(1, resetCount)
@@ -82,16 +83,16 @@ class DlsiteDownloadQueueRepositoryTest {
     fun pauseAndCancelQueuedDownloadsReturnTaskAndFinishQueueState() = runBlocking {
         val dao = FakeDlsiteDao()
         val repository = repository(dao)
-        val pausedTask = repository.enqueueDownload(work("RJ00000001"), emptyList(), null)
-        val canceledTask = repository.enqueueDownload(work("RJ00000002"), emptyList(), null)
+        val pausedTask = requireNotNull(repository.enqueueDownload(work("RJ00000001"), emptyList(), null))
+        val canceledTask = requireNotNull(repository.enqueueDownload(work("RJ00000002"), emptyList(), null))
 
         val paused = repository.pauseQueuedDownload("RJ00000001")
         val canceled = repository.cancelQueuedDownload("RJ00000002")
 
-        assertEquals(pausedTask?.taskId, paused?.taskId)
-        assertEquals(canceledTask?.taskId, canceled?.taskId)
-        assertEquals(DlsiteDownloadQueueTask.STATUS_PAUSED, dao.downloadQueueByTaskId(pausedTask?.taskId.orEmpty())?.status)
-        assertEquals(DlsiteDownloadQueueTask.STATUS_CANCELED, dao.downloadQueueByTaskId(canceledTask?.taskId.orEmpty())?.status)
+        assertEquals(pausedTask.taskId, paused?.taskId)
+        assertEquals(canceledTask.taskId, canceled?.taskId)
+        assertEquals(DlsiteDownloadQueueTask.STATUS_PAUSED, dao.downloadQueueByTaskId(pausedTask.taskId)?.status)
+        assertEquals(DlsiteDownloadQueueTask.STATUS_CANCELED, dao.downloadQueueByTaskId(canceledTask.taskId)?.status)
         assertEquals(emptyList<DlsiteDownloadQueueTask>(), repository.activeDownloadQueueTasks())
     }
 
@@ -99,26 +100,26 @@ class DlsiteDownloadQueueRepositoryTest {
     fun finishedTasksLeaveActiveQueueForEveryTerminalStatus() = runBlocking {
         val dao = FakeDlsiteDao()
         val repository = repository(dao)
-        val completed = repository.enqueueDownload(work("RJ00000001"), emptyList(), null)
-        val failed = repository.enqueueDownload(work("RJ00000002"), emptyList(), null)
-        val paused = repository.enqueueDownload(work("RJ00000003"), emptyList(), null)
-        val canceled = repository.enqueueDownload(work("RJ00000004"), emptyList(), null)
+        val completed = requireNotNull(repository.enqueueDownload(work("RJ00000001"), emptyList(), null))
+        val failed = requireNotNull(repository.enqueueDownload(work("RJ00000002"), emptyList(), null))
+        val paused = requireNotNull(repository.enqueueDownload(work("RJ00000003"), emptyList(), null))
+        val canceled = requireNotNull(repository.enqueueDownload(work("RJ00000004"), emptyList(), null))
 
-        repository.markDownloadQueueTaskRunning(completed?.taskId)
-        repository.markDownloadQueueTaskRunning(failed?.taskId)
-        repository.markDownloadQueueTaskRunning(paused?.taskId)
-        repository.markDownloadQueueTaskRunning(canceled?.taskId)
-        repository.markDownloadQueueTaskCompleted(completed?.taskId)
-        repository.markDownloadQueueTaskFailed(failed?.taskId, "network")
-        repository.markDownloadQueueTaskPaused(paused?.taskId)
-        repository.markDownloadQueueTaskCanceled(canceled?.taskId)
+        repository.markDownloadQueueTaskRunning(completed.taskId)
+        repository.markDownloadQueueTaskRunning(failed.taskId)
+        repository.markDownloadQueueTaskRunning(paused.taskId)
+        repository.markDownloadQueueTaskRunning(canceled.taskId)
+        repository.markDownloadQueueTaskCompleted(completed.taskId)
+        repository.markDownloadQueueTaskFailed(failed.taskId, "network")
+        repository.markDownloadQueueTaskPaused(paused.taskId)
+        repository.markDownloadQueueTaskCanceled(canceled.taskId)
 
         assertEquals(emptyList<DlsiteDownloadQueueTask>(), repository.activeDownloadQueueTasks())
-        assertEquals(DlsiteDownloadQueueTask.STATUS_COMPLETED, dao.downloadQueueByTaskId(completed?.taskId.orEmpty())?.status)
-        assertEquals(DlsiteDownloadQueueTask.STATUS_FAILED, dao.downloadQueueByTaskId(failed?.taskId.orEmpty())?.status)
-        assertEquals("network", dao.downloadQueueByTaskId(failed?.taskId.orEmpty())?.errorMessage)
-        assertEquals(DlsiteDownloadQueueTask.STATUS_PAUSED, dao.downloadQueueByTaskId(paused?.taskId.orEmpty())?.status)
-        assertEquals(DlsiteDownloadQueueTask.STATUS_CANCELED, dao.downloadQueueByTaskId(canceled?.taskId.orEmpty())?.status)
+        assertEquals(DlsiteDownloadQueueTask.STATUS_COMPLETED, dao.downloadQueueByTaskId(completed.taskId)?.status)
+        assertEquals(DlsiteDownloadQueueTask.STATUS_FAILED, dao.downloadQueueByTaskId(failed.taskId)?.status)
+        assertEquals("network", dao.downloadQueueByTaskId(failed.taskId)?.errorMessage)
+        assertEquals(DlsiteDownloadQueueTask.STATUS_PAUSED, dao.downloadQueueByTaskId(paused.taskId)?.status)
+        assertEquals(DlsiteDownloadQueueTask.STATUS_CANCELED, dao.downloadQueueByTaskId(canceled.taskId)?.status)
     }
 
     private fun repository(

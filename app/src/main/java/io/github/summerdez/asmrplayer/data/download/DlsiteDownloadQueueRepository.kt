@@ -16,7 +16,7 @@ import kotlinx.coroutines.withContext
 
 interface DlsiteDownloadQueueRepository {
     suspend fun enqueueDownload(
-        work: DlsiteWork?,
+        work: DlsiteWork,
         optionIds: List<String>,
         optionTitle: String?,
     ): DlsiteDownloadQueueTask?
@@ -24,14 +24,14 @@ interface DlsiteDownloadQueueRepository {
     suspend fun pendingDownloadQueueTasks(limit: Int): List<DlsiteDownloadQueueTask>
     suspend fun activeDownloadQueueTasks(): List<DlsiteDownloadQueueTask>
     suspend fun resetRunningDownloadQueue(): Int
-    suspend fun markDownloadQueueTaskRunning(taskId: String?): DlsiteDownloadQueueTask?
-    suspend fun markDownloadQueueTaskCompleted(taskId: String?)
-    suspend fun markDownloadQueueTaskFailed(taskId: String?, error: String?)
-    suspend fun markDownloadQueueTaskPaused(taskId: String?)
-    suspend fun markDownloadQueueTaskCanceled(taskId: String?)
-    suspend fun markDownloadQueueTaskPending(taskId: String?)
-    suspend fun pauseQueuedDownload(workId: String?): DlsiteDownloadQueueTask?
-    suspend fun cancelQueuedDownload(workId: String?): DlsiteDownloadQueueTask?
+    suspend fun markDownloadQueueTaskRunning(taskId: String): DlsiteDownloadQueueTask?
+    suspend fun markDownloadQueueTaskCompleted(taskId: String)
+    suspend fun markDownloadQueueTaskFailed(taskId: String, error: String?)
+    suspend fun markDownloadQueueTaskPaused(taskId: String)
+    suspend fun markDownloadQueueTaskCanceled(taskId: String)
+    suspend fun markDownloadQueueTaskPending(taskId: String)
+    suspend fun pauseQueuedDownload(workId: String): DlsiteDownloadQueueTask?
+    suspend fun cancelQueuedDownload(workId: String): DlsiteDownloadQueueTask?
     suspend fun markAllQueuedDownloadsPaused()
 }
 
@@ -66,7 +66,7 @@ class RoomDlsiteDownloadQueueRepository private constructor(
     )
 
     override suspend fun enqueueDownload(
-        work: DlsiteWork?,
+        work: DlsiteWork,
         optionIds: List<String>,
         optionTitle: String?,
     ): DlsiteDownloadQueueTask? = delegate.enqueueDownload(work, optionIds, optionTitle)
@@ -80,33 +80,33 @@ class RoomDlsiteDownloadQueueRepository private constructor(
     override suspend fun resetRunningDownloadQueue(): Int =
         delegate.resetRunningDownloadQueue()
 
-    override suspend fun markDownloadQueueTaskRunning(taskId: String?): DlsiteDownloadQueueTask? =
+    override suspend fun markDownloadQueueTaskRunning(taskId: String): DlsiteDownloadQueueTask? =
         delegate.markDownloadQueueTaskRunning(taskId)
 
-    override suspend fun markDownloadQueueTaskCompleted(taskId: String?) {
+    override suspend fun markDownloadQueueTaskCompleted(taskId: String) {
         delegate.markDownloadQueueTaskCompleted(taskId)
     }
 
-    override suspend fun markDownloadQueueTaskFailed(taskId: String?, error: String?) {
+    override suspend fun markDownloadQueueTaskFailed(taskId: String, error: String?) {
         delegate.markDownloadQueueTaskFailed(taskId, error)
     }
 
-    override suspend fun markDownloadQueueTaskPaused(taskId: String?) {
+    override suspend fun markDownloadQueueTaskPaused(taskId: String) {
         delegate.markDownloadQueueTaskPaused(taskId)
     }
 
-    override suspend fun markDownloadQueueTaskCanceled(taskId: String?) {
+    override suspend fun markDownloadQueueTaskCanceled(taskId: String) {
         delegate.markDownloadQueueTaskCanceled(taskId)
     }
 
-    override suspend fun markDownloadQueueTaskPending(taskId: String?) {
+    override suspend fun markDownloadQueueTaskPending(taskId: String) {
         delegate.markDownloadQueueTaskPending(taskId)
     }
 
-    override suspend fun pauseQueuedDownload(workId: String?): DlsiteDownloadQueueTask? =
+    override suspend fun pauseQueuedDownload(workId: String): DlsiteDownloadQueueTask? =
         delegate.pauseQueuedDownload(workId)
 
-    override suspend fun cancelQueuedDownload(workId: String?): DlsiteDownloadQueueTask? =
+    override suspend fun cancelQueuedDownload(workId: String): DlsiteDownloadQueueTask? =
         delegate.cancelQueuedDownload(workId)
 
     override suspend fun markAllQueuedDownloadsPaused() {
@@ -124,11 +124,11 @@ private class RoomDlsiteDownloadQueueRepositoryDelegate(
     private val ioDispatcher: CoroutineDispatcher,
 ) : DlsiteDownloadQueueRepository {
     override suspend fun enqueueDownload(
-        work: DlsiteWork?,
+        work: DlsiteWork,
         optionIds: List<String>,
         optionTitle: String?,
     ): DlsiteDownloadQueueTask? {
-        if (work == null || work.workId.isEmpty()) {
+        if (work.workId.isEmpty()) {
             return null
         }
         val sanitizedOptionIds = optionIds.filter { it.isNotBlank() }
@@ -172,8 +172,8 @@ private class RoomDlsiteDownloadQueueRepositoryDelegate(
         }
     }
 
-    override suspend fun markDownloadQueueTaskRunning(taskId: String?): DlsiteDownloadQueueTask? {
-        if (taskId.isNullOrEmpty()) {
+    override suspend fun markDownloadQueueTaskRunning(taskId: String): DlsiteDownloadQueueTask? {
+        if (taskId.isEmpty()) {
             return null
         }
         return withContext(ioDispatcher) {
@@ -187,24 +187,24 @@ private class RoomDlsiteDownloadQueueRepositoryDelegate(
         }
     }
 
-    override suspend fun markDownloadQueueTaskCompleted(taskId: String?) {
+    override suspend fun markDownloadQueueTaskCompleted(taskId: String) {
         finishDownloadQueueTask(taskId, DlsiteDownloadQueueTask.STATUS_COMPLETED, null)
     }
 
-    override suspend fun markDownloadQueueTaskFailed(taskId: String?, error: String?) {
+    override suspend fun markDownloadQueueTaskFailed(taskId: String, error: String?) {
         finishDownloadQueueTask(taskId, DlsiteDownloadQueueTask.STATUS_FAILED, error)
     }
 
-    override suspend fun markDownloadQueueTaskPaused(taskId: String?) {
+    override suspend fun markDownloadQueueTaskPaused(taskId: String) {
         finishDownloadQueueTask(taskId, DlsiteDownloadQueueTask.STATUS_PAUSED, null)
     }
 
-    override suspend fun markDownloadQueueTaskCanceled(taskId: String?) {
+    override suspend fun markDownloadQueueTaskCanceled(taskId: String) {
         finishDownloadQueueTask(taskId, DlsiteDownloadQueueTask.STATUS_CANCELED, null)
     }
 
-    override suspend fun markDownloadQueueTaskPending(taskId: String?) {
-        if (taskId.isNullOrEmpty()) {
+    override suspend fun markDownloadQueueTaskPending(taskId: String) {
+        if (taskId.isEmpty()) {
             return
         }
         withContext(ioDispatcher) {
@@ -212,11 +212,11 @@ private class RoomDlsiteDownloadQueueRepositoryDelegate(
         }
     }
 
-    override suspend fun pauseQueuedDownload(workId: String?): DlsiteDownloadQueueTask? {
+    override suspend fun pauseQueuedDownload(workId: String): DlsiteDownloadQueueTask? {
         return finishActiveQueueTaskForWork(workId, DlsiteDownloadQueueTask.STATUS_PAUSED, null)
     }
 
-    override suspend fun cancelQueuedDownload(workId: String?): DlsiteDownloadQueueTask? {
+    override suspend fun cancelQueuedDownload(workId: String): DlsiteDownloadQueueTask? {
         return finishActiveQueueTaskForWork(workId, DlsiteDownloadQueueTask.STATUS_CANCELED, null)
     }
 
@@ -239,8 +239,8 @@ private class RoomDlsiteDownloadQueueRepositoryDelegate(
         }
     }
 
-    private suspend fun finishDownloadQueueTask(taskId: String?, status: String, error: String?) {
-        if (taskId.isNullOrEmpty()) {
+    private suspend fun finishDownloadQueueTask(taskId: String, status: String, error: String?) {
+        if (taskId.isEmpty()) {
             return
         }
         withContext(ioDispatcher) {
@@ -249,11 +249,11 @@ private class RoomDlsiteDownloadQueueRepositoryDelegate(
     }
 
     private suspend fun finishActiveQueueTaskForWork(
-        workId: String?,
+        workId: String,
         status: String,
         error: String?,
     ): DlsiteDownloadQueueTask? {
-        if (workId.isNullOrEmpty()) {
+        if (workId.isEmpty()) {
             return null
         }
         return withContext(ioDispatcher) {
@@ -292,11 +292,11 @@ private class RoomDlsiteDownloadQueueRepositoryDelegate(
     }
 
     private suspend fun updateContentsInCurrentTransaction(
-        workId: String?,
+        workId: String,
         optionIds: List<String>,
         transform: (DlsiteContent) -> DlsiteContent,
     ) {
-        if (workId.isNullOrEmpty()) {
+        if (workId.isEmpty()) {
             return
         }
         val ids = optionIds.ifEmpty { listOf("") }.toSet()
