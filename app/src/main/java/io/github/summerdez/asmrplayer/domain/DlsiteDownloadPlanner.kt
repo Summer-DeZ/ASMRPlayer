@@ -4,7 +4,6 @@ import io.github.summerdez.asmrplayer.data.remote.DlsiteJsonParser
 import io.github.summerdez.asmrplayer.domain.model.DlsiteDownloadOption
 
 object DlsiteDownloadPlanner {
-    @JvmStatic
     fun optionsFor(ziptree: DlsiteJsonParser.DlsiteZiptree?): List<DlsiteDownloadOption> {
         val files = ziptree?.audioFiles.orEmpty()
         if (files.isEmpty()) {

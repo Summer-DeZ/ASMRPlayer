@@ -5,49 +5,39 @@ import java.io.IOException
 import kotlin.math.max
 
 object DlsiteJsonParser {
-    @JvmStatic
     fun isAuthorized(json: String?): Boolean = DlsiteLibraryJsonParser.isAuthorized(json)
 
-    @JvmStatic
     @Throws(IOExceptionLikeJsonException::class)
     fun parseContentCount(json: String?): ContentCount =
         DlsiteLibraryJsonParser.parseContentCount(json)
 
-    @JvmStatic
     @Throws(IOExceptionLikeJsonException::class)
     fun parseSalesWorkIds(json: String?): List<String> =
         DlsiteLibraryJsonParser.parseSalesWorkIds(json)
 
-    @JvmStatic
     @Throws(IOExceptionLikeJsonException::class)
     fun parseHistoryWorkIds(json: String?): List<String> =
         DlsiteLibraryJsonParser.parseHistoryWorkIds(json)
 
-    @JvmStatic
     @Throws(IOExceptionLikeJsonException::class)
     fun parseContentWorks(json: String?): List<DlsiteWork> =
         DlsiteLibraryJsonParser.parseContentWorks(json)
 
-    @JvmStatic
     @Throws(IOExceptionLikeJsonException::class)
     fun parseWorkDetail(json: String?): DlsiteWork? =
         DlsiteLibraryJsonParser.parseWorkDetail(json)
 
-    @JvmStatic
     fun toJsonArray(values: List<String?>?): String =
         DlsiteDownloadJsonParser.toJsonArray(values)
 
-    @JvmStatic
     @Throws(IOExceptionLikeJsonException::class)
     fun parseZiptree(json: String?): DlsiteZiptree =
         DlsiteDownloadJsonParser.parseZiptree(json)
 
-    @JvmStatic
     @Throws(IOExceptionLikeJsonException::class)
     fun parseSignUrlParams(json: String?): Map<String, String> =
         DlsiteDownloadJsonParser.parseSignUrlParams(json)
 
-    @JvmStatic
     @Throws(IOExceptionLikeJsonException::class)
     fun parseWebvttJson(json: String?): String =
         DlsiteWebvttJsonParser.parseWebvttJson(json)

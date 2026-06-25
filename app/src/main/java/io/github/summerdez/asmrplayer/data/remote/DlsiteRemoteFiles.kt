@@ -15,7 +15,6 @@ import java.util.regex.Pattern
 object DlsiteRemoteFiles {
     private val pathSeparator: Pattern = Pattern.compile("/")
 
-    @JvmStatic
     fun encodePath(path: String?): String {
         if (path.isNullOrEmpty()) {
             return ""
@@ -31,7 +30,6 @@ object DlsiteRemoteFiles {
         return builder.toString()
     }
 
-    @JvmStatic
     fun encodeQueryValue(value: String?): String {
         return try {
             URLEncoder.encode(value ?: "", StandardCharsets.UTF_8.name())
@@ -41,7 +39,6 @@ object DlsiteRemoteFiles {
         }
     }
 
-    @JvmStatic
     fun localFileFor(workDir: File?, relativePath: String?): File? {
         val segments = if (relativePath == null) emptyArray() else pathSeparator.split(relativePath)
         var current = workDir
@@ -54,7 +51,6 @@ object DlsiteRemoteFiles {
         return current
     }
 
-    @JvmStatic
     fun uniqueTarget(targetFile: File?, usedTargets: MutableSet<String>?): File {
         val source = targetFile ?: throw NullPointerException("targetFile")
         val targets = usedTargets ?: throw NullPointerException("usedTargets")
@@ -71,7 +67,6 @@ object DlsiteRemoteFiles {
         return candidate
     }
 
-    @JvmStatic
     fun safeFileName(value: String?): String {
         var safe = if (value.isNullOrEmpty()) "download" else value.trim { it <= ' ' }
         safe = safe.replace(Regex("[\\\\/:*?\"<>|]+"), "_")
@@ -81,7 +76,6 @@ object DlsiteRemoteFiles {
         return safe
     }
 
-    @JvmStatic
     @Throws(IOException::class)
     fun looksLikeHtml(file: File?): Boolean {
         if (file == null || !file.isFile) {
@@ -100,7 +94,6 @@ object DlsiteRemoteFiles {
         }
     }
 
-    @JvmStatic
     @Throws(IOException::class)
     fun looksLikeJson(file: File?): Boolean {
         if (file == null || !file.isFile) {
@@ -117,7 +110,6 @@ object DlsiteRemoteFiles {
         }
     }
 
-    @JvmStatic
     @Throws(IOException::class)
     fun readTextFile(file: File?): String {
         val builder = StringBuilder()
@@ -134,7 +126,6 @@ object DlsiteRemoteFiles {
         return builder.toString()
     }
 
-    @JvmStatic
     @Throws(IOException::class)
     fun writeTextFile(file: File?, text: String?) {
         FileOutputStream(file).use { output ->
@@ -142,14 +133,12 @@ object DlsiteRemoteFiles {
         }
     }
 
-    @JvmStatic
     fun deleteQuietly(file: File?) {
         if (file != null && file.exists() && !file.delete()) {
             file.deleteOnExit()
         }
     }
 
-    @JvmStatic
     fun summarizeBody(body: String?): String {
         if (body == null) {
             return ""
@@ -158,7 +147,6 @@ object DlsiteRemoteFiles {
         return if (text.length <= 160) text else text.substring(0, 160)
     }
 
-    @JvmStatic
     @Throws(InterruptedIOException::class)
     fun throwIfInterrupted() {
         if (Thread.currentThread().isInterrupted) {

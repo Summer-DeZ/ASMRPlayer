@@ -6,7 +6,6 @@ enum class AppThemeMode {
     SYSTEM;
 
     companion object {
-        @JvmStatic
         fun fromName(name: String?): AppThemeMode {
             if (name == null) {
                 return DARK

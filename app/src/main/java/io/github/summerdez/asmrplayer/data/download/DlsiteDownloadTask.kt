@@ -27,7 +27,6 @@ class DlsiteDownloadTask private constructor() {
     companion object {
         private const val BUFFER_SIZE = 64 * 1024
 
-        @JvmStatic
         @Throws(IOException::class)
         fun downloadAndImport(
             context: Context?,
@@ -38,7 +37,6 @@ class DlsiteDownloadTask private constructor() {
             return downloadAndImport(context, dlsiteApi, repository, work, "")
         }
 
-        @JvmStatic
         @Throws(IOException::class)
         fun downloadAndImport(
             context: Context?,
@@ -54,7 +52,6 @@ class DlsiteDownloadTask private constructor() {
             return downloadAndImport(context, dlsiteApi, repository, work, optionIds, null)
         }
 
-        @JvmStatic
         @Throws(IOException::class)
         fun downloadAndImport(
             context: Context?,
@@ -163,7 +160,6 @@ class DlsiteDownloadTask private constructor() {
             )
         }
 
-        @JvmStatic
         @Throws(IOException::class)
         fun deleteCache(context: Context?, work: DlsiteWork?) {
             if (work == null || TextUtils.isEmpty(work.workId)) {
@@ -173,7 +169,6 @@ class DlsiteDownloadTask private constructor() {
             deleteRecursively(workDir)
         }
 
-        @JvmStatic
         @Throws(IOException::class)
         fun deleteContentCache(context: Context?, work: DlsiteWork?, optionId: String?) {
             if (work == null || TextUtils.isEmpty(work.workId)) {
@@ -241,7 +236,6 @@ class DlsiteDownloadTask private constructor() {
             )
         }
 
-        @JvmStatic
         fun contentResultsForImport(
             downloadedContents: List<DownloadedContent>?,
             importResult: ImportResult?,

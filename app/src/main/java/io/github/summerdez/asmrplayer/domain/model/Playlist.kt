@@ -34,7 +34,6 @@ class Playlist(
     }
 
     companion object {
-        @JvmStatic
         @Throws(JSONException::class)
         fun fromJson(obj: JSONObject): Playlist {
             val trackArray = obj.optJSONArray("tracks")

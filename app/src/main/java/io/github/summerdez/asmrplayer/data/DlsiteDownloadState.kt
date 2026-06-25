@@ -164,7 +164,6 @@ class DlsiteDownloadStateStore {
         return if (workId.isNullOrEmpty()) null else _state.value.tasks[workId]
     }
 
-    @JvmOverloads
     fun publishTask(
         workId: String?,
         title: String?,

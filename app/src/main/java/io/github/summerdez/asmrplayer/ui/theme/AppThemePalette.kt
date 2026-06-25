@@ -19,7 +19,6 @@ class AppThemePalette private constructor(
     val sheetMaterial: Int,
 ) {
     companion object {
-        @JvmStatic
         fun dark(): AppThemePalette {
             return AppThemePalette(
                 false,
@@ -41,7 +40,6 @@ class AppThemePalette private constructor(
             )
         }
 
-        @JvmStatic
         fun light(): AppThemePalette {
             return AppThemePalette(
                 true,

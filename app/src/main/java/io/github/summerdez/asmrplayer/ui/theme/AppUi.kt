@@ -58,28 +58,23 @@ class AppUi private constructor() {
             applyPalette(palette)
         }
 
-        @JvmStatic
         fun setThemeMode(context: Context?, mode: AppThemeMode?) {
             currentThemeMode = mode ?: AppThemeMode.DARK
             applyPalette(resolvePalette(context, currentThemeMode))
         }
 
-        @JvmStatic
         fun themeMode(): AppThemeMode {
             return currentThemeMode
         }
 
-        @JvmStatic
         fun isLightTheme(): Boolean {
             return palette.light
         }
 
-        @JvmStatic
         fun refreshTheme(context: Context?) {
             applyPalette(resolvePalette(context, currentThemeMode))
         }
 
-        @JvmStatic
         fun applySystemBars(activity: Activity?) {
             if (activity == null) {
                 return
@@ -128,7 +123,6 @@ class AppUi private constructor() {
             SHEET_MATERIAL = nextPalette.sheetMaterial
         }
 
-        @JvmStatic
         fun horizontalRow(context: Context?): LinearLayout {
             val row = LinearLayout(context!!)
             row.orientation = LinearLayout.HORIZONTAL
@@ -136,7 +130,6 @@ class AppUi private constructor() {
             return row
         }
 
-        @JvmStatic
         fun matchWrap(): LinearLayout.LayoutParams {
             return LinearLayout.LayoutParams(
                 LinearLayout.LayoutParams.MATCH_PARENT,
@@ -144,14 +137,12 @@ class AppUi private constructor() {
             )
         }
 
-        @JvmStatic
         fun matchWrapWithTop(context: Context?, topDp: Int): LinearLayout.LayoutParams {
             val params = matchWrap()
             params.topMargin = dp(context, topDp)
             return params
         }
 
-        @JvmStatic
         fun compactTitleText(context: Context?, text: String?): TextView {
             val view = TextView(context!!)
             view.text = text
@@ -162,7 +153,6 @@ class AppUi private constructor() {
             return view
         }
 
-        @JvmStatic
         fun pageTitle(context: Context?, text: String?): TextView {
             val view = TextView(context!!)
             view.text = text
@@ -174,7 +164,6 @@ class AppUi private constructor() {
             return view
         }
 
-        @JvmStatic
         fun compactSubtitleText(context: Context?, text: String?): TextView {
             val view = TextView(context!!)
             view.text = text
@@ -185,7 +174,6 @@ class AppUi private constructor() {
             return view
         }
 
-        @JvmStatic
         fun iconView(context: Context?, drawableRes: Int, tintColor: Int, iconDp: Int): ImageView {
             val view = ImageView(context!!)
             view.setImageResource(drawableRes)
@@ -197,7 +185,6 @@ class AppUi private constructor() {
             return view
         }
 
-        @JvmStatic
         fun iconButton(context: Context?, drawableRes: Int, tintColor: Int, iconDp: Int): ImageButton {
             val button = ImageButton(context!!)
             button.setImageResource(drawableRes)
@@ -213,7 +200,6 @@ class AppUi private constructor() {
             return button
         }
 
-        @JvmStatic
         fun miniCoverView(context: Context?, index: Int): TextView {
             val view = TextView(context!!)
             view.text = index.toString()
@@ -225,7 +211,6 @@ class AppUi private constructor() {
             return view
         }
 
-        @JvmStatic
         fun coverView(context: Context?, coverUri: String?, sizeDp: Int, selected: Boolean): FrameLayout {
             val cover = FrameLayout(context!!)
             cover.background = coverBackground(context, selected)
@@ -264,7 +249,6 @@ class AppUi private constructor() {
             return cover
         }
 
-        @JvmStatic
         fun subtitleLineText(context: Context?, color: Int, textSize: Float): TextView {
             val view = TextView(context!!)
             view.setTextColor(color)
@@ -276,7 +260,6 @@ class AppUi private constructor() {
             return view
         }
 
-        @JvmStatic
         fun transparentTextButton(context: Context?, text: String?): Button {
             val button = Button(context!!)
             button.text = text
@@ -289,7 +272,6 @@ class AppUi private constructor() {
             return button
         }
 
-        @JvmStatic
         fun compactButton(context: Context?, text: String?): Button {
             val button = Button(context!!)
             button.text = text
@@ -301,7 +283,6 @@ class AppUi private constructor() {
             return button
         }
 
-        @JvmStatic
         fun rowWithDivider(context: Context?, row: View?, leftInsetDp: Int): View {
             val container = LinearLayout(context!!)
             container.orientation = LinearLayout.VERTICAL
@@ -311,7 +292,6 @@ class AppUi private constructor() {
             return container
         }
 
-        @JvmStatic
         fun listDivider(context: Context?, leftInsetDp: Int): View {
             val divider = View(context!!)
             divider.setBackgroundColor(SEPARATOR)
@@ -325,12 +305,10 @@ class AppUi private constructor() {
             return divider
         }
 
-        @JvmStatic
         fun materialBackground(context: Context?, fillColor: Int, radiusDp: Int): GradientDrawable {
             return cardBackground(context, fillColor, SEPARATOR, 1, radiusDp)
         }
 
-        @JvmStatic
         fun topRoundedBackground(context: Context?, fillColor: Int, radiusDp: Int): GradientDrawable {
             val drawable = GradientDrawable()
             drawable.setColor(fillColor)
@@ -348,7 +326,6 @@ class AppUi private constructor() {
             return drawable
         }
 
-        @JvmStatic
         fun cardBackground(
             context: Context?,
             fillColor: Int,
@@ -375,7 +352,6 @@ class AppUi private constructor() {
             return drawable
         }
 
-        @JvmStatic
         fun dp(context: Context?, value: Int): Int {
             return Math.round(value * context!!.resources.displayMetrics.density)
         }

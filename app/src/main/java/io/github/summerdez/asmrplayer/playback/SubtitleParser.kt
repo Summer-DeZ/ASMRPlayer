@@ -16,7 +16,6 @@ object SubtitleParser {
     private val SRT_TIME: Pattern =
         Pattern.compile("(.+?)\\s*-->\\s*(.+)")
 
-    @JvmStatic
     @Throws(IOException::class)
     fun parse(resolver: ContentResolver?, uri: Uri?): List<SubtitleCue> {
         val lines = readLines(resolver, uri)
@@ -48,13 +47,11 @@ object SubtitleParser {
         return fallback
     }
 
-    @JvmStatic
     fun textAt(cues: List<SubtitleCue>?, positionMs: Long): String? {
         val index = indexAt(cues, positionMs)
         return if (index >= 0) cues!![index].text else ""
     }
 
-    @JvmStatic
     fun indexAt(cues: List<SubtitleCue>?, positionMs: Long): Int {
         if (cues == null || cues.isEmpty()) {
             return -1
@@ -76,7 +73,6 @@ object SubtitleParser {
         return if (high >= 0) high else -1
     }
 
-    @JvmStatic
     fun nextCueStartAfter(cues: List<SubtitleCue>?, positionMs: Long): Long {
         if (cues == null || cues.isEmpty()) {
             return -1L

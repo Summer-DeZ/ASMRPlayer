@@ -516,7 +516,6 @@ class DlsiteDownloadService : Service() {
         private const val STOP_RESCHEDULE = "reschedule"
         private const val MAX_CONCURRENT_DOWNLOADS = 2
 
-        @JvmStatic
         fun downloadIntent(context: Context?, workId: String?, optionId: String?): Intent {
             val optionIds = ArrayList<String>()
             if (optionId != null) {
@@ -525,7 +524,6 @@ class DlsiteDownloadService : Service() {
             return downloadIntent(context, workId, optionIds)
         }
 
-        @JvmStatic
         fun downloadIntent(context: Context?, workId: String?, optionIds: List<String>?): Intent {
             val intent = Intent(context, DlsiteDownloadService::class.java)
             intent.action = ACTION_DOWNLOAD
@@ -539,7 +537,6 @@ class DlsiteDownloadService : Service() {
             return intent
         }
 
-        @JvmStatic
         fun pauseIntent(context: Context?, workId: String?): Intent {
             val intent = Intent(context, DlsiteDownloadService::class.java)
             intent.action = ACTION_PAUSE
@@ -547,7 +544,6 @@ class DlsiteDownloadService : Service() {
             return intent
         }
 
-        @JvmStatic
         fun deleteIntent(context: Context?, workId: String?): Intent {
             val intent = Intent(context, DlsiteDownloadService::class.java)
             intent.action = ACTION_DELETE

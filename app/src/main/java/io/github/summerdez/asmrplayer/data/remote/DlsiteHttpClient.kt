@@ -78,7 +78,6 @@ class DlsiteHttpClient {
                 "(KHTML, like Gecko) Chrome/125.0 Mobile Safari/537.36"
         private val JSON = "application/json; charset=utf-8".toMediaType()
 
-        @JvmStatic
         @Throws(IOException::class)
         fun successfulText(response: Response?, fallbackMessage: String?): String {
             val actualResponse = response ?: throw NullPointerException("response")
@@ -95,7 +94,6 @@ class DlsiteHttpClient {
             return body
         }
 
-        @JvmStatic
         @Throws(IOException::class)
         fun bodyString(response: Response?): String {
             val actualResponse = response ?: throw NullPointerException("response")

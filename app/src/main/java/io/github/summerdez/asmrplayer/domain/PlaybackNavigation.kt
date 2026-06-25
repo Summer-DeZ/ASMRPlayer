@@ -2,7 +2,6 @@ package io.github.summerdez.asmrplayer.domain
 
 import io.github.summerdez.asmrplayer.domain.model.Playlist
 object PlaybackNavigation {
-    @JvmStatic
     fun relative(selection: PlaybackSelection, playlist: Playlist?, delta: Int): Result {
         if (playlist == null || playlist.tracks.isEmpty()) {
             return Result.empty()

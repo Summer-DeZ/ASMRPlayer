@@ -21,7 +21,6 @@ object DocumentFiles {
         DocumentsContract.Document.COLUMN_MIME_TYPE,
     )
 
-    @JvmStatic
     fun audioPickerIntent(allowMultiple: Boolean): Intent {
         val intent = baseOpenDocumentIntent("audio/*")
         if (allowMultiple) {
@@ -30,7 +29,6 @@ object DocumentFiles {
         return intent
     }
 
-    @JvmStatic
     fun folderPickerIntent(): Intent {
         val intent = Intent(Intent.ACTION_OPEN_DOCUMENT_TREE)
         intent.addFlags(
@@ -41,7 +39,6 @@ object DocumentFiles {
         return intent
     }
 
-    @JvmStatic
     fun subtitlePickerIntent(): Intent {
         val intent = baseOpenDocumentIntent("*/*")
         intent.putExtra(
@@ -56,12 +53,10 @@ object DocumentFiles {
         return intent
     }
 
-    @JvmStatic
     fun imagePickerIntent(): Intent {
         return baseOpenDocumentIntent("image/*")
     }
 
-    @JvmStatic
     fun urisFromResult(data: Intent?): List<Uri> {
         val uris = ArrayList<Uri>()
         val clipData: ClipData? = data!!.clipData
@@ -78,7 +73,6 @@ object DocumentFiles {
         return uris
     }
 
-    @JvmStatic
     fun persistReadPermission(context: Context?, uri: Uri?) {
         try {
             context!!.contentResolver.takePersistableUriPermission(
@@ -89,7 +83,6 @@ object DocumentFiles {
         }
     }
 
-    @JvmStatic
     fun persistTreeReadPermission(context: Context?, data: Intent?, uri: Uri?) {
         val flags = data?.flags ?: Intent.FLAG_GRANT_READ_URI_PERMISSION
         var readFlags = flags and Intent.FLAG_GRANT_READ_URI_PERMISSION
@@ -102,7 +95,6 @@ object DocumentFiles {
         }
     }
 
-    @JvmStatic
     fun folderAudioImports(context: Context?, treeUri: Uri?): List<FolderImportItem> {
         if (treeUri == null) {
             return Collections.emptyList()
@@ -134,7 +126,6 @@ object DocumentFiles {
         return imports
     }
 
-    @JvmStatic
     fun displayName(context: Context?, uri: Uri?): String {
         val targetUri = uri!!
         if (ContentResolver.SCHEME_CONTENT == targetUri.scheme) {
@@ -160,7 +151,6 @@ object DocumentFiles {
         return if (TextUtils.isEmpty(lastSegment)) targetUri.toString() else lastSegment!!
     }
 
-    @JvmStatic
     fun audioDurationMs(context: Context?, uri: Uri?): Long {
         if (context == null || uri == null) {
             return 0L
@@ -184,12 +174,10 @@ object DocumentFiles {
         }
     }
 
-    @JvmStatic
     fun subtitleNameForAudioName(audioName: String?): String {
         return safeName(audioName) + ".vtt"
     }
 
-    @JvmStatic
     fun isSupportedAudioName(name: String?, mimeType: String?): Boolean {
         val normalized = normalizedName(name)
         if (normalized.endsWith(".vtt")) {

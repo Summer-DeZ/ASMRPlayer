@@ -10,7 +10,7 @@ import kotlinx.coroutines.CoroutineDispatcher
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.runBlocking
 
-class DlsiteDownloadBlockingAdapter @JvmOverloads constructor(
+class DlsiteDownloadBlockingAdapter constructor(
     private val dlsiteRepository: DlsiteRepository,
     private val libraryRepository: LibraryRepository,
     private val dispatcher: CoroutineDispatcher = Dispatchers.IO,

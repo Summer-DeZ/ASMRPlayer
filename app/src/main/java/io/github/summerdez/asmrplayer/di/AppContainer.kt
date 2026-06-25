@@ -135,7 +135,6 @@ class AppContainer(private val application: Application) {
 }
 
 object AppGraph {
-    @JvmStatic
     fun container(context: Context): AppContainer {
         return (context.applicationContext as ASMRPlayerApplication).appContainer
     }

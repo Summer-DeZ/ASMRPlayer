@@ -14,7 +14,6 @@ object DlsiteHtmlParser {
     )
     private val WORK_ID: Pattern = Pattern.compile("""\b(?:RJ|RE|BJ|VJ)\d{5,10}\b""", Pattern.CASE_INSENSITIVE)
 
-    @JvmStatic
     fun parsePurchasedWorks(html: String?, pageUrl: String?): List<DlsiteWork> {
         val works = LinkedHashMap<String, DlsiteWork>()
         if (html == null || html.isEmpty()) {
@@ -51,7 +50,6 @@ object DlsiteHtmlParser {
         return ArrayList(works.values)
     }
 
-    @JvmStatic
     fun findDownloadUrlForWork(html: String?, pageUrl: String?, workId: String?): String {
         if (html == null || workId == null) {
             return ""
@@ -69,7 +67,6 @@ object DlsiteHtmlParser {
         return ""
     }
 
-    @JvmStatic
     fun findFirstDownloadUrl(html: String?, pageUrl: String?): String {
         if (html == null) {
             return ""
@@ -84,7 +81,6 @@ object DlsiteHtmlParser {
         return ""
     }
 
-    @JvmStatic
     fun findCoverUrl(html: String?, pageUrl: String?, workId: String?): String {
         if (html == null || html.isEmpty()) {
             return ""

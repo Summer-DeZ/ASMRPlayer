@@ -35,7 +35,6 @@ class TrackItem(
     }
 
     companion object {
-        @JvmStatic
         @Throws(JSONException::class)
         fun fromJson(obj: JSONObject): TrackItem {
             return TrackItem(

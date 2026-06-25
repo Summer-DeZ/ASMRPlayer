@@ -146,7 +146,6 @@ data class DlsiteWork(
         const val STATUS_DOWNLOADED = "downloaded"
         const val STATUS_FAILED = "failed"
 
-        @JvmStatic
         fun fromJson(obj: JSONObject): DlsiteWork {
             return DlsiteWork(
                 workId = obj.optString("workId"),
@@ -166,7 +165,6 @@ data class DlsiteWork(
             )
         }
 
-        @JvmStatic
         fun inferredCoverUrl(workId: String?): String {
             val bucketName = imageBucketName(workId)
             if (bucketName.isEmpty()) {
@@ -181,7 +179,6 @@ data class DlsiteWork(
                 "_img_main.jpg"
         }
 
-        @JvmStatic
         fun safe(value: String?): String = value?.trim().orEmpty()
 
         private fun imageBucketName(workId: String?): String {

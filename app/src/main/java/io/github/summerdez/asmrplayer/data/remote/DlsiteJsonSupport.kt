@@ -4,12 +4,10 @@ import java.util.ArrayList
 import java.util.LinkedHashMap
 
 object DlsiteJsonSupport {
-    @JvmStatic
     fun parse(json: String?): Any? {
         return JsonReader(json).parse()
     }
 
-    @JvmStatic
     fun arrayFromRoot(root: Any?, key: String): List<Any?> {
         if (root is List<*>) {
             return asList(root)
@@ -23,7 +21,6 @@ object DlsiteJsonSupport {
         return data ?: ArrayList()
     }
 
-    @JvmStatic
     @Suppress("UNCHECKED_CAST")
     fun asObject(value: Any?): Map<String, Any?> {
         if (value is Map<*, *>) {
@@ -32,13 +29,11 @@ object DlsiteJsonSupport {
         throw IllegalArgumentException("Expected JSON object")
     }
 
-    @JvmStatic
     @Suppress("UNCHECKED_CAST")
     fun asObjectOrNull(value: Any?): Map<String, Any?>? {
         return if (value is Map<*, *>) value as Map<String, Any?> else null
     }
 
-    @JvmStatic
     fun asList(value: Any?): List<Any?> {
         if (value is List<*>) {
             return value
@@ -46,23 +41,19 @@ object DlsiteJsonSupport {
         throw IllegalArgumentException("Expected JSON array")
     }
 
-    @JvmStatic
     fun asListOrNull(value: Any?): List<Any?>? {
         return if (value is List<*>) value else null
     }
 
-    @JvmStatic
     fun asListOrEmpty(value: Any?): List<Any?> {
         val list = asListOrNull(value)
         return list ?: ArrayList()
     }
 
-    @JvmStatic
     fun asString(value: Any?): String {
         return if (value is String) value else ""
     }
 
-    @JvmStatic
     fun asQueryValue(value: Any?): String {
         if (value is String) {
             return value.trim { it <= ' ' }
@@ -73,7 +64,6 @@ object DlsiteJsonSupport {
         return ""
     }
 
-    @JvmStatic
     fun asInt(value: Any?, fallback: Int): Int {
         if (value is Number) {
             return value.toInt()
@@ -88,7 +78,6 @@ object DlsiteJsonSupport {
         return fallback
     }
 
-    @JvmStatic
     fun asLong(value: Any?, fallback: Long): Long {
         if (value is Number) {
             return value.toLong()
@@ -103,7 +92,6 @@ object DlsiteJsonSupport {
         return fallback
     }
 
-    @JvmStatic
     fun asBooleanOrNull(value: Any?): Boolean? {
         if (value is Boolean) {
             return value
@@ -120,7 +108,6 @@ object DlsiteJsonSupport {
         return null
     }
 
-    @JvmStatic
     fun escapeJson(value: String?): String {
         val safeValue = value ?: ""
         val builder = StringBuilder(safeValue.length)

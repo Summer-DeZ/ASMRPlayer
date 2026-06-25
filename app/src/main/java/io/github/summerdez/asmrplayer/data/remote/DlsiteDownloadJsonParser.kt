@@ -3,7 +3,6 @@ package io.github.summerdez.asmrplayer.data.remote
 import java.util.LinkedHashMap
 
 object DlsiteDownloadJsonParser {
-    @JvmStatic
     fun toJsonArray(values: List<String?>?): String {
         val builder = StringBuilder("[")
         if (values != null) {
@@ -19,7 +18,6 @@ object DlsiteDownloadJsonParser {
         return builder.append(']').toString()
     }
 
-    @JvmStatic
     @Throws(DlsiteJsonParser.IOExceptionLikeJsonException::class)
     fun parseZiptree(json: String?): DlsiteJsonParser.DlsiteZiptree {
         try {
@@ -37,7 +35,6 @@ object DlsiteDownloadJsonParser {
         }
     }
 
-    @JvmStatic
     @Throws(DlsiteJsonParser.IOExceptionLikeJsonException::class)
     fun parseSignUrlParams(json: String?): Map<String, String> {
         try {

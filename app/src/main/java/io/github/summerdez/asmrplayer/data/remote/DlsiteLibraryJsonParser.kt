@@ -7,7 +7,6 @@ import java.util.Locale
 object DlsiteLibraryJsonParser {
     private const val PLAY_BASE_URL = "https://play.dlsite.com"
 
-    @JvmStatic
     fun isAuthorized(json: String?): Boolean {
         return try {
             when (val root = DlsiteJsonSupport.parse(json)) {
@@ -20,7 +19,6 @@ object DlsiteLibraryJsonParser {
         }
     }
 
-    @JvmStatic
     @Throws(DlsiteJsonParser.IOExceptionLikeJsonException::class)
     fun parseContentCount(json: String?): DlsiteJsonParser.ContentCount {
         return try {
@@ -35,7 +33,6 @@ object DlsiteLibraryJsonParser {
         }
     }
 
-    @JvmStatic
     @Throws(DlsiteJsonParser.IOExceptionLikeJsonException::class)
     fun parseSalesWorkIds(json: String?): List<String> {
         return try {
@@ -45,7 +42,6 @@ object DlsiteLibraryJsonParser {
         }
     }
 
-    @JvmStatic
     @Throws(DlsiteJsonParser.IOExceptionLikeJsonException::class)
     fun parseHistoryWorkIds(json: String?): List<String> {
         return try {
@@ -55,7 +51,6 @@ object DlsiteLibraryJsonParser {
         }
     }
 
-    @JvmStatic
     @Throws(DlsiteJsonParser.IOExceptionLikeJsonException::class)
     fun parseContentWorks(json: String?): List<DlsiteWork> {
         return try {
@@ -73,7 +68,6 @@ object DlsiteLibraryJsonParser {
         }
     }
 
-    @JvmStatic
     @Throws(DlsiteJsonParser.IOExceptionLikeJsonException::class)
     fun parseWorkDetail(json: String?): DlsiteWork? {
         return try {

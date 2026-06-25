@@ -7,7 +7,6 @@ object DlsiteWebvttJsonParser {
     private val WHITESPACE_PATTERN: Pattern = Pattern.compile("\\s+")
     private val COLON_PATTERN: Pattern = Pattern.compile(":")
 
-    @JvmStatic
     @Throws(DlsiteJsonParser.IOExceptionLikeJsonException::class)
     fun parseWebvttJson(json: String?): String {
         val trimmed = if (json == null) "" else javaTrim(json)

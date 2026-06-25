@@ -18,7 +18,6 @@ object DlsiteDownloadNotifications {
 
     private const val CHANNEL_ID = "dlsite_download"
 
-    @JvmStatic
     fun ensureChannel(context: Context?) {
         val manager = context?.getSystemService(NotificationManager::class.java) ?: return
         val channel = NotificationChannel(
@@ -30,12 +29,10 @@ object DlsiteDownloadNotifications {
         manager.createNotificationChannel(channel)
     }
 
-    @JvmStatic
     fun build(context: Context?, title: String?, status: String?): Notification {
         return build(context, title, status, 0, 0L)
     }
 
-    @JvmStatic
     fun buildSummary(context: Context?, state: DlsiteDownloadState?): Notification {
         val summary = state?.summary ?: DlsiteDownloadSummary()
         val title = if (summary.visible) {
@@ -55,7 +52,6 @@ object DlsiteDownloadNotifications {
         return build(context, title, text, progressPercent ?: 0, summary.totalBytes)
     }
 
-    @JvmStatic
     fun build(
         context: Context?,
         title: String?,
@@ -84,13 +80,11 @@ object DlsiteDownloadNotifications {
         return builder.build()
     }
 
-    @JvmStatic
     fun update(context: Context?, title: String?, status: String?) {
         val manager = context?.getSystemService(NotificationManager::class.java) ?: return
         manager.notify(NOTIFICATION_ID, build(context, title, status))
     }
 
-    @JvmStatic
     fun updateSummary(context: Context?, state: DlsiteDownloadState?) {
         val manager = context?.getSystemService(NotificationManager::class.java) ?: return
         manager.notify(NOTIFICATION_ID, buildSummary(context, state))

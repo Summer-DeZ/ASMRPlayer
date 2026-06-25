@@ -6,7 +6,6 @@ object LibraryActivityResults {
     const val REQUEST_PLAYLIST_COVER = 106
     const val REQUEST_PLAYLIST_FOLDER = 107
 
-    @JvmStatic
     fun resolve(requestCode: Int, success: Boolean, hasData: Boolean, hasPrimaryUri: Boolean): Action {
         if (!success || !hasData) {
             return clearActionFor(requestCode)
