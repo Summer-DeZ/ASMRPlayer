@@ -88,9 +88,9 @@
 
 ### C3 · [P2] 接口/方法 nullable 参数泛滥 + 防御式 `if-null-return`（Java 移植味）
 
-- **位置**：`LibraryRepository`/`DlsiteRepository` 几乎每个方法签名都是 `String?`，方法体开头 `if (xxx.isNullOrEmpty()) return`（如 `LibraryRepository.kt:101-104/112-114/122-124/...`、`DlsiteRepository` 多处 `workId: String?`）。
-- **问题**：Kotlin 侧本可用非空类型在编译期挡住，现在把校验下沉到运行时、每个方法重复。源头是 C2 的 Java model/调用约定。
-- **方向**：随 C2 迁移把参数收紧为非空类型，删除重复防御分支。
+- **位置**：`LibraryRepository` 已完成 Phase F/C3 第一切片，playlist/track/subtitle/cover/selected playlist 相关入参改为非空 Kotlin 类型，Room 实现只保留空字符串业务校验；DLsite 下载 blocking adapter 作为 Java/历史边界继续接收 nullable，并在 adapter 内过滤/归一化后调用 repository。剩余热点主要在 `DlsiteRepository` 多处 `workId: String?` 和迁移期 model/API 兼容点。
+- **问题**：Kotlin 侧本可用非空类型在编译期挡住，旧 Java 迁移边界把校验下沉到运行时、每个方法重复；如果继续扩大，会让业务缺失值和 null 兼容输入混在同一层。
+- **方向**：继续沿调用链把参数收紧为非空类型，删除重复 null 防御；确实可能缺失的值在调用层提前 return/失败事件处理，Java/历史入口保留在 adapter 或 facade 内部归一化。
 
 ### C4 · [P2] 字幕/位置「双 ticker」重复轮询
 

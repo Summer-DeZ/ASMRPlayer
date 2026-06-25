@@ -15,23 +15,29 @@ class DlsiteDownloadBlockingAdapter @JvmOverloads constructor(
     private val libraryRepository: LibraryRepository,
     private val dispatcher: CoroutineDispatcher = Dispatchers.IO,
 ) {
-    fun getPlaylist(playlistId: String?): Playlist? = blocking {
-        libraryRepository.getPlaylist(playlistId)
+    fun getPlaylist(playlistId: String?): Playlist? {
+        val normalizedPlaylistId = playlistId?.takeIf { it.isNotEmpty() } ?: return null
+        return blocking {
+            libraryRepository.getPlaylist(normalizedPlaylistId)
+        }
     }
 
     fun createPlaylist(name: String?): Playlist = blocking {
-        libraryRepository.createPlaylist(name)
+        libraryRepository.createPlaylist(name.orEmpty())
     }
 
     fun setPlaylistCover(playlistId: String?, coverUri: String?) {
+        val normalizedPlaylistId = playlistId?.takeIf { it.isNotEmpty() } ?: return
         blocking {
-            libraryRepository.setPlaylistCover(playlistId, coverUri)
+            libraryRepository.setPlaylistCover(normalizedPlaylistId, coverUri.orEmpty())
         }
     }
 
     fun addTrack(playlistId: String?, track: TrackItem?) {
+        val normalizedPlaylistId = playlistId?.takeIf { it.isNotEmpty() } ?: return
+        val normalizedTrack = track ?: return
         blocking {
-            libraryRepository.addTrack(playlistId, track)
+            libraryRepository.addTrack(normalizedPlaylistId, normalizedTrack)
         }
     }
 

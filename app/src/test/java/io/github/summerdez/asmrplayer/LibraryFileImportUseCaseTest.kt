@@ -390,47 +390,45 @@ private class FakeLibraryRepository : LibraryRepository {
     val coverUpdates = mutableListOf<CoverUpdate>()
     var setTrackSubtitleResult = true
 
-    override suspend fun createPlaylist(name: String?): Playlist {
-        createdPlaylistNames += name.orEmpty()
-        return Playlist("created-${createdPlaylistNames.size}", name.orEmpty())
+    override suspend fun createPlaylist(name: String): Playlist {
+        createdPlaylistNames += name
+        return Playlist("created-${createdPlaylistNames.size}", name)
     }
 
-    override suspend fun addTrack(playlistId: String?, track: TrackItem?) {
-        if (playlistId != null && track != null) {
-            addedTracks += AddedTrack(playlistId, track)
-        }
+    override suspend fun addTrack(playlistId: String, track: TrackItem) {
+        addedTracks += AddedTrack(playlistId, track)
     }
 
-    override suspend fun setSelectedPlaylistId(playlistId: String?) {
-        selectedPlaylistIds += playlistId.orEmpty()
+    override suspend fun setSelectedPlaylistId(playlistId: String) {
+        selectedPlaylistIds += playlistId
     }
 
-    override suspend fun getPlaylist(playlistId: String?): Playlist? = unused()
-    override suspend fun renamePlaylist(playlistId: String?, name: String?) = unused()
-    override suspend fun setPlaylistCover(playlistId: String?, coverUri: String?) {
+    override suspend fun getPlaylist(playlistId: String): Playlist? = unused()
+    override suspend fun renamePlaylist(playlistId: String, name: String) = unused()
+    override suspend fun setPlaylistCover(playlistId: String, coverUri: String) {
         coverUpdates += CoverUpdate(
-            playlistId = playlistId.orEmpty(),
-            coverUri = coverUri.orEmpty(),
+            playlistId = playlistId,
+            coverUri = coverUri,
         )
     }
-    override suspend fun deletePlaylist(playlistId: String?) = unused()
-    override suspend fun renameTrack(playlistId: String?, trackId: String?, title: String?) = unused()
+    override suspend fun deletePlaylist(playlistId: String) = unused()
+    override suspend fun renameTrack(playlistId: String, trackId: String, title: String) = unused()
     override suspend fun setTrackSubtitle(
-        playlistId: String?,
-        trackId: String?,
-        subtitleUri: String?,
-        subtitleTitle: String?,
+        playlistId: String,
+        trackId: String,
+        subtitleUri: String,
+        subtitleTitle: String,
     ): Boolean {
         subtitleUpdates += SubtitleUpdate(
-            playlistId = playlistId.orEmpty(),
-            trackId = trackId.orEmpty(),
-            subtitleUri = subtitleUri.orEmpty(),
-            subtitleTitle = subtitleTitle.orEmpty(),
+            playlistId = playlistId,
+            trackId = trackId,
+            subtitleUri = subtitleUri,
+            subtitleTitle = subtitleTitle,
         )
         return setTrackSubtitleResult
     }
-    override suspend fun removeTrack(playlistId: String?, trackId: String?) = unused()
-    override suspend fun moveTrack(fromPlaylistId: String?, toPlaylistId: String?, trackId: String?): Boolean =
+    override suspend fun removeTrack(playlistId: String, trackId: String) = unused()
+    override suspend fun moveTrack(fromPlaylistId: String, toPlaylistId: String, trackId: String): Boolean =
         unused()
     override suspend fun refreshMissingTrackDurations(): Boolean = unused()
 

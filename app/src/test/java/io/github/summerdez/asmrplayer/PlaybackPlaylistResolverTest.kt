@@ -77,30 +77,30 @@ class PlaybackPlaylistResolverTest {
         var getPlaylistCallCount = 0
             private set
 
-        override suspend fun getPlaylist(playlistId: String?): Playlist? {
+        override suspend fun getPlaylist(playlistId: String): Playlist? {
             getPlaylistCallCount += 1
-            requestedPlaylistIds += playlistId.orEmpty()
+            requestedPlaylistIds += playlistId
             failure?.let { throw it }
             return playlist
         }
 
-        override suspend fun createPlaylist(name: String?): Playlist = unused()
-        override suspend fun renamePlaylist(playlistId: String?, name: String?) = unused()
-        override suspend fun setPlaylistCover(playlistId: String?, coverUri: String?) = unused()
-        override suspend fun deletePlaylist(playlistId: String?) = unused()
-        override suspend fun addTrack(playlistId: String?, track: TrackItem?) = unused()
-        override suspend fun renameTrack(playlistId: String?, trackId: String?, title: String?) = unused()
+        override suspend fun createPlaylist(name: String): Playlist = unused()
+        override suspend fun renamePlaylist(playlistId: String, name: String) = unused()
+        override suspend fun setPlaylistCover(playlistId: String, coverUri: String) = unused()
+        override suspend fun deletePlaylist(playlistId: String) = unused()
+        override suspend fun addTrack(playlistId: String, track: TrackItem) = unused()
+        override suspend fun renameTrack(playlistId: String, trackId: String, title: String) = unused()
         override suspend fun setTrackSubtitle(
-            playlistId: String?,
-            trackId: String?,
-            subtitleUri: String?,
-            subtitleTitle: String?,
+            playlistId: String,
+            trackId: String,
+            subtitleUri: String,
+            subtitleTitle: String,
         ): Boolean = unused()
-        override suspend fun removeTrack(playlistId: String?, trackId: String?) = unused()
-        override suspend fun moveTrack(fromPlaylistId: String?, toPlaylistId: String?, trackId: String?): Boolean =
+        override suspend fun removeTrack(playlistId: String, trackId: String) = unused()
+        override suspend fun moveTrack(fromPlaylistId: String, toPlaylistId: String, trackId: String): Boolean =
             unused()
         override suspend fun refreshMissingTrackDurations(): Boolean = unused()
-        override suspend fun setSelectedPlaylistId(playlistId: String?) = unused()
+        override suspend fun setSelectedPlaylistId(playlistId: String) = unused()
 
         private fun unused(): Nothing = error("Unexpected repository call")
     }

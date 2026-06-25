@@ -19,18 +19,18 @@ interface LibraryRepository {
     val playlistsFlow: Flow<List<Playlist>>
     val selectedPlaylistIdFlow: Flow<String>
 
-    suspend fun getPlaylist(playlistId: String?): Playlist?
-    suspend fun createPlaylist(name: String?): Playlist
-    suspend fun renamePlaylist(playlistId: String?, name: String?)
-    suspend fun setPlaylistCover(playlistId: String?, coverUri: String?)
-    suspend fun deletePlaylist(playlistId: String?)
-    suspend fun addTrack(playlistId: String?, track: TrackItem?)
-    suspend fun renameTrack(playlistId: String?, trackId: String?, title: String?)
-    suspend fun setTrackSubtitle(playlistId: String?, trackId: String?, subtitleUri: String?, subtitleTitle: String?): Boolean
-    suspend fun removeTrack(playlistId: String?, trackId: String?)
-    suspend fun moveTrack(fromPlaylistId: String?, toPlaylistId: String?, trackId: String?): Boolean
+    suspend fun getPlaylist(playlistId: String): Playlist?
+    suspend fun createPlaylist(name: String): Playlist
+    suspend fun renamePlaylist(playlistId: String, name: String)
+    suspend fun setPlaylistCover(playlistId: String, coverUri: String)
+    suspend fun deletePlaylist(playlistId: String)
+    suspend fun addTrack(playlistId: String, track: TrackItem)
+    suspend fun renameTrack(playlistId: String, trackId: String, title: String)
+    suspend fun setTrackSubtitle(playlistId: String, trackId: String, subtitleUri: String, subtitleTitle: String): Boolean
+    suspend fun removeTrack(playlistId: String, trackId: String)
+    suspend fun moveTrack(fromPlaylistId: String, toPlaylistId: String, trackId: String): Boolean
     suspend fun refreshMissingTrackDurations(): Boolean
-    suspend fun setSelectedPlaylistId(playlistId: String?)
+    suspend fun setSelectedPlaylistId(playlistId: String)
 }
 
 class RoomLibraryRepository(
@@ -53,8 +53,8 @@ class RoomLibraryRepository(
     override val selectedPlaylistIdFlow: Flow<String> =
         settingsDao.valueFlow(KEY_SELECTED_PLAYLIST_ID).map { it.orEmpty() }
 
-    override suspend fun getPlaylist(playlistId: String?): Playlist? {
-        if (playlistId.isNullOrEmpty()) {
+    override suspend fun getPlaylist(playlistId: String): Playlist? {
+        if (playlistId.isEmpty()) {
             return null
         }
         return withContext(ioDispatcher) {
@@ -63,9 +63,9 @@ class RoomLibraryRepository(
         }
     }
 
-    override suspend fun createPlaylist(name: String?): Playlist {
+    override suspend fun createPlaylist(name: String): Playlist {
         return withContext(ioDispatcher) {
-            val normalizedName = name.orEmpty().trim().ifEmpty { DEFAULT_PLAYLIST_NAME }
+            val normalizedName = name.trim().ifEmpty { DEFAULT_PLAYLIST_NAME }
             val playlist = Playlist(UUID.randomUUID().toString(), normalizedName)
             database.withTransaction {
                 playlistDao.insertPlaylist(
@@ -82,9 +82,9 @@ class RoomLibraryRepository(
         }
     }
 
-    override suspend fun renamePlaylist(playlistId: String?, name: String?) {
-        val trimmedName = name.orEmpty().trim()
-        if (playlistId.isNullOrEmpty() || trimmedName.isEmpty()) {
+    override suspend fun renamePlaylist(playlistId: String, name: String) {
+        val trimmedName = name.trim()
+        if (playlistId.isEmpty() || trimmedName.isEmpty()) {
             return
         }
         withContext(ioDispatcher) {
@@ -93,18 +93,18 @@ class RoomLibraryRepository(
         }
     }
 
-    override suspend fun setPlaylistCover(playlistId: String?, coverUri: String?) {
-        if (playlistId.isNullOrEmpty()) {
+    override suspend fun setPlaylistCover(playlistId: String, coverUri: String) {
+        if (playlistId.isEmpty()) {
             return
         }
         withContext(ioDispatcher) {
             val playlist = playlistDao.playlistById(playlistId) ?: return@withContext
-            playlistDao.updatePlaylist(playlist.copy(coverUri = coverUri.orEmpty()))
+            playlistDao.updatePlaylist(playlist.copy(coverUri = coverUri))
         }
     }
 
-    override suspend fun deletePlaylist(playlistId: String?) {
-        if (playlistId.isNullOrEmpty()) {
+    override suspend fun deletePlaylist(playlistId: String) {
+        if (playlistId.isEmpty()) {
             return
         }
         withContext(ioDispatcher) {
@@ -119,8 +119,8 @@ class RoomLibraryRepository(
         }
     }
 
-    override suspend fun addTrack(playlistId: String?, track: TrackItem?) {
-        if (playlistId.isNullOrEmpty() || track == null) {
+    override suspend fun addTrack(playlistId: String, track: TrackItem) {
+        if (playlistId.isEmpty()) {
             return
         }
         withContext(ioDispatcher) {
@@ -129,9 +129,9 @@ class RoomLibraryRepository(
         }
     }
 
-    override suspend fun renameTrack(playlistId: String?, trackId: String?, title: String?) {
-        val trimmedTitle = title.orEmpty().trim()
-        if (playlistId.isNullOrEmpty() || trackId.isNullOrEmpty() || trimmedTitle.isEmpty()) {
+    override suspend fun renameTrack(playlistId: String, trackId: String, title: String) {
+        val trimmedTitle = title.trim()
+        if (playlistId.isEmpty() || trackId.isEmpty() || trimmedTitle.isEmpty()) {
             return
         }
         withContext(ioDispatcher) {
@@ -144,12 +144,12 @@ class RoomLibraryRepository(
     }
 
     override suspend fun setTrackSubtitle(
-        playlistId: String?,
-        trackId: String?,
-        subtitleUri: String?,
-        subtitleTitle: String?,
+        playlistId: String,
+        trackId: String,
+        subtitleUri: String,
+        subtitleTitle: String,
     ): Boolean {
-        if (playlistId.isNullOrEmpty() || trackId.isNullOrEmpty() || subtitleUri.isNullOrEmpty()) {
+        if (playlistId.isEmpty() || trackId.isEmpty() || subtitleUri.isEmpty()) {
             return false
         }
         return withContext(ioDispatcher) {
@@ -160,15 +160,15 @@ class RoomLibraryRepository(
             playlistDao.updateTrack(
                 track.copy(
                     subtitleUri = subtitleUri,
-                    subtitleTitle = subtitleTitle.orEmpty(),
+                    subtitleTitle = subtitleTitle,
                 ),
             )
             true
         }
     }
 
-    override suspend fun removeTrack(playlistId: String?, trackId: String?) {
-        if (playlistId.isNullOrEmpty() || trackId.isNullOrEmpty()) {
+    override suspend fun removeTrack(playlistId: String, trackId: String) {
+        if (playlistId.isEmpty() || trackId.isEmpty()) {
             return
         }
         withContext(ioDispatcher) {
@@ -176,10 +176,10 @@ class RoomLibraryRepository(
         }
     }
 
-    override suspend fun moveTrack(fromPlaylistId: String?, toPlaylistId: String?, trackId: String?): Boolean {
-        if (fromPlaylistId.isNullOrEmpty()
-            || toPlaylistId.isNullOrEmpty()
-            || trackId.isNullOrEmpty()
+    override suspend fun moveTrack(fromPlaylistId: String, toPlaylistId: String, trackId: String): Boolean {
+        if (fromPlaylistId.isEmpty()
+            || toPlaylistId.isEmpty()
+            || trackId.isEmpty()
             || fromPlaylistId == toPlaylistId
         ) {
             return false
@@ -217,9 +217,9 @@ class RoomLibraryRepository(
         }
     }
 
-    override suspend fun setSelectedPlaylistId(playlistId: String?) {
+    override suspend fun setSelectedPlaylistId(playlistId: String) {
         withContext(ioDispatcher) {
-            settingsDao.put(AppSettingEntity(KEY_SELECTED_PLAYLIST_ID, playlistId.orEmpty()))
+            settingsDao.put(AppSettingEntity(KEY_SELECTED_PLAYLIST_ID, playlistId))
         }
     }
 
