@@ -58,10 +58,11 @@
 - [x] 需要做：Phase A/C1 全仓 import cleanup：清理主源码和单元测试中 46 个文件的自动生成全家桶 wildcard import，改为精确 import，保留必要的精确 `R` 资源 import。
 - [x] 需要做：Phase F/C3 主源码字段 ABI 清理切片：`DlsiteDownloadTask` 嵌套结果/进度 DTO、`SubtitleCue`、`PendingLibrarySelection.TrackSubtitleTarget`、`DocumentFiles.FolderImportItem`、`AppThemePalette` 与 `AppUi` 删除剩余字段 `@JvmField`，主源码 `@JvmField` 清零；继续保留必要业务 nullable 字段和 Kotlin property 访问。
 - [x] 需要做：Phase F/C3 主源码函数入口 ABI 清理切片：删除剩余 `@JvmStatic` 与 `@JvmOverloads`，主源码 JVM 兼容注解清零；保留 Kotlin 默认参数、`@Throws`、`const val`、object/companion 结构和所有现有 nullable 语义。
+- [x] 需要做：Phase F/C3 平台值 helper 清理切片：`SubtitleCue.text`、`DocumentFiles.FolderImportItem.audioName/audioUri/subtitleName` 与 `TreeDocument` 改为非空 Kotlin 构造语义，删除 `preserveJavaFieldValue`、`platformValue` 和 `platformFieldValue` helper；`subtitleUri` 继续保留可空表示没有匹配字幕。
 - [ ] 后续做：Phase C 如继续评估播放位置/字幕链路，只处理状态边界和测试覆盖；`PlaybackCommandClient` UI position ticker 与 `PlaybackService` cue-boundary scheduler 属于不同 runtime 驱动，不作为“两个 250ms 轮询”合并。
 - [ ] 后续做：Phase D 继续处理其它剩余 service-locator 去耦，逐步收敛到注入的仓库/服务边界。
 - [ ] 后续做：Phase E 继续拆分 `ASMRPlayerApp.kt` 组合根和巨型 Screen 文件。
-- [ ] 后续做：Phase F 继续清理迁移期平台值兼容点和 model/facade nullable helper；`@JvmField`、`@JvmStatic`、`@JvmOverloads` 已不再出现在主源码。
+- [ ] 后续做：Phase F 继续清理其它 model/facade nullable helper；`@JvmField`、`@JvmStatic`、`@JvmOverloads` 与明确 Java 平台值 helper 已不再出现在主源码。
 - [ ] 暂不做：本轮不引入 ktlint/Spotless 自动格式化工具链；后续如需要再单独评估格式化配置。
 
 ### 2026-06-24

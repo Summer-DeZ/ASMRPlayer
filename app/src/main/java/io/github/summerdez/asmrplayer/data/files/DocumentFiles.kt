@@ -76,7 +76,7 @@ object DocumentFiles {
     fun persistReadPermission(context: Context?, uri: Uri?) {
         try {
             context!!.contentResolver.takePersistableUriPermission(
-                platformValue(uri),
+                uri!!,
                 Intent.FLAG_GRANT_READ_URI_PERMISSION,
             )
         } catch (ignored: SecurityException) {
@@ -90,7 +90,7 @@ object DocumentFiles {
             readFlags = Intent.FLAG_GRANT_READ_URI_PERMISSION
         }
         try {
-            context!!.contentResolver.takePersistableUriPermission(platformValue(uri), readFlags)
+            context!!.contentResolver.takePersistableUriPermission(uri!!, readFlags)
         } catch (ignored: SecurityException) {
         }
     }
@@ -274,41 +274,21 @@ object DocumentFiles {
         return name?.trim() ?: ""
     }
 
-    @Suppress("UNCHECKED_CAST")
-    private fun <T> platformValue(value: T?): T {
-        return value as T
-    }
-
     class FolderImportItem(
-        audioName: String?,
-        audioUri: Uri?,
-        subtitleName: String?,
+        val audioName: String,
+        val audioUri: Uri,
+        val subtitleName: String,
         val subtitleUri: Uri?,
     ) {
-        val audioName: String = audioName ?: ""
-
-        val audioUri: Uri = run {
-            @Suppress("UNCHECKED_CAST")
-            fun <T> platformFieldValue(value: T?): T {
-                return value as T
-            }
-
-            platformFieldValue(audioUri)
-        }
-
-        val subtitleName: String = subtitleName ?: ""
-
         fun hasSubtitle(): Boolean {
             return subtitleUri != null
         }
     }
 
     private class TreeDocument(
-        name: String?,
-        mimeType: String?,
-        val uri: Uri?,
+        val name: String,
+        val mimeType: String,
+        val uri: Uri,
     ) {
-        val name: String = name ?: ""
-        val mimeType: String = mimeType ?: ""
     }
 }
