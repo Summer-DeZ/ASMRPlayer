@@ -9,8 +9,8 @@ import org.junit.Test
 
 class TrackItemTest {
     @Test
-    fun constructorNormalizesNullableValues() {
-        val track = TrackItem(null, null, null, null, null, -1L)
+    fun constructorUsesKotlinDefaultsAndNormalizesDuration() {
+        val track = TrackItem(durationMs = -1L)
 
         assertEquals("", track.id)
         assertEquals("", track.title)
@@ -30,12 +30,13 @@ class TrackItemTest {
     @Test
     fun subtitleTitleFallsBackWhenMissing() {
         assertEquals(
-                "fallback",
-                TrackItem("id", "title", "content://audio").subtitleTitleOr("fallback"))
+            "fallback",
+            TrackItem("id", "title", "content://audio").subtitleTitleOr("fallback"),
+        )
         assertEquals(
-                "subtitle.srt",
-                TrackItem("id", "title", "content://audio", "content://subtitle", "subtitle.srt")
-                        .subtitleTitleOr("fallback"))
+            "subtitle.srt",
+            TrackItem("id", "title", "content://audio", "content://subtitle", "subtitle.srt")
+                .subtitleTitleOr("fallback"),
+        )
     }
-
 }

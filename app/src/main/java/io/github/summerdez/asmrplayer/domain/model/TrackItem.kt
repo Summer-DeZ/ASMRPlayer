@@ -4,30 +4,14 @@ import android.net.Uri
 import org.json.JSONException
 import org.json.JSONObject
 
-class TrackItem @JvmOverloads constructor(
-    id: String?,
-    title: String?,
-    uri: String?,
-    subtitleUri: String? = "",
-    subtitleTitle: String? = "",
+class TrackItem(
+    val id: String = "",
+    var title: String = "",
+    val uri: String = "",
+    var subtitleUri: String = "",
+    var subtitleTitle: String = "",
     durationMs: Long = 0L,
 ) {
-    @JvmField
-    val id: String = id.orEmpty()
-
-    @JvmField
-    var title: String = title.orEmpty()
-
-    @JvmField
-    val uri: String = uri.orEmpty()
-
-    @JvmField
-    var subtitleUri: String = subtitleUri.orEmpty()
-
-    @JvmField
-    var subtitleTitle: String = subtitleTitle.orEmpty()
-
-    @JvmField
     val durationMs: Long = maxOf(0L, durationMs)
 
     fun hasAudioUri(): Boolean = uri.isNotEmpty()

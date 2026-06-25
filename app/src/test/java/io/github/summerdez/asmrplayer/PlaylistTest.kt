@@ -8,8 +8,8 @@ import org.junit.Test
 
 class PlaylistTest {
     @Test
-    fun constructorNormalizesNullCoverUri() {
-        val playlist = Playlist("id", "name", null, emptyList())
+    fun constructorUsesKotlinDefaults() {
+        val playlist = Playlist("id", "name")
 
         assertEquals("id", playlist.id)
         assertEquals("name", playlist.name)
@@ -31,13 +31,12 @@ class PlaylistTest {
     }
 
     @Test
-    fun defaultTracksRemainMutableForJavaFieldCompatibility() {
-        val playlist = Playlist("id", "name")
+    fun threeArgumentConstructorTreatsThirdParameterAsTracks() {
+        val track = TrackItem("track", "Track", "content://track")
+        val playlist = Playlist("id", "name", listOf(track))
 
-        @Suppress("UNCHECKED_CAST")
-        val mutableTracks = playlist.tracks as MutableList<TrackItem>
-        mutableTracks.add(TrackItem("track", "Track", "content://track"))
-
+        assertEquals("", playlist.coverUri)
         assertEquals(1, playlist.tracks.size)
+        assertEquals(track, playlist.tracks[0])
     }
 }

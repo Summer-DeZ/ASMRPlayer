@@ -4,25 +4,13 @@ import org.json.JSONArray
 import org.json.JSONException
 import org.json.JSONObject
 
-class Playlist @JvmOverloads constructor(
-    id: String?,
-    name: String?,
-    coverUri: String? = "",
-    tracks: List<TrackItem>? = ArrayList(),
+class Playlist(
+    val id: String = "",
+    var name: String = "",
+    var coverUri: String = "",
+    val tracks: List<TrackItem> = emptyList(),
 ) {
-    @JvmField
-    val id: String = id.orEmpty()
-
-    @JvmField
-    var name: String = name.orEmpty()
-
-    @JvmField
-    var coverUri: String = coverUri.orEmpty()
-
-    @JvmField
-    val tracks: List<TrackItem> = tracks ?: ArrayList()
-
-    constructor(id: String?, name: String?, tracks: List<TrackItem>?) : this(id, name, "", tracks)
+    constructor(id: String, name: String, tracks: List<TrackItem>) : this(id, name, "", tracks)
 
     fun copy(
         id: String = this.id,

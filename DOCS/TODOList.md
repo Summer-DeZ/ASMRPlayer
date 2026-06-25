@@ -51,6 +51,7 @@
 - [x] 需要做：Phase F legacy UI 切片：`AppThemeMode`、`AppThemePalette`、`AppUi` 和 `DlsiteLoginActivity` 迁移为 Kotlin，主源码 Java 文件清零，并保留主题静态字段、WebView 登录和系统栏行为。
 - [x] 需要做：Phase F/C3 第一切片：收紧 `LibraryRepository` nullable API 边界，playlist/track/subtitle/cover/selected playlist 相关入参改为非空 Kotlin 类型，Room 实现只保留空字符串业务校验；DLsite 下载 blocking adapter 保留 nullable 兼容入口并在 adapter 内过滤/归一化。
 - [x] 需要做：Phase F/C3 第二切片：收紧 `DlsiteRepository`、`DlsiteLocalStore` 和 `DlsiteDownloadQueueRepository` 的 identity/required nullable API 边界，`workId`、`taskId`、`optionId`、`DlsiteWork` 与 `saveWork(updatedWork)` 等入参改为非空 Kotlin 类型；`DlsiteDownloadBlockingAdapter` 保留 nullable 历史边界并在进入 repository 前过滤或归一化。
+- [x] 需要做：Phase F/C3 Kotlin-native model 清理切片：`TrackItem` 与 `Playlist` 删除迁移期 `@JvmOverloads`、字段 `@JvmField` 和 nullable 构造语义，构造参数改为非空 Kotlin 类型并保留 `Playlist(id, name)`、`Playlist(id, name, tracks)`、`Playlist(id, name, coverUri, tracks)`、`copy(...)` 与 JSON 行为。
 - [x] 需要做：Phase A/C1 全仓 import cleanup：清理主源码和单元测试中 46 个文件的自动生成全家桶 wildcard import，改为精确 import，保留必要的精确 `R` 资源 import。
 - [ ] 后续做：Phase C 继续评估 `PlaybackCommandClient` 播放位置 ticker 与 `PlaybackService` 字幕调度的进一步收敛方式。
 - [ ] 后续做：Phase D 继续处理其它剩余 service-locator 去耦，逐步收敛到注入的仓库/服务边界。
