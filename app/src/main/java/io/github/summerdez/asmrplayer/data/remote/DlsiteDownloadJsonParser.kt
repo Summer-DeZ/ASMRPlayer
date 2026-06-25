@@ -19,7 +19,7 @@ object DlsiteDownloadJsonParser {
     }
 
     @Throws(DlsiteJsonParser.IOExceptionLikeJsonException::class)
-    fun parseZiptree(json: String?): DlsiteJsonParser.DlsiteZiptree {
+    fun parseZiptree(json: String): DlsiteJsonParser.DlsiteZiptree {
         try {
             val root = DlsiteJsonSupport.asObject(DlsiteJsonSupport.parse(json))
             val playFiles = DlsiteJsonSupport.asObject(root["playfile"])
@@ -36,7 +36,7 @@ object DlsiteDownloadJsonParser {
     }
 
     @Throws(DlsiteJsonParser.IOExceptionLikeJsonException::class)
-    fun parseSignUrlParams(json: String?): Map<String, String> {
+    fun parseSignUrlParams(json: String): Map<String, String> {
         try {
             val root = DlsiteJsonSupport.asObject(DlsiteJsonSupport.parse(json))
             var params = DlsiteJsonSupport.asObjectOrNull(root["params"])

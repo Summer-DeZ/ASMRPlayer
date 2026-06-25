@@ -4,7 +4,7 @@ import java.util.ArrayList
 import java.util.LinkedHashMap
 
 object DlsiteJsonSupport {
-    fun parse(json: String?): Any? {
+    fun parse(json: String): Any? {
         return JsonReader(json).parse()
     }
 
@@ -133,8 +133,7 @@ object DlsiteJsonSupport {
         return builder.toString()
     }
 
-    private class JsonReader(input: String?) {
-        private val input: String = input ?: ""
+    private class JsonReader(private val input: String) {
         private var index = 0
 
         fun parse(): Any? {

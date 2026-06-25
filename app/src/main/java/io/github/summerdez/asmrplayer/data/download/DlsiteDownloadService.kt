@@ -377,8 +377,10 @@ class DlsiteDownloadService : Service() {
             val work = initialWork
             val contentDownload = isContentDownload(request.optionIds)
             try {
+                val api = dlsiteApi ?: throw IllegalStateException("DLsite API not initialized")
+                val repository = downloadRepository ?: throw IllegalStateException("DLsite download repository not initialized")
                 if (!contentDownload) {
-                    downloadRepository!!.markDownloading(
+                    repository.markDownloading(
                         work,
                         TextUtils.join("|", request.optionIds),
                         request.optionIds.size.toString() + " 个内容",
@@ -393,8 +395,8 @@ class DlsiteDownloadService : Service() {
                 }
                 val result = DlsiteDownloadTask.downloadAndImport(
                     this@DlsiteDownloadService,
-                    dlsiteApi,
-                    downloadRepository,
+                    api,
+                    repository,
                     work,
                     request.optionIds,
                     this,
@@ -406,21 +408,21 @@ class DlsiteDownloadService : Service() {
                         work.withCoverUri(result.coverUri)
                     }
                     if (contentDownload) {
-                        downloadRepository!!.markImported(
+                        repository.markImported(
                             downloadedWork,
                             result.playlistId,
                             result.localPath,
                             result.trackCount,
                         )
                     } else {
-                        downloadRepository!!.markDownloaded(
+                        repository.markDownloaded(
                             downloadedWork,
                             result.playlistId,
                             result.localPath,
                             result.trackCount,
                         )
                     }
-                    downloadRepository!!.markDownloadQueueTaskCompleted(request.taskId)
+                    repository.markDownloadQueueTaskCompleted(request.taskId)
                     dlsiteDownloadStateStore!!.publishCompleted(work.workId, work.displayTitle())
                     updateNotification()
                 }

@@ -8,8 +8,8 @@ object DlsiteWebvttJsonParser {
     private val COLON_PATTERN: Pattern = Pattern.compile(":")
 
     @Throws(DlsiteJsonParser.IOExceptionLikeJsonException::class)
-    fun parseWebvttJson(json: String?): String {
-        val trimmed = if (json == null) "" else javaTrim(json)
+    fun parseWebvttJson(json: String): String {
+        val trimmed = javaTrim(json)
         if (trimmed.startsWith("WEBVTT")) {
             return if (trimmed.endsWith("\n")) trimmed else "$trimmed\n"
         }

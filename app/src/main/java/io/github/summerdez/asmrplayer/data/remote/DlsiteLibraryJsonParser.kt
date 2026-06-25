@@ -7,7 +7,7 @@ import java.util.Locale
 object DlsiteLibraryJsonParser {
     private const val PLAY_BASE_URL = "https://play.dlsite.com"
 
-    fun isAuthorized(json: String?): Boolean {
+    fun isAuthorized(json: String): Boolean {
         return try {
             when (val root = DlsiteJsonSupport.parse(json)) {
                 is Map<*, *> -> root.isNotEmpty()
@@ -20,7 +20,7 @@ object DlsiteLibraryJsonParser {
     }
 
     @Throws(DlsiteJsonParser.IOExceptionLikeJsonException::class)
-    fun parseContentCount(json: String?): DlsiteJsonParser.ContentCount {
+    fun parseContentCount(json: String): DlsiteJsonParser.ContentCount {
         return try {
             val data = DlsiteJsonSupport.asObject(DlsiteJsonSupport.parse(json))
             DlsiteJsonParser.ContentCount(
@@ -34,7 +34,7 @@ object DlsiteLibraryJsonParser {
     }
 
     @Throws(DlsiteJsonParser.IOExceptionLikeJsonException::class)
-    fun parseSalesWorkIds(json: String?): List<String> {
+    fun parseSalesWorkIds(json: String): List<String> {
         return try {
             parseWorkIds(json, "sales")
         } catch (exception: IllegalArgumentException) {
@@ -43,7 +43,7 @@ object DlsiteLibraryJsonParser {
     }
 
     @Throws(DlsiteJsonParser.IOExceptionLikeJsonException::class)
-    fun parseHistoryWorkIds(json: String?): List<String> {
+    fun parseHistoryWorkIds(json: String): List<String> {
         return try {
             parseWorkIds(json, "histories")
         } catch (exception: IllegalArgumentException) {
@@ -52,7 +52,7 @@ object DlsiteLibraryJsonParser {
     }
 
     @Throws(DlsiteJsonParser.IOExceptionLikeJsonException::class)
-    fun parseContentWorks(json: String?): List<DlsiteWork> {
+    fun parseContentWorks(json: String): List<DlsiteWork> {
         return try {
             val array = DlsiteJsonSupport.arrayFromRoot(DlsiteJsonSupport.parse(json), "works")
             val works = ArrayList<DlsiteWork>()
@@ -69,7 +69,7 @@ object DlsiteLibraryJsonParser {
     }
 
     @Throws(DlsiteJsonParser.IOExceptionLikeJsonException::class)
-    fun parseWorkDetail(json: String?): DlsiteWork? {
+    fun parseWorkDetail(json: String): DlsiteWork? {
         return try {
             val root = DlsiteJsonSupport.asObject(DlsiteJsonSupport.parse(json))
             val work = DlsiteJsonSupport.asObjectOrNull(root["work"])
@@ -79,7 +79,7 @@ object DlsiteLibraryJsonParser {
         }
     }
 
-    private fun parseWorkIds(json: String?, key: String): List<String> {
+    private fun parseWorkIds(json: String, key: String): List<String> {
         val array = DlsiteJsonSupport.arrayFromRoot(DlsiteJsonSupport.parse(json), key)
         val ids = ArrayList<String>()
         for (value in array) {

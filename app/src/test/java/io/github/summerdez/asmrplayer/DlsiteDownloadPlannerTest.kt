@@ -93,6 +93,13 @@ class DlsiteDownloadPlannerTest {
         assertTrue(options.none { it.id.contains("|") })
     }
 
+    @Test
+    fun emptyAudioFilesReturnNoOptions() {
+        val options = DlsiteDownloadPlanner.optionsFor(ziptree())
+
+        assertTrue(options.isEmpty())
+    }
+
     private fun ziptree(vararg files: DlsiteJsonParser.ContentFile): DlsiteJsonParser.DlsiteZiptree {
         return DlsiteJsonParser.DlsiteZiptree("RJ00000001", "revision", files.toList())
     }

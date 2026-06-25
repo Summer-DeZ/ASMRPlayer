@@ -18,7 +18,6 @@ import java.io.IOException
 import java.io.InterruptedIOException
 import java.nio.charset.Charset
 import java.nio.charset.StandardCharsets
-import java.util.Collections
 import java.util.Locale
 import java.util.UUID
 import java.util.zip.ZipInputStream
@@ -29,20 +28,20 @@ class DlsiteDownloadTask private constructor() {
 
         @Throws(IOException::class)
         fun downloadAndImport(
-            context: Context?,
-            dlsiteApi: DlsiteApi?,
-            repository: DlsiteDownloadBlockingAdapter?,
-            work: DlsiteWork?,
+            context: Context,
+            dlsiteApi: DlsiteApi,
+            repository: DlsiteDownloadBlockingAdapter,
+            work: DlsiteWork,
         ): Result {
             return downloadAndImport(context, dlsiteApi, repository, work, "")
         }
 
         @Throws(IOException::class)
         fun downloadAndImport(
-            context: Context?,
-            dlsiteApi: DlsiteApi?,
-            repository: DlsiteDownloadBlockingAdapter?,
-            work: DlsiteWork?,
+            context: Context,
+            dlsiteApi: DlsiteApi,
+            repository: DlsiteDownloadBlockingAdapter,
+            work: DlsiteWork,
             downloadOptionId: String?,
         ): Result {
             val optionIds = ArrayList<String>()
@@ -54,21 +53,21 @@ class DlsiteDownloadTask private constructor() {
 
         @Throws(IOException::class)
         fun downloadAndImport(
-            context: Context?,
-            dlsiteApi: DlsiteApi?,
-            repository: DlsiteDownloadBlockingAdapter?,
-            work: DlsiteWork?,
+            context: Context,
+            dlsiteApi: DlsiteApi,
+            repository: DlsiteDownloadBlockingAdapter,
+            work: DlsiteWork,
             downloadOptionIds: List<String>?,
             listener: ContentListener?,
         ): Result {
-            val importWork = work!!.withEnsuredCoverUrl()
-            val workDir = File(context!!.filesDir, "dlsite/works/" + importWork.workId)
+            val importWork = work.withEnsuredCoverUrl()
+            val workDir = File(context.filesDir, "dlsite/works/" + importWork.workId)
 
             if (!workDir.mkdirs() && !workDir.isDirectory) {
                 throw IOException("无法创建作品目录")
             }
 
-            val options = dlsiteApi!!.fetchDownloadOptions(importWork)
+            val options = dlsiteApi.fetchDownloadOptions(importWork)
             val selectedOptions = selectedOptions(options, downloadOptionIds)
             if (selectedOptions.isEmpty()) {
                 throw IOException("没有找到可下载的内容")
@@ -161,35 +160,33 @@ class DlsiteDownloadTask private constructor() {
         }
 
         @Throws(IOException::class)
-        fun deleteCache(context: Context?, work: DlsiteWork?) {
-            if (work == null || TextUtils.isEmpty(work.workId)) {
+        fun deleteCache(context: Context, work: DlsiteWork) {
+            if (TextUtils.isEmpty(work.workId)) {
                 return
             }
-            val workDir = File(context!!.filesDir, "dlsite/works/" + work.workId)
+            val workDir = File(context.filesDir, "dlsite/works/" + work.workId)
             deleteRecursively(workDir)
         }
 
         @Throws(IOException::class)
-        fun deleteContentCache(context: Context?, work: DlsiteWork?, optionId: String?) {
-            if (work == null || TextUtils.isEmpty(work.workId)) {
+        fun deleteContentCache(context: Context, work: DlsiteWork, optionId: String?) {
+            if (TextUtils.isEmpty(work.workId)) {
                 return
             }
-            val workDir = File(context!!.filesDir, "dlsite/works/" + work.workId)
+            val workDir = File(context.filesDir, "dlsite/works/" + work.workId)
             deleteRecursively(File(File(workDir, "contents"), safeContentId(optionId)))
         }
 
         private fun importPlaylist(
-            context: Context?,
-            repository: DlsiteDownloadBlockingAdapter?,
-            work: DlsiteWork?,
+            context: Context,
+            repository: DlsiteDownloadBlockingAdapter,
+            work: DlsiteWork,
             audioFiles: List<File>,
             coverFile: File?,
         ): ImportResult {
-            val repo = repository!!
-            val sourceWork = work!!
-            val playlist = repo.getPlaylist(sourceWork.playlistId) ?: repo.createPlaylist(sourceWork.displayTitle())
+            val playlist = repository.getPlaylist(work.playlistId) ?: repository.createPlaylist(work.displayTitle())
             if (coverFile != null && coverFile.isFile) {
-                repo.setPlaylistCover(playlist.id, Uri.fromFile(coverFile).toString())
+                repository.setPlaylistCover(playlist.id, Uri.fromFile(coverFile).toString())
             }
             val existingUris = HashSet<String>()
             val existingTrackIdsByUri = HashMap<String, String>()
@@ -211,7 +208,7 @@ class DlsiteDownloadTask private constructor() {
                 }
                 val subtitleFile = subtitles[normalizedName(audioFile.name + ".vtt")]
                 val trackId = UUID.randomUUID().toString()
-                repo.addTrack(
+                repository.addTrack(
                     playlist.id,
                     TrackItem(
                         trackId,
@@ -227,7 +224,7 @@ class DlsiteDownloadTask private constructor() {
                 existingTrackIdsByUri[audioUri] = trackId
                 trackIdsByPath[audioFile.absolutePath] = trackId
             }
-            val updated = repo.getPlaylist(playlist.id)
+            val updated = repository.getPlaylist(playlist.id)
             return ImportResult(
                 playlist.id,
                 addedTrackIds,
@@ -237,14 +234,11 @@ class DlsiteDownloadTask private constructor() {
         }
 
         fun contentResultsForImport(
-            downloadedContents: List<DownloadedContent>?,
-            importResult: ImportResult?,
+            downloadedContents: List<DownloadedContent>,
+            importResult: ImportResult,
         ): List<ContentResult> {
             val contentResults = ArrayList<ContentResult>()
-            if (downloadedContents == null) {
-                return contentResults
-            }
-            val trackIdsByPath = importResult?.trackIdsByPath ?: Collections.emptyMap()
+            val trackIdsByPath = importResult.trackIdsByPath
             for (content in downloadedContents) {
                 val trackIds = ArrayList<String>()
                 for (audioFile in content.audioFiles) {
@@ -255,9 +249,9 @@ class DlsiteDownloadTask private constructor() {
                 }
                 contentResults.add(
                     ContentResult(
-                        content.option!!.id,
+                        content.option.id,
                         content.option.title,
-                        content.contentDir!!.absolutePath,
+                        content.contentDir.absolutePath,
                         trackIds,
                         content.audioFiles.size,
                     ),
@@ -268,11 +262,11 @@ class DlsiteDownloadTask private constructor() {
 
         @Throws(IOException::class)
         private fun selectedOptions(
-            options: List<DlsiteDownloadOption>?,
+            options: List<DlsiteDownloadOption>,
             downloadOptionIds: List<String>?,
         ): List<DlsiteDownloadOption> {
-            if (options == null || options.isEmpty()) {
-                return Collections.emptyList()
+            if (options.isEmpty()) {
+                return emptyList()
             }
             if (downloadOptionIds == null || downloadOptionIds.isEmpty()) {
                 return options
@@ -295,23 +289,23 @@ class DlsiteDownloadTask private constructor() {
         }
 
         private fun safeContentId(optionId: String?): String {
-            val id = if (TextUtils.isEmpty(optionId)) "default" else optionId
+            val id = optionId?.takeIf { it.isNotEmpty() } ?: "default"
             return safeFileName(id)
         }
 
-        private fun downloadCover(dlsiteApi: DlsiteApi?, work: DlsiteWork?, workDir: File): File? {
-            if (TextUtils.isEmpty(work!!.coverUrl)) {
+        private fun downloadCover(dlsiteApi: DlsiteApi, work: DlsiteWork, workDir: File): File? {
+            if (TextUtils.isEmpty(work.coverUrl)) {
                 return null
             }
             return try {
-                dlsiteApi!!.downloadCover(work, File(workDir, "cover"))
+                dlsiteApi.downloadCover(work, File(workDir, "cover"))
             } catch (ignored: IOException) {
                 null
             }
         }
 
-        private fun existingCoverFile(work: DlsiteWork?): File? {
-            if (work == null || TextUtils.isEmpty(work.coverUri)) {
+        private fun existingCoverFile(work: DlsiteWork): File? {
+            if (TextUtils.isEmpty(work.coverUri)) {
                 return null
             }
             return try {
@@ -479,13 +473,13 @@ class DlsiteDownloadTask private constructor() {
             }
         }
 
-        private fun safeFileName(value: String?): String {
-            val safe = if (TextUtils.isEmpty(value)) "download" else value!!
+        private fun safeFileName(value: String): String {
+            val safe = value.ifEmpty { "download" }
             return safe.replace("[\\\\/:*?\"<>|]+".toRegex(), "_")
         }
 
-        private fun normalizedName(value: String?): String {
-            return (value ?: "").trim().lowercase(Locale.ROOT)
+        private fun normalizedName(value: String): String {
+            return value.trim().lowercase(Locale.ROOT)
         }
 
         @Throws(InterruptedIOException::class)
@@ -496,42 +490,14 @@ class DlsiteDownloadTask private constructor() {
         }
     }
 
-    class Result {
-        val playlistId: String
-
-        val localPath: String
-
-        val trackCount: Int
-
-        val coverUri: String
-
-        val contentResults: List<ContentResult>
-
-        constructor(playlistId: String?, localPath: String?, trackCount: Int, coverUri: String?) : this(
-            playlistId,
-            localPath,
-            trackCount,
-            coverUri,
-            Collections.emptyList(),
-        )
-
-        constructor(
-            playlistId: String?,
-            localPath: String?,
-            trackCount: Int,
-            coverUri: String?,
-            contentResults: List<ContentResult>?,
-        ) {
-            this.playlistId = playlistId ?: ""
-            this.localPath = localPath ?: ""
-            this.trackCount = trackCount
-            this.coverUri = coverUri ?: ""
-            this.contentResults = if (contentResults == null) {
-                Collections.emptyList()
-            } else {
-                ArrayList(contentResults)
-            }
-        }
+    class Result(
+        val playlistId: String,
+        val localPath: String,
+        val trackCount: Int,
+        val coverUri: String,
+        contentResults: List<ContentResult> = emptyList(),
+    ) {
+        val contentResults: List<ContentResult> = ArrayList(contentResults)
     }
 
     interface ContentListener {
@@ -553,7 +519,7 @@ class DlsiteDownloadTask private constructor() {
         val totalBytes: Long = totalBytes
     }
 
-    class DownloadProgressTracker(options: List<DlsiteDownloadOption?>?) {
+    class DownloadProgressTracker(options: List<DlsiteDownloadOption>) {
         private val entries = ArrayList<ProgressEntry>()
         private val totalBytes: Long
 
@@ -561,26 +527,16 @@ class DlsiteDownloadTask private constructor() {
             var total = 0L
             var hasFiles = false
             var hasUnknownLength = false
-            if (options != null) {
-                for (option in options) {
-                    if (option == null) {
-                        continue
+            for (option in options) {
+                for (file in option.audioFiles) {
+                    hasFiles = true
+                    val lengthBytes = file.lengthBytes
+                    if (lengthBytes <= 0L) {
+                        hasUnknownLength = true
+                    } else {
+                        total += lengthBytes
                     }
-                    @Suppress("UNCHECKED_CAST")
-                    val files = option.audioFiles as List<DlsiteJsonParser.ContentFile?>
-                    for (file in files) {
-                        if (file == null) {
-                            continue
-                        }
-                        hasFiles = true
-                        val lengthBytes = file.lengthBytes
-                        if (lengthBytes <= 0L) {
-                            hasUnknownLength = true
-                        } else {
-                            total += lengthBytes
-                        }
-                        entries.add(ProgressEntry(option.id, file, lengthBytes))
-                    }
+                    entries.add(ProgressEntry(option.id, file, lengthBytes))
                 }
             }
             totalBytes = if (hasFiles && !hasUnknownLength && total > 0L) total else -1L
@@ -591,8 +547,8 @@ class DlsiteDownloadTask private constructor() {
         }
 
         fun onFileProgress(
-            option: DlsiteDownloadOption?,
-            contentFile: DlsiteJsonParser.ContentFile?,
+            option: DlsiteDownloadOption,
+            contentFile: DlsiteJsonParser.ContentFile,
             fileBytesDownloaded: Long,
             fileTotalBytes: Long,
         ): TaskProgress {
@@ -605,10 +561,7 @@ class DlsiteDownloadTask private constructor() {
             return snapshot()
         }
 
-        fun markOptionComplete(option: DlsiteDownloadOption?, audioFiles: List<File?>?) {
-            if (option == null) {
-                return
-            }
+        fun markOptionComplete(option: DlsiteDownloadOption, audioFiles: List<File>) {
             for (entry in entries) {
                 if (entry.optionId != option.id) {
                     continue
@@ -617,7 +570,7 @@ class DlsiteDownloadTask private constructor() {
                 if (completedBytes <= 0L) {
                     completedBytes = entry.responseTotalBytes
                 }
-                if (completedBytes <= 0L && audioFiles != null) {
+                if (completedBytes <= 0L) {
                     completedBytes = matchingLocalLength(entry.contentFile, audioFiles)
                 }
                 if (completedBytes > 0L) {
@@ -639,12 +592,9 @@ class DlsiteDownloadTask private constructor() {
         }
 
         private fun indexOf(
-            option: DlsiteDownloadOption?,
-            contentFile: DlsiteJsonParser.ContentFile?,
+            option: DlsiteDownloadOption,
+            contentFile: DlsiteJsonParser.ContentFile,
         ): Int {
-            if (option == null || contentFile == null) {
-                return -1
-            }
             for (i in entries.indices) {
                 val entry = entries[i]
                 if (entry.optionId == option.id && sameContentFile(entry.contentFile, contentFile)) {
@@ -655,25 +605,19 @@ class DlsiteDownloadTask private constructor() {
         }
 
         private fun sameContentFile(
-            left: DlsiteJsonParser.ContentFile?,
-            right: DlsiteJsonParser.ContentFile?,
+            left: DlsiteJsonParser.ContentFile,
+            right: DlsiteJsonParser.ContentFile,
         ): Boolean {
-            return left != null &&
-                right != null &&
-                left.contentPath == right.contentPath &&
+            return left.contentPath == right.contentPath &&
                 left.displayPath == right.displayPath
         }
 
         private fun matchingLocalLength(
-            contentFile: DlsiteJsonParser.ContentFile?,
-            audioFiles: List<File?>?,
+            contentFile: DlsiteJsonParser.ContentFile,
+            audioFiles: List<File>,
         ): Long {
-            if (contentFile == null || audioFiles == null) {
-                return 0L
-            }
             for (audioFile in audioFiles) {
-                if (audioFile != null &&
-                    audioFile.isFile &&
+                if (audioFile.isFile &&
                     audioFile.name == Companion.safeFileName(contentFile.displayName)
                 ) {
                     return audioFile.length()
@@ -684,88 +628,41 @@ class DlsiteDownloadTask private constructor() {
     }
 
     private class ProgressEntry(
-        optionId: String?,
+        val optionId: String,
         val contentFile: DlsiteJsonParser.ContentFile,
         lengthBytes: Long,
     ) {
-        val optionId: String = optionId ?: ""
         val lengthBytes: Long = lengthBytes.coerceAtLeast(0L)
         var bytesDownloaded: Long = 0L
         var responseTotalBytes: Long = -1L
     }
 
     class ContentResult(
-        optionId: String?,
-        title: String?,
-        localPath: String?,
-        trackIds: List<String>?,
-        trackCount: Int,
+        val optionId: String,
+        val title: String,
+        val localPath: String,
+        trackIds: List<String>,
+        val trackCount: Int,
     ) {
-        val optionId: String = optionId ?: ""
-
-        val title: String = title ?: ""
-
-        val localPath: String = localPath ?: ""
-
-        val trackIds: List<String> = if (trackIds == null) {
-            Collections.emptyList()
-        } else {
-            ArrayList(trackIds)
-        }
-
-        val trackCount: Int = trackCount
+        val trackIds: List<String> = ArrayList(trackIds)
     }
 
     class DownloadedContent(
-        option: DlsiteDownloadOption?,
-        contentDir: File?,
-        audioFiles: List<File>?,
+        val option: DlsiteDownloadOption,
+        val contentDir: File,
+        audioFiles: List<File>,
     ) {
-        val option: DlsiteDownloadOption? = option
-
-        val contentDir: File? = contentDir
-
-        val audioFiles: List<File> = if (audioFiles == null) {
-            Collections.emptyList()
-        } else {
-            ArrayList(audioFiles)
-        }
+        val audioFiles: List<File> = ArrayList(audioFiles)
     }
 
-    class ImportResult {
-        val playlistId: String
+    class ImportResult(
+        val playlistId: String,
+        addedTrackIds: List<String>,
+        val totalTrackCount: Int,
+        trackIdsByPath: Map<String, String> = emptyMap(),
+    ) {
+        val addedTrackIds: List<String> = ArrayList(addedTrackIds)
 
-        val addedTrackIds: List<String>
-
-        val totalTrackCount: Int
-
-        val trackIdsByPath: Map<String, String>
-
-        constructor(playlistId: String?, addedTrackIds: List<String>?, totalTrackCount: Int) : this(
-            playlistId,
-            addedTrackIds,
-            totalTrackCount,
-            Collections.emptyMap(),
-        )
-
-        constructor(
-            playlistId: String?,
-            addedTrackIds: List<String>?,
-            totalTrackCount: Int,
-            trackIdsByPath: Map<String, String>?,
-        ) {
-            this.playlistId = playlistId ?: ""
-            this.addedTrackIds = if (addedTrackIds == null) {
-                Collections.emptyList()
-            } else {
-                ArrayList(addedTrackIds)
-            }
-            this.totalTrackCount = totalTrackCount
-            this.trackIdsByPath = if (trackIdsByPath == null) {
-                Collections.emptyMap()
-            } else {
-                HashMap(trackIdsByPath)
-            }
-        }
+        val trackIdsByPath: Map<String, String> = HashMap(trackIdsByPath)
     }
 }

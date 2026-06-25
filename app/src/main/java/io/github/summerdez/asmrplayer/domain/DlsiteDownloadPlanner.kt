@@ -4,8 +4,8 @@ import io.github.summerdez.asmrplayer.data.remote.DlsiteJsonParser
 import io.github.summerdez.asmrplayer.domain.model.DlsiteDownloadOption
 
 object DlsiteDownloadPlanner {
-    fun optionsFor(ziptree: DlsiteJsonParser.DlsiteZiptree?): List<DlsiteDownloadOption> {
-        val files = ziptree?.audioFiles.orEmpty()
+    fun optionsFor(ziptree: DlsiteJsonParser.DlsiteZiptree): List<DlsiteDownloadOption> {
+        val files = ziptree.audioFiles
         if (files.isEmpty()) {
             return emptyList()
         }
@@ -28,8 +28,8 @@ object DlsiteDownloadPlanner {
         }
     }
 
-    private fun parentPath(displayPath: String?): List<String> {
-        val segments = displayPath.orEmpty()
+    private fun parentPath(displayPath: String): List<String> {
+        val segments = displayPath
             .split("/")
             .map { it.trim() }
             .filter { it.isNotEmpty() }
