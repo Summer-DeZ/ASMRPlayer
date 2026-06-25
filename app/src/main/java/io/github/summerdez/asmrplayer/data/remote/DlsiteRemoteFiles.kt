@@ -15,8 +15,8 @@ import java.util.regex.Pattern
 object DlsiteRemoteFiles {
     private val pathSeparator: Pattern = Pattern.compile("/")
 
-    fun encodePath(path: String?): String {
-        if (path.isNullOrEmpty()) {
+    fun encodePath(path: String): String {
+        if (path.isEmpty()) {
             return ""
         }
         val segments = pathSeparator.split(path)
@@ -30,9 +30,9 @@ object DlsiteRemoteFiles {
         return builder.toString()
     }
 
-    fun encodeQueryValue(value: String?): String {
+    fun encodeQueryValue(value: String): String {
         return try {
-            URLEncoder.encode(value ?: "", StandardCharsets.UTF_8.name())
+            URLEncoder.encode(value, StandardCharsets.UTF_8.name())
                 .replace("+", "%20")
         } catch (exception: IOException) {
             ""
@@ -65,8 +65,8 @@ object DlsiteRemoteFiles {
         return candidate
     }
 
-    fun safeFileName(value: String?): String {
-        var safe = if (value.isNullOrEmpty()) "download" else value.trim { it <= ' ' }
+    fun safeFileName(value: String): String {
+        var safe = if (value.isEmpty()) "download" else value.trim { it <= ' ' }
         safe = safe.replace(Regex("[\\\\/:*?\"<>|]+"), "_")
         if (safe == "." || safe == "..") {
             return "download"
@@ -75,8 +75,8 @@ object DlsiteRemoteFiles {
     }
 
     @Throws(IOException::class)
-    fun looksLikeHtml(file: File?): Boolean {
-        if (file == null || !file.isFile) {
+    fun looksLikeHtml(file: File): Boolean {
+        if (!file.isFile) {
             return false
         }
         val header = ByteArray(minOf(128L, file.length()).toInt())
@@ -93,8 +93,8 @@ object DlsiteRemoteFiles {
     }
 
     @Throws(IOException::class)
-    fun looksLikeJson(file: File?): Boolean {
-        if (file == null || !file.isFile) {
+    fun looksLikeJson(file: File): Boolean {
+        if (!file.isFile) {
             return false
         }
         val header = ByteArray(minOf(128L, file.length()).toInt())
@@ -137,10 +137,7 @@ object DlsiteRemoteFiles {
         }
     }
 
-    fun summarizeBody(body: String?): String {
-        if (body == null) {
-            return ""
-        }
+    fun summarizeBody(body: String): String {
         val text = body.replace(Regex("\\s+"), " ").trim { it <= ' ' }
         return if (text.length <= 160) text else text.substring(0, 160)
     }
