@@ -14,16 +14,16 @@ object DlsiteHtmlParser {
     )
     private val WORK_ID: Pattern = Pattern.compile("""\b(?:RJ|RE|BJ|VJ)\d{5,10}\b""", Pattern.CASE_INSENSITIVE)
 
-    fun parsePurchasedWorks(html: String?, pageUrl: String?): List<DlsiteWork> {
+    fun parsePurchasedWorks(html: String, pageUrl: String): List<DlsiteWork> {
         val works = LinkedHashMap<String, DlsiteWork>()
-        if (html == null || html.isEmpty()) {
+        if (html.isEmpty()) {
             return ArrayList()
         }
 
         val anchorMatcher = ANCHOR.matcher(html)
         while (anchorMatcher.find()) {
-            val attrs = anchorMatcher.group(1)
-            val body = anchorMatcher.group(2)
+            val attrs = anchorMatcher.group(1).orEmpty()
+            val body = anchorMatcher.group(2).orEmpty()
             val href = hrefFrom(attrs)
             val text = cleanText(body)
             val workId = workIdFrom("$href $text")
@@ -50,14 +50,11 @@ object DlsiteHtmlParser {
         return ArrayList(works.values)
     }
 
-    fun findDownloadUrlForWork(html: String?, pageUrl: String?, workId: String?): String {
-        if (html == null || workId == null) {
-            return ""
-        }
+    fun findDownloadUrlForWork(html: String, pageUrl: String, workId: String): String {
         val anchorMatcher = ANCHOR.matcher(html)
         while (anchorMatcher.find()) {
-            val attrs = anchorMatcher.group(1)
-            val body = anchorMatcher.group(2)
+            val attrs = anchorMatcher.group(1).orEmpty()
+            val body = anchorMatcher.group(2).orEmpty()
             val href = hrefFrom(attrs)
             val haystack = "$href ${cleanText(body)}"
             if (workId.equals(workIdFrom(haystack), ignoreCase = true) && looksLikeDownloadUrl(href)) {
@@ -67,13 +64,10 @@ object DlsiteHtmlParser {
         return ""
     }
 
-    fun findFirstDownloadUrl(html: String?, pageUrl: String?): String {
-        if (html == null) {
-            return ""
-        }
+    fun findFirstDownloadUrl(html: String, pageUrl: String): String {
         val anchorMatcher = ANCHOR.matcher(html)
         while (anchorMatcher.find()) {
-            val href = hrefFrom(anchorMatcher.group(1))
+            val href = hrefFrom(anchorMatcher.group(1).orEmpty())
             if (looksLikeDownloadUrl(href)) {
                 return absoluteUrl(pageUrl, href)
             }
@@ -81,25 +75,25 @@ object DlsiteHtmlParser {
         return ""
     }
 
-    fun findCoverUrl(html: String?, pageUrl: String?, workId: String?): String {
-        if (html == null || html.isEmpty()) {
+    fun findCoverUrl(html: String, pageUrl: String, workId: String): String {
+        if (html.isEmpty()) {
             return ""
         }
 
         val candidates = ArrayList<String>()
         val attrMatcher = IMAGE_ATTR.matcher(html)
         while (attrMatcher.find()) {
-            val url = decodeHtml(attrMatcher.group(2)).trim()
+            val url = decodeHtml(attrMatcher.group(2).orEmpty()).trim()
             addCoverCandidate(candidates, pageUrl, url)
         }
 
         val urlMatcher = IMAGE_URL.matcher(html)
         while (urlMatcher.find()) {
-            val url = decodeHtml(urlMatcher.group()).trim()
+            val url = decodeHtml(urlMatcher.group().orEmpty()).trim()
             addCoverCandidate(candidates, pageUrl, url)
         }
 
-        val lowerWorkId = workId?.lowercase(Locale.ROOT) ?: ""
+        val lowerWorkId = workId.lowercase(Locale.ROOT)
         if (lowerWorkId.isNotEmpty()) {
             for (candidate in candidates) {
                 if (candidate.lowercase(Locale.ROOT).contains(lowerWorkId)) {
@@ -110,7 +104,7 @@ object DlsiteHtmlParser {
         return if (candidates.isEmpty()) "" else candidates[0]
     }
 
-    private fun addCoverCandidate(candidates: MutableList<String>, pageUrl: String?, url: String) {
+    private fun addCoverCandidate(candidates: MutableList<String>, pageUrl: String, url: String) {
         if (!looksLikeCoverUrl(url)) {
             return
         }
@@ -120,45 +114,45 @@ object DlsiteHtmlParser {
         }
     }
 
-    private fun hrefFrom(attrs: String?): String {
-        val matcher = HREF.matcher(attrs ?: "")
-        return if (matcher.find()) decodeHtml(matcher.group(2)).trim() else ""
+    private fun hrefFrom(attrs: String): String {
+        val matcher = HREF.matcher(attrs)
+        return if (matcher.find()) decodeHtml(matcher.group(2).orEmpty()).trim() else ""
     }
 
-    private fun workIdFrom(value: String?): String {
-        val matcher = WORK_ID.matcher(value ?: "")
-        return if (matcher.find()) matcher.group().uppercase(Locale.ROOT) else ""
+    private fun workIdFrom(value: String): String {
+        val matcher = WORK_ID.matcher(value)
+        return if (matcher.find()) matcher.group().orEmpty().uppercase(Locale.ROOT) else ""
     }
 
-    private fun titleFrom(text: String?, workId: String): String {
-        var title = (text ?: "").replace(workId, "").trim()
+    private fun titleFrom(text: String, workId: String): String {
+        var title = text.replace(workId, "").trim()
         title = title.replace(Regex("\\s+"), " ")
         return title.ifEmpty { workId }
     }
 
-    private fun cleanText(html: String?): String {
-        val withoutTags = (html ?: "")
+    private fun cleanText(html: String): String {
+        val withoutTags = html
             .replace(Regex("(?is)<script.*?</script>"), "")
             .replace(Regex("(?is)<style.*?</style>"), "")
             .replace(Regex("(?is)<[^>]+>"), " ")
         return decodeHtml(withoutTags).replace(Regex("\\s+"), " ").trim()
     }
 
-    private fun looksLikeDownloadUrl(url: String?): Boolean {
-        val lower = (url ?: "").lowercase(Locale.ROOT)
+    private fun looksLikeDownloadUrl(url: String): Boolean {
+        val lower = url.lowercase(Locale.ROOT)
         return lower.contains("download") ||
             lower.contains("dl_count") ||
             lower.contains("product_file") ||
             lower.contains("file_type")
     }
 
-    private fun looksLikeDetailUrl(url: String?): Boolean {
-        val lower = (url ?: "").lowercase(Locale.ROOT)
+    private fun looksLikeDetailUrl(url: String): Boolean {
+        val lower = url.lowercase(Locale.ROOT)
         return lower.contains("product_id") || lower.contains("/work/") || lower.contains("dlsite.com")
     }
 
-    private fun looksLikeCoverUrl(url: String?): Boolean {
-        val lower = (url ?: "").lowercase(Locale.ROOT)
+    private fun looksLikeCoverUrl(url: String): Boolean {
+        val lower = url.lowercase(Locale.ROOT)
         if (!lower.contains("img.dlsite.jp") || !lower.contains("/work/")) {
             return false
         }
@@ -168,21 +162,20 @@ object DlsiteHtmlParser {
         return true
     }
 
-    private fun absoluteUrl(pageUrl: String?, href: String?): String {
-        if (href == null || href.isEmpty()) {
+    private fun absoluteUrl(pageUrl: String, href: String): String {
+        if (href.isEmpty()) {
             return ""
         }
         try {
-            val baseUrl = pageUrl ?: throw NullPointerException()
-            val base = URI.create(baseUrl)
+            val base = URI.create(pageUrl)
             return base.resolve(href).toString()
         } catch (ignored: IllegalArgumentException) {
             return href
         }
     }
 
-    private fun decodeHtml(value: String?): String {
-        return (value ?: "")
+    private fun decodeHtml(value: String): String {
+        return value
             .replace("&amp;", "&")
             .replace("&quot;", "\"")
             .replace("&#039;", "'")

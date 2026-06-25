@@ -113,7 +113,7 @@ class DlsiteCoverRemote(private val httpClient: DlsiteHttpClient) {
 
     private fun resolveCoverUrl(work: DlsiteWork): String {
         val workId = work.workId
-        if (TextUtils.isEmpty(workId)) {
+        if (workId.isEmpty()) {
             return ""
         }
 
@@ -146,23 +146,22 @@ class DlsiteCoverRemote(private val httpClient: DlsiteHttpClient) {
         return ""
     }
 
-    private fun publicWorkUrls(workId: String?): List<String> {
+    private fun publicWorkUrls(workId: String): List<String> {
         val urls = ArrayList<String>()
-        if (TextUtils.isEmpty(workId)) {
+        if (workId.isEmpty()) {
             return urls
         }
-        val id = workId ?: return urls
-        val first = id[0].uppercaseChar()
+        val first = workId[0].uppercaseChar()
         if (first == 'B') {
-            urls.add("https://www.dlsite.com/books/work/=/product_id/$id.html")
+            urls.add("https://www.dlsite.com/books/work/=/product_id/$workId.html")
             return urls
         }
         if (first == 'V') {
-            urls.add("https://www.dlsite.com/pro/work/=/product_id/$id.html")
+            urls.add("https://www.dlsite.com/pro/work/=/product_id/$workId.html")
             return urls
         }
-        urls.add("https://www.dlsite.com/maniax/work/=/product_id/$id.html")
-        urls.add("https://www.dlsite.com/home/work/=/product_id/$id.html")
+        urls.add("https://www.dlsite.com/maniax/work/=/product_id/$workId.html")
+        urls.add("https://www.dlsite.com/home/work/=/product_id/$workId.html")
         return urls
     }
 
@@ -180,7 +179,7 @@ class DlsiteCoverRemote(private val httpClient: DlsiteHttpClient) {
     }
 
     @Throws(IOException::class)
-    private fun getCoverPage(url: String?): String {
+    private fun getCoverPage(url: String): String {
         return httpClient.text(
             url,
             DlsiteRemoteConstants.DL_SITE_COOKIE_URL,

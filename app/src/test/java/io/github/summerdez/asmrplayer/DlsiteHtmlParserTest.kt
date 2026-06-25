@@ -7,6 +7,36 @@ import org.junit.Test
 
 class DlsiteHtmlParserTest {
     @Test
+    fun emptyHtmlInputsReturnEmptyResults() {
+        val works = DlsiteHtmlParser.parsePurchasedWorks("", "https://www.dlsite.com/home/mypage/userbuy")
+
+        assertEquals(0, works.size)
+        assertEquals(
+            "",
+            DlsiteHtmlParser.findFirstDownloadUrl(
+                "",
+                "https://www.dlsite.com/maniax/work/=/product_id/RJ654321.html",
+            ),
+        )
+        assertEquals(
+            "",
+            DlsiteHtmlParser.findDownloadUrlForWork(
+                "",
+                "https://www.dlsite.com/home/mypage/userbuy",
+                "RJ123456",
+            ),
+        )
+        assertEquals(
+            "",
+            DlsiteHtmlParser.findCoverUrl(
+                "",
+                "https://www.dlsite.com/maniax/work/=/product_id/RJ432317.html",
+                "RJ432317",
+            ),
+        )
+    }
+
+    @Test
     fun parsePurchasedWorksUsesWorkIdTitleAndLinks() {
         val html = """
             <html>
@@ -65,6 +95,22 @@ class DlsiteHtmlParserTest {
 
         assertEquals(
             "https://img.dlsite.jp/modpub/images2/work/doujin/RJ01256000/RJ01255129_img_main.jpg",
+            url,
+        )
+    }
+
+    @Test
+    fun findCoverUrlKeepsCandidateWhenBaseUrlIsInvalid() {
+        val html = """
+            <html>
+              <img src="//img.dlsite.jp/modpub/images2/work/doujin/RJ433000/RJ432317_img_main.jpg">
+            </html>
+        """.trimIndent()
+
+        val url = DlsiteHtmlParser.findCoverUrl(html, "not a url", "RJ432317")
+
+        assertEquals(
+            "//img.dlsite.jp/modpub/images2/work/doujin/RJ433000/RJ432317_img_main.jpg",
             url,
         )
     }

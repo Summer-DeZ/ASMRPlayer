@@ -63,6 +63,7 @@
 - [x] 需要做：Phase F/C3 DLsite 下载任务非空数据流切片：`DlsiteDownloadPlanner.optionsFor`、`DlsiteDownloadTask.downloadAndImport` 必填协作者、`DownloadProgressTracker`、`Result` / `ContentResult` / `DownloadedContent` / `ImportResult` 内部构造数据改为非空 Kotlin 类型；下载内容 `optionId` 和封面/错误等业务可缺失字段在当时继续保留 nullable，后续切片已把任务回调收紧为非空。
 - [x] 需要做：Phase F/C3 DLsite remote client 非空化切片：`DlsiteClient`、`DlsiteContentRemote`、`DlsiteCoverRemote` 与 `DlsiteRemoteFiles` 的必填 `DlsiteWork`、目标文件、目录和 `DlsiteHttpClient` 注入改为非空；HTTP helper 容错和安全探测/清理 nullable 继续保留。
 - [x] 需要做：Phase F/C3 DLsite 下载内部链路非空化切片：`DlsiteDownloadBlockingAdapter`、`DownloadRequest` 和 `DlsiteDownloadTask.ContentListener` 的 required `workId`、`taskId`、`DlsiteWork`、playlist/local path、content option/result 等入参改为非空；Android Intent、伴生 intent helper、错误消息、删除入口 optionId 和文件清理入口继续作为真实 nullable 边界保留。
+- [x] 需要做：Phase F/C3 DLsite HTML parser facade 非空化切片：`DlsiteHtmlParser` 的完整 HTML、页面 URL 和目标 `workId` 入参改为非空 `String`，内部链接/标题/封面候选 helper 同步收紧；空 HTML、找不到链接和非法 base URL 仍按既有空结果或保留候选 URL 语义处理。
 - [ ] 后续做：Phase C 如继续评估播放位置/字幕链路，只处理状态边界和测试覆盖；`PlaybackCommandClient` UI position ticker 与 `PlaybackService` cue-boundary scheduler 属于不同 runtime 驱动，不作为“两个 250ms 轮询”合并。
 - [ ] 后续做：Phase D 继续处理其它剩余 service-locator 去耦，逐步收敛到注入的仓库/服务边界。
 - [ ] 后续做：Phase E 继续拆分 `ASMRPlayerApp.kt` 组合根和巨型 Screen 文件。
