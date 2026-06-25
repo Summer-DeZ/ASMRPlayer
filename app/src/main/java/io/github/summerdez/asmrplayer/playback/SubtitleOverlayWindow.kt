@@ -191,7 +191,13 @@ class SubtitleOverlayWindow(context: Context?, private val listener: Listener?) 
     }
 
     private fun applyPlayingState() {
-        playPauseButton?.setImageResource(if (playing) R.drawable.ic_pause else R.drawable.ic_play)
+        playPauseButton?.setImageResource(
+            if (playing) {
+                R.drawable.ic_pause
+            } else {
+                R.drawable.ic_play
+            },
+        )
     }
 
     private fun applyLockedState() {

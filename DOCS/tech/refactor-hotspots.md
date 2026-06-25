@@ -69,28 +69,28 @@
 
 ## C. 代码层
 
-### C1 · [P0-卫生] 16 行「全家桶 wildcard import」废弃块，覆盖 36/70 文件
+### C1 · [P0-卫生] 全家桶 wildcard import 已清理
 
-- **位置**：`DbIo.kt:3-18`、`LibraryRepository.kt:3-18`、`PlaybackCommandClient.kt:3-18`、`PlaybackViewModel.kt:3-18` 等共 **36 个文件**顶部同一坨：
+- **位置**：主源码和单元测试中 46 个文件顶部的自动生成 import 块已清理，代表形式为：
   ```
   import io.github.summerdez.asmrplayer.R
   import io.github.summerdez.asmrplayer.data.*
   ... // ui.*  playback.*  presentation.*  di.* 等全家桶，含 import 自己所在的包
   ```
-- **问题**：绝大多数未使用（如 `DbIo` 只需 `runBlocking/Dispatchers`），且让 **data 层 `import ui.*`、domain 层 `import ui.*`**，制造跨层耦合假象、可能掩盖真实非法依赖。这是「大量废弃代码」的**最大单一来源**，疑似某次批量移动文件自动生成。
-- **方向**：全仓库一次性清理为精确 import（IDE Optimize Imports / ktlint）。低风险高收益，可独立先做。
+- **结果**：全仓目标全家桶 import 与 `import .*` 已清零，保留必要的精确类型 import 和精确 `R` 资源 import；data/domain 层不再因为 wildcard import 表面依赖 ui/presentation。
+- **后续**：不再补回全家桶 import；如要引入 ktlint/Spotless 等工具链，单独评估格式化规则和 churn。
 
 ### C2 · [P1] Java 文件已完成 Kotlin 化（Java 0 / Kotlin 105，0%）
 
 - **位置**：`app/src/main/java/` 下主源码 Java 文件已清零；核心 model、`data/remote`、`data/files/DocumentFiles`、`data/download`、`playback/`、旧 `ui/theme` 与 `DlsiteLoginActivity` 均已迁移到 Kotlin，并保留迁移期 Java/ABI 兼容入口。
 - **问题**：语言统一阶段完成，但部分迁移期 API 仍保留 Java null 宽松边界、`@JvmField` 字段 ABI 和平台值兼容写法，尚未完全发挥 Kotlin 空安全和数据建模能力。
-- **方向**：C2 已完成；下一步转入 C3，按调用链收紧 nullable API，再单独做全仓 import cleanup 和迁移期兼容点清理。
+- **方向**：C2 已完成；下一步继续处理迁移期兼容点，按调用链收紧剩余 nullable API。
 
 ### C3 · [P2] 接口/方法 nullable 参数泛滥 + 防御式 `if-null-return`（Java 移植味）
 
 - **位置**：`LibraryRepository` 已完成 Phase F/C3 第一切片，playlist/track/subtitle/cover/selected playlist 相关入参改为非空 Kotlin 类型；`DlsiteRepository`、`DlsiteLocalStore` 与 `DlsiteDownloadQueueRepository` 已完成第二切片，`workId`、`taskId`、`optionId`、`DlsiteWork` 与 `saveWork(updatedWork)` 等 identity/required 入参改为非空 Kotlin 类型。Room 实现继续保留空字符串业务校验；`DlsiteDownloadBlockingAdapter` 作为 Java/历史边界继续接收 nullable，并在 adapter 内过滤/归一化后调用 repository。
 - **问题**：Kotlin 侧本可用非空类型在编译期挡住，旧 Java 迁移边界把校验下沉到运行时、每个方法重复；如果继续扩大，会让业务缺失值和 null 兼容输入混在同一层。
-- **方向**：剩余 C3 工作转入迁移期 model、facade 和 import cleanup：继续按调用链收紧真实 required 参数；`error`、`optionTitle` 这类“可缺失本身就是业务数据”的 nullable 保留；Java/历史入口继续在 adapter 或 facade 内部归一化。
+- **方向**：剩余 C3 工作转入迁移期 model 和 facade 兼容点：继续按调用链收紧真实 required 参数；`error`、`optionTitle` 这类“可缺失本身就是业务数据”的 nullable 保留；Java/历史入口继续在 adapter 或 facade 内部归一化。
 
 ### C4 · [P2] 字幕/位置「双 ticker」重复轮询
 
@@ -104,10 +104,10 @@
 - **问题**：数量偏多，存在 `runCatching{}.getOrNull()` 静默吞错误、掩盖失败的可能。
 - **方向**：抽样审查，确认是否有应上报/重试却被吞掉的异常（重点看网络与下载路径）。非阻塞项。
 
-### C6 · [P3] `PlaybackViewModel` 用全限定 `kotlinx...MutableStateFlow`
+### C6 · [P3] `PlaybackViewModel` 全限定 coroutine 类型已清理
 
 - **位置**：`presentation/PlaybackViewModel.kt:59-60`。
-- **问题**：因 C1 的 wildcard 块没 import 具体类，写代码时图省事用全限定名——是 C1 的副作用证据，随 C1 清理一并消除。
+- **结果**：随 C1 import cleanup 改为精确 `MutableStateFlow` / `StateFlow` import，不再使用全限定 coroutine 类型。
 
 ---
 
@@ -150,7 +150,7 @@
 
 ## 建议推进顺序（Phase）
 
-1. **Phase A（卫生，低风险先行）**：C1 清 wildcard import → C6 自然消除。可独立成一个 PR，便于后续 diff 干净。
+1. **Phase A（卫生，低风险先行）**：C1 全仓 wildcard import 清理与 C6 已完成；后续避免补回全家桶 import。
 2. **Phase B（根因，P0）**：A1 删 `DbIo` → 仓库读写转 `suspend`/`Flow`（A6）→ 删命令式 `refresh/sync`（A2）→ UI 写操作进协程（A3）。一条主线，解决 ANR 与双路径。
 3. **Phase C（播放状态收敛，P1）**：A4 统一到 `MediaController` → D1 合并数据类 → C4 合并 ticker。
 4. **Phase D（全局状态去耦，P1）**：A5 把 4 个 bus + service-locator 收敛进 DI。

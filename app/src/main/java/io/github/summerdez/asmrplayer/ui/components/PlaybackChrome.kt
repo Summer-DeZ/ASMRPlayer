@@ -1,21 +1,5 @@
 package io.github.summerdez.asmrplayer.ui.components
 
-import io.github.summerdez.asmrplayer.R
-import io.github.summerdez.asmrplayer.data.*
-import io.github.summerdez.asmrplayer.data.remote.*
-import io.github.summerdez.asmrplayer.data.download.*
-import io.github.summerdez.asmrplayer.data.files.*
-import io.github.summerdez.asmrplayer.domain.*
-import io.github.summerdez.asmrplayer.domain.model.*
-import io.github.summerdez.asmrplayer.playback.*
-import io.github.summerdez.asmrplayer.presentation.*
-import io.github.summerdez.asmrplayer.ui.*
-import io.github.summerdez.asmrplayer.ui.activity.*
-import io.github.summerdez.asmrplayer.ui.components.*
-import io.github.summerdez.asmrplayer.ui.screens.*
-import io.github.summerdez.asmrplayer.ui.theme.*
-import io.github.summerdez.asmrplayer.ui.util.*
-import io.github.summerdez.asmrplayer.di.*
 import android.app.Activity
 import android.content.Intent
 import android.net.Uri
@@ -145,6 +129,10 @@ import androidx.compose.animation.slideOutVertically
 import androidx.compose.animation.togetherWith
 import androidx.compose.ui.window.Dialog
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
+import io.github.summerdez.asmrplayer.presentation.MainTab
+import io.github.summerdez.asmrplayer.presentation.PlaybackUiState
+import io.github.summerdez.asmrplayer.ui.theme.LocalAmberTokens
+import io.github.summerdez.asmrplayer.ui.uiProbe
 import java.text.DateFormat
 import java.util.Date
 import kotlin.math.max

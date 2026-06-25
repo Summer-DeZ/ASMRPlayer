@@ -247,7 +247,12 @@ class AppUi private constructor() {
                     ),
                 )
             } else {
-                val placeholder = iconView(context, R.drawable.ic_music_note, LABEL3, max(22, sizeDp / 2))
+                val placeholder = iconView(
+                    context,
+                    R.drawable.ic_music_note,
+                    LABEL3,
+                    max(22, sizeDp / 2),
+                )
                 cover.addView(
                     placeholder,
                     FrameLayout.LayoutParams(
