@@ -149,7 +149,7 @@ fun SettingsTab(
                 SettingsSegmentPreferenceRow(
                     icon = Icons.Default.DarkMode,
                     title = "主题",
-                    labels = listOf("深色", "浅色", "跟随系统"),
+                    labels = listOf("深色", "浅色", "系统"),
                     selectedIndex = when (state.themeMode) {
                         AppThemeMode.DARK -> 0
                         AppThemeMode.LIGHT -> 1

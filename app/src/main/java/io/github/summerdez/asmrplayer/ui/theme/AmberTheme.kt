@@ -15,6 +15,7 @@ import androidx.compose.foundation.clickable
 import androidx.compose.foundation.gestures.detectDragGestures
 import androidx.compose.foundation.gestures.detectTapGestures
 import androidx.compose.foundation.interaction.MutableInteractionSource
+import androidx.compose.foundation.isSystemInDarkTheme
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.BoxWithConstraints
@@ -235,7 +236,11 @@ fun amberSwitchColors() = SwitchDefaults.colors(
 
 @Composable
 fun ASMRPlayerTheme(themeMode: AppThemeMode, content: @Composable () -> Unit) {
-    val dark = themeMode != AppThemeMode.LIGHT
+    val dark = when (themeMode) {
+        AppThemeMode.DARK -> true
+        AppThemeMode.LIGHT -> false
+        AppThemeMode.SYSTEM -> isSystemInDarkTheme()
+    }
     val tokens = if (dark) amberDarkTokens() else amberLightTokens()
     val colorScheme = if (dark) {
         darkColorScheme(
