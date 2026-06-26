@@ -253,10 +253,11 @@ class PlaybackCommandClient(private val application: Application) {
     }
 
     private fun MediaController.snapshot(): PlaybackControllerSnapshot {
-        val serviceSnapshot = playbackServiceSnapshotFromSessionExtras(sessionExtras)
-            .withDerivedSleepTimer(SystemClock.elapsedRealtime())
         val durationMs = duration.toPlaybackIntMs()
         val positionMs = currentPosition.toPlaybackIntMs()
+        val serviceSnapshot = playbackServiceSnapshotFromSessionExtras(sessionExtras)
+            .withDerivedSleepTimer(SystemClock.elapsedRealtime())
+            .withLiveSubtitleIndex(positionMs)
         return PlaybackControllerSnapshot(
             connected = true,
             mediaId = currentMediaItem?.mediaId.orEmpty(),
@@ -284,6 +285,31 @@ class PlaybackCommandClient(private val application: Application) {
             sleepTimerActive = remainingMs > 0L,
             sleepTimerRemainingMs = remainingMs,
         )
+    }
+
+    // 用 controller 的实时 position 本地推导当前字幕行，避免拖动/跳转时等待服务端 sessionExtras 往返，
+    // 让字幕与进度条同源同步。索引等价于「最后一个 startMs <= position 的行」，与服务端 indexAt 一致。
+    private fun PlaybackServiceSnapshot.withLiveSubtitleIndex(positionMs: Int): PlaybackServiceSnapshot {
+        if (subtitleStartsMs.isEmpty()) {
+            return this
+        }
+        return copy(subtitleIndex = subtitleIndexAt(subtitleStartsMs, positionMs))
+    }
+
+    private fun subtitleIndexAt(startsMs: List<Int>, positionMs: Int): Int {
+        var low = 0
+        var high = startsMs.size - 1
+        var result = -1
+        while (low <= high) {
+            val mid = (low + high) ushr 1
+            if (startsMs[mid] <= positionMs) {
+                result = mid
+                low = mid + 1
+            } else {
+                high = mid - 1
+            }
+        }
+        return result
     }
 
     private fun PlaybackServiceSnapshot.hasActiveSleepTimerCountdown(): Boolean {

@@ -59,8 +59,6 @@ internal fun AiSettingsPage(
     onAiWhisperModelSelected: (String) -> Unit,
     onEditRemoteTranscriptionAddress: () -> Unit,
     onEditRemoteTranscriptionPort: () -> Unit,
-    onEditRemoteWhisperModel: () -> Unit,
-    onEditRemoteWhisperToken: () -> Unit,
     onTestRemoteWhisperConnection: () -> Unit,
     onDownloadWhisperModel: () -> Unit,
     onCancelWhisperModelDownload: () -> Unit,
@@ -234,20 +232,6 @@ internal fun AiSettingsPage(
                         title = "端口",
                         value = settings.remoteTranscriptionPort.ifBlank { "未设置" },
                         onClick = onEditRemoteTranscriptionPort,
-                    )
-                    SettingsDivider()
-                    SettingsActionRow(
-                        icon = Icons.Default.MusicNote,
-                        title = "转写模型",
-                        value = settings.activeRemoteWhisperModel.ifBlank { "未指定" },
-                        onClick = onEditRemoteWhisperModel,
-                    )
-                    SettingsDivider()
-                    SettingsActionRow(
-                        icon = Icons.Default.LockOpen,
-                        title = "Bearer Token",
-                        value = if (settings.remoteWhisperToken.isBlank()) "未设置" else "已设置",
-                        onClick = onEditRemoteWhisperToken,
                     )
                     SettingsDivider()
                     RemoteWhisperTestRow(state.remoteWhisperTestStatus, onTestRemoteWhisperConnection)

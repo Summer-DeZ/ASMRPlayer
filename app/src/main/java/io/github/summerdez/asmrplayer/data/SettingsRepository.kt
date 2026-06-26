@@ -36,8 +36,6 @@ interface SettingsRepository {
     suspend fun setAiDeepSeekApiKey(value: String)
     suspend fun setAiWhisperModelId(value: String)
     suspend fun setAiRemoteWhisperBaseUrl(value: String)
-    suspend fun setAiRemoteWhisperModel(value: String)
-    suspend fun setAiRemoteWhisperToken(value: String)
     suspend fun setAiAdultContentTranslationAllowed(value: Boolean)
 }
 
@@ -72,8 +70,6 @@ class AppSettingsRepository(
             settingsDao.valueFlow(KEY_AI_ADULT_CONTENT_TRANSLATION),
             settingsDao.valueFlow(KEY_AI_TRANSCRIPTION_BACKEND),
             settingsDao.valueFlow(KEY_AI_REMOTE_WHISPER_BASE_URL),
-            settingsDao.valueFlow(KEY_AI_REMOTE_WHISPER_MODEL),
-            settingsDao.valueFlow(KEY_AI_REMOTE_WHISPER_TOKEN),
         ),
     ) { values ->
         aiSettingsFromValues(values)
@@ -132,8 +128,6 @@ class AppSettingsRepository(
                     settingsDao.value(KEY_AI_ADULT_CONTENT_TRANSLATION),
                     settingsDao.value(KEY_AI_TRANSCRIPTION_BACKEND),
                     settingsDao.value(KEY_AI_REMOTE_WHISPER_BASE_URL),
-                    settingsDao.value(KEY_AI_REMOTE_WHISPER_MODEL),
-                    settingsDao.value(KEY_AI_REMOTE_WHISPER_TOKEN),
                 ),
             )
         }
@@ -175,14 +169,6 @@ class AppSettingsRepository(
         put(KEY_AI_REMOTE_WHISPER_BASE_URL, value.trim())
     }
 
-    override suspend fun setAiRemoteWhisperModel(value: String) {
-        put(KEY_AI_REMOTE_WHISPER_MODEL, value.trim())
-    }
-
-    override suspend fun setAiRemoteWhisperToken(value: String) {
-        put(KEY_AI_REMOTE_WHISPER_TOKEN, value.trim())
-    }
-
     override suspend fun setAiAdultContentTranslationAllowed(value: Boolean) {
         put(KEY_AI_ADULT_CONTENT_TRANSLATION, value.toString())
     }
@@ -211,8 +197,6 @@ class AppSettingsRepository(
             whisperModelId = WhisperModelSpec.byId(values.getOrNull(6)).id,
             allowAdultContentTranslation = values.getOrNull(7)?.toBooleanStrictOrNull() ?: false,
             remoteWhisperBaseUrl = values.getOrNull(9).orEmpty(),
-            remoteWhisperModel = values.getOrNull(10).orEmpty(),
-            remoteWhisperToken = values.getOrNull(11).orEmpty(),
         )
     }
 
@@ -240,8 +224,6 @@ class AppSettingsRepository(
         const val KEY_AI_ADULT_CONTENT_TRANSLATION = "ai_adult_content_translation"
         const val KEY_AI_TRANSCRIPTION_BACKEND = "ai_transcription_backend"
         const val KEY_AI_REMOTE_WHISPER_BASE_URL = "ai_remote_whisper_base_url"
-        const val KEY_AI_REMOTE_WHISPER_MODEL = "ai_remote_whisper_model"
-        const val KEY_AI_REMOTE_WHISPER_TOKEN = "ai_remote_whisper_token"
         const val KEY_APP_THEME_MODE = "app_theme_mode"
     }
 }

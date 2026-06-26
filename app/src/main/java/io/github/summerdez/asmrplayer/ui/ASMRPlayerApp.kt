@@ -253,8 +253,6 @@ fun ASMRPlayerApp(
                     onEditRemoteTranscriptionPort = {
                         rootState.aiSettingField = AiSettingField.REMOTE_TRANSCRIPTION_PORT
                     },
-                    onEditRemoteWhisperModel = { rootState.aiSettingField = AiSettingField.REMOTE_WHISPER_MODEL },
-                    onEditRemoteWhisperToken = { rootState.aiSettingField = AiSettingField.REMOTE_WHISPER_TOKEN },
                     onTestRemoteWhisperConnection = settingsViewModel::testRemoteWhisperConnection,
                     onDownloadWhisperModel = settingsViewModel::downloadWhisperModel,
                     onCancelWhisperModelDownload = settingsViewModel::cancelWhisperModelDownload,

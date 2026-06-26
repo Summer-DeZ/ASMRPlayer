@@ -339,14 +339,6 @@ class SettingsViewModel(
         aiSettingsHandler.setAiRemoteTranscriptionPort(value)
     }
 
-    fun setAiRemoteWhisperModel(value: String) {
-        aiSettingsHandler.setAiRemoteWhisperModel(value)
-    }
-
-    fun setAiRemoteWhisperToken(value: String) {
-        aiSettingsHandler.setAiRemoteWhisperToken(value)
-    }
-
     fun testRemoteWhisperConnection() {
         remoteWhisperTester.testConnection()
     }

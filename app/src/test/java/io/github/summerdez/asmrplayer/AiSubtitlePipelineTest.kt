@@ -661,11 +661,10 @@ class AiSubtitlePipelineTest {
         val remote = aiSettings().copy(
             transcriptionBackend = AiTranscriptionBackend.REMOTE,
             remoteWhisperBaseUrl = "http://192.168.1.10:8000/",
-            remoteWhisperModel = "large-v3",
         )
 
         assertEquals("local:base", local.transcriptionCacheKey)
-        assertEquals("remote:http://192.168.1.10:8000|large-v3", remote.transcriptionCacheKey)
+        assertEquals("remote:http://192.168.1.10:8000", remote.transcriptionCacheKey)
     }
 
     @Test
@@ -690,18 +689,6 @@ class AiSubtitlePipelineTest {
             "http://192.168.1.10:8000",
             remoteTranscriptionBaseUrl("http://192.168.1.10:8000", ""),
         )
-    }
-
-    @Test
-    fun remoteTranscriptionModelCanBeBlank() {
-        val settings = aiSettings().copy(
-            transcriptionBackend = AiTranscriptionBackend.REMOTE,
-            remoteWhisperBaseUrl = "http://192.168.1.10:8000",
-            remoteWhisperModel = "",
-        )
-
-        assertEquals("", settings.activeRemoteWhisperModel)
-        assertEquals("remote:http://192.168.1.10:8000|", settings.transcriptionCacheKey)
     }
 
     @Test

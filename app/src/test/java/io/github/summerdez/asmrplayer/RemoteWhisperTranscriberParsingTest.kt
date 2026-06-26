@@ -17,21 +17,6 @@ class RemoteWhisperTranscriberParsingTest {
         val multipart = remoteTranscriptionUploadMultipart(
             fileName = "audio.mp3",
             uploadBody = ByteArray(0).toRequestBody("application/octet-stream".toMediaTypeOrNull()),
-            model = " Qwen3-ASR-0.6B ",
-        )
-
-        assertEquals(
-            setOf("file", "language", "task", "model"),
-            multipart.formFieldNames(),
-        )
-    }
-
-    @Test
-    fun asyncTranscriptionsMultipartOmitsBlankOptionalModel() {
-        val multipart = remoteTranscriptionUploadMultipart(
-            fileName = "audio.mp3",
-            uploadBody = ByteArray(0).toRequestBody("application/octet-stream".toMediaTypeOrNull()),
-            model = " ",
         )
 
         assertEquals(

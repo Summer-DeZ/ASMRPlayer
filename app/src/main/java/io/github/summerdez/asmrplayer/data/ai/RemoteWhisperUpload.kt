@@ -16,7 +16,6 @@ internal fun buildRemoteWhisperUploadMultipart(
     uri: Uri,
     fileName: String,
     totalBytes: Long,
-    model: String,
     onUploadProgress: (uploaded: Long, total: Long) -> Unit,
 ): MultipartBody {
     val uploadBody = ProgressRequestBody(
@@ -29,26 +28,18 @@ internal fun buildRemoteWhisperUploadMultipart(
     return remoteTranscriptionUploadMultipart(
         fileName = fileName,
         uploadBody = uploadBody,
-        model = model,
     )
 }
 
 internal fun remoteTranscriptionUploadMultipart(
     fileName: String,
     uploadBody: RequestBody,
-    model: String,
 ): MultipartBody {
     return MultipartBody.Builder()
         .setType(MultipartBody.FORM)
         .addFormDataPart("file", fileName, uploadBody)
         .addFormDataPart("language", "ja")
         .addFormDataPart("task", "transcribe")
-        .apply {
-            val normalizedModel = model.trim()
-            if (normalizedModel.isNotBlank()) {
-                addFormDataPart("model", normalizedModel)
-            }
-        }
         .build()
 }
 

@@ -39,8 +39,6 @@ data class AiSubtitleSettings(
     val deepSeekApiKey: String = "",
     val whisperModelId: String = WhisperModelSpec.DEFAULT_ID,
     val remoteWhisperBaseUrl: String = "",
-    val remoteWhisperModel: String = "",
-    val remoteWhisperToken: String = "",
     val allowAdultContentTranslation: Boolean = false,
 ) {
     val activeBaseUrl: String
@@ -70,14 +68,11 @@ data class AiSubtitleSettings(
     val remoteTranscriptionPort: String
         get() = remoteTranscriptionEndpointFromBaseUrl(remoteWhisperBaseUrl).port
 
-    val activeRemoteWhisperModel: String
-        get() = remoteWhisperModel.trim()
-
     val transcriptionCacheKey: String
         get() = when (transcriptionBackend) {
             AiTranscriptionBackend.LOCAL -> "local:$whisperModelId"
             AiTranscriptionBackend.REMOTE ->
-                "remote:${normalizedRemoteWhisperBaseUrl}|${activeRemoteWhisperModel}"
+                "remote:${normalizedRemoteWhisperBaseUrl}"
         }
 }
 

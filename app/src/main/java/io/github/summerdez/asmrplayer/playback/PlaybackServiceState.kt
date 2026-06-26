@@ -9,6 +9,7 @@ data class PlaybackServiceSnapshot(
     val playlistIndex: Int = -1,
     val audioUri: String = "",
     val subtitleLines: List<String> = emptyList(),
+    val subtitleStartsMs: List<Int> = emptyList(),
     val subtitleIndex: Int = -1,
     val subtitleCount: Int = 0,
     val overlayRequested: Boolean = false,
@@ -44,6 +45,7 @@ internal fun PlaybackServiceSnapshot.toSessionExtras(): Bundle {
         putInt(KEY_PLAYLIST_INDEX, playlistIndex)
         putString(KEY_AUDIO_URI, audioUri)
         putStringArrayList(KEY_SUBTITLE_LINES, ArrayList(subtitleLines))
+        putIntArray(KEY_SUBTITLE_STARTS, subtitleStartsMs.toIntArray())
         putInt(KEY_SUBTITLE_INDEX, subtitleIndex)
         putInt(KEY_SUBTITLE_COUNT, subtitleCount)
         putBoolean(KEY_OVERLAY_REQUESTED, overlayRequested)
@@ -66,6 +68,7 @@ internal fun playbackServiceSnapshotFromSessionExtras(extras: Bundle?): Playback
         playlistIndex = extras.getInt(KEY_PLAYLIST_INDEX, -1),
         audioUri = extras.getString(KEY_AUDIO_URI).orEmpty(),
         subtitleLines = extras.getStringArrayList(KEY_SUBTITLE_LINES).orEmpty(),
+        subtitleStartsMs = extras.getIntArray(KEY_SUBTITLE_STARTS)?.toList().orEmpty(),
         subtitleIndex = extras.getInt(KEY_SUBTITLE_INDEX, -1),
         subtitleCount = extras.getInt(KEY_SUBTITLE_COUNT, 0),
         overlayRequested = extras.getBoolean(KEY_OVERLAY_REQUESTED, false),
@@ -84,6 +87,7 @@ private const val KEY_PLAYLIST_ID = KEY_PREFIX + "playlist_id"
 private const val KEY_PLAYLIST_INDEX = KEY_PREFIX + "playlist_index"
 private const val KEY_AUDIO_URI = KEY_PREFIX + "audio_uri"
 private const val KEY_SUBTITLE_LINES = KEY_PREFIX + "subtitle_lines"
+private const val KEY_SUBTITLE_STARTS = KEY_PREFIX + "subtitle_starts"
 private const val KEY_SUBTITLE_INDEX = KEY_PREFIX + "subtitle_index"
 private const val KEY_SUBTITLE_COUNT = KEY_PREFIX + "subtitle_count"
 private const val KEY_OVERLAY_REQUESTED = KEY_PREFIX + "overlay_requested"

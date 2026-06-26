@@ -605,6 +605,7 @@ class PlaybackService : MediaSessionService() {
                 playlistIndex = currentPlaylistIndex,
                 audioUri = currentAudioUri?.toString().orEmpty(),
                 subtitleLines = subtitleCues.map { it.text },
+                subtitleStartsMs = subtitleCues.map { it.startMs.toInt() },
                 subtitleIndex = subtitleTicker.activeSubtitleIndex(),
                 subtitleCount = subtitleCues.size,
                 overlayRequested = overlayRequested,

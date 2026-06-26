@@ -1,8 +1,8 @@
 package io.github.summerdez.asmrplayer.ui.screens
 
 import androidx.compose.foundation.Canvas
-import androidx.compose.foundation.gestures.detectDragGestures
-import androidx.compose.foundation.gestures.detectTapGestures
+import androidx.compose.foundation.gestures.awaitEachGesture
+import androidx.compose.foundation.gestures.awaitFirstDown
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
@@ -66,23 +66,20 @@ fun PlaybackProgressLine(playbackState: PlaybackUiState, onSeek: (Int) -> Unit) 
                     if (!canSeek) {
                         return@pointerInput
                     }
-                    detectTapGestures { offset ->
-                        seekToProgressOffset(offset.x, size.width, duration, onSeek)
-                    }
-                }
-                .pointerInput(duration, canSeek) {
-                    if (!canSeek) {
-                        return@pointerInput
-                    }
-                    detectDragGestures(
-                        onDragStart = { offset ->
-                            seekToProgressOffset(offset.x, size.width, duration, onSeek)
-                        },
-                        onDrag = { change, _ ->
-                            change.consume()
+                    awaitEachGesture {
+                        val down = awaitFirstDown(requireUnconsumed = false)
+                        seekToProgressOffset(down.position.x, size.width, duration, onSeek)
+                        down.consume()
+                        while (true) {
+                            val event = awaitPointerEvent()
+                            val change = event.changes.firstOrNull { it.id == down.id }
+                            if (change == null || !change.pressed) {
+                                break
+                            }
                             seekToProgressOffset(change.position.x, size.width, duration, onSeek)
-                        },
-                    )
+                            change.consume()
+                        }
+                    }
                 },
         ) {
             val trackHeight = 4.5.dp.toPx()

@@ -99,20 +99,6 @@ internal class SettingsAiSettingsHandler(
         resetRemoteWhisperTestStatus()
     }
 
-    fun setAiRemoteWhisperModel(value: String) {
-        scope.launch {
-            settingsRepository.setAiRemoteWhisperModel(value)
-        }
-        resetRemoteWhisperTestStatus()
-    }
-
-    fun setAiRemoteWhisperToken(value: String) {
-        scope.launch {
-            settingsRepository.setAiRemoteWhisperToken(value)
-        }
-        resetRemoteWhisperTestStatus()
-    }
-
     fun setAiAdultContentTranslationAllowed(value: Boolean) {
         scope.launch {
             settingsRepository.setAiAdultContentTranslationAllowed(value)

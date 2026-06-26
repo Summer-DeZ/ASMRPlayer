@@ -36,14 +36,6 @@ internal suspend fun <T> executeRemoteJsonRequest(
     }
 }
 
-internal fun Request.Builder.applyAuthorization(settings: AiSubtitleSettings): Request.Builder {
-    val token = settings.remoteWhisperToken.trim()
-    if (token.isNotBlank()) {
-        header("Authorization", "Bearer $token")
-    }
-    return this
-}
-
 internal fun remoteBaseUrl(settings: AiSubtitleSettings): String {
     val baseUrl = settings.normalizedRemoteWhisperBaseUrl
     if (baseUrl.isBlank()) {

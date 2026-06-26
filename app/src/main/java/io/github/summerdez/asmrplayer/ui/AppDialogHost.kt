@@ -52,8 +52,6 @@ internal enum class AiSettingField {
     DEEPSEEK_API_KEY,
     REMOTE_TRANSCRIPTION_ADDRESS,
     REMOTE_TRANSCRIPTION_PORT,
-    REMOTE_WHISPER_MODEL,
-    REMOTE_WHISPER_TOKEN,
 }
 
 @OptIn(ExperimentalMaterial3Api::class)
@@ -354,8 +352,6 @@ internal fun AppDialogHost(
                 AiSettingField.DEEPSEEK_API_KEY -> "OpenAI 兼容 API Key"
                 AiSettingField.REMOTE_TRANSCRIPTION_ADDRESS -> "远程转写地址"
                 AiSettingField.REMOTE_TRANSCRIPTION_PORT -> "远程转写端口"
-                AiSettingField.REMOTE_WHISPER_MODEL -> "转写模型"
-                AiSettingField.REMOTE_WHISPER_TOKEN -> "远程转写 Token"
             },
             initialValue = when (field) {
                 AiSettingField.OLLAMA_BASE_URL -> aiSettings.ollamaBaseUrl
@@ -365,16 +361,12 @@ internal fun AppDialogHost(
                 AiSettingField.DEEPSEEK_API_KEY -> aiSettings.deepSeekApiKey
                 AiSettingField.REMOTE_TRANSCRIPTION_ADDRESS -> aiSettings.remoteTranscriptionAddress
                 AiSettingField.REMOTE_TRANSCRIPTION_PORT -> aiSettings.remoteTranscriptionPort
-                AiSettingField.REMOTE_WHISPER_MODEL -> aiSettings.activeRemoteWhisperModel
-                AiSettingField.REMOTE_WHISPER_TOKEN -> aiSettings.remoteWhisperToken
             },
             confirmText = "保存",
             numeric = field == AiSettingField.REMOTE_TRANSCRIPTION_PORT,
             required = when (field) {
                 AiSettingField.REMOTE_TRANSCRIPTION_ADDRESS,
                 AiSettingField.REMOTE_TRANSCRIPTION_PORT,
-                AiSettingField.REMOTE_WHISPER_MODEL,
-                AiSettingField.REMOTE_WHISPER_TOKEN,
                 AiSettingField.DEEPSEEK_API_KEY,
                 -> false
                 else -> true
@@ -392,8 +384,6 @@ internal fun AppDialogHost(
                         settingsViewModel.setAiRemoteTranscriptionAddress(value)
                     AiSettingField.REMOTE_TRANSCRIPTION_PORT ->
                         settingsViewModel.setAiRemoteTranscriptionPort(value)
-                    AiSettingField.REMOTE_WHISPER_MODEL -> settingsViewModel.setAiRemoteWhisperModel(value)
-                    AiSettingField.REMOTE_WHISPER_TOKEN -> settingsViewModel.setAiRemoteWhisperToken(value)
                 }
                 onAiSettingFieldChange(null)
             },

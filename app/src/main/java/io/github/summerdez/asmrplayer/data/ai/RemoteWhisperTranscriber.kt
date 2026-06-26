@@ -36,9 +36,7 @@ class RemoteWhisperTranscriber(
         val request = Request.Builder()
             .url("${remoteBaseUrl(settings)}/health")
             .header("Accept", "application/json")
-            .header("User-Agent", USER_AGENT)
-            .applyAuthorization(settings)
-            .build()
+            .header("User-Agent", USER_AGENT)            .build()
         executeRemoteJsonRequest(request, client) { body ->
             parseHealthResponse(body)
         }
@@ -108,7 +106,6 @@ class RemoteWhisperTranscriber(
             uri = uri,
             fileName = fileName,
             totalBytes = totalBytes,
-            model = settings.activeRemoteWhisperModel,
         ) { uploaded, total ->
             if (total > 0L) {
                 val uploadProgress = (uploaded.toFloat() / total.toFloat()).coerceIn(0f, 1f)
@@ -122,9 +119,7 @@ class RemoteWhisperTranscriber(
         val request = Request.Builder()
             .url("$baseUrl/transcriptions")
             .header("Accept", "application/json")
-            .header("User-Agent", USER_AGENT)
-            .applyAuthorization(settings)
-            .post(multipart)
+            .header("User-Agent", USER_AGENT)            .post(multipart)
             .build()
         val response = try {
             executeCancellable(client.newCall(request))
@@ -223,9 +218,7 @@ class RemoteWhisperTranscriber(
         val request = Request.Builder()
             .url("$baseUrl/transcriptions/${Uri.encode(jobId)}")
             .header("Accept", "application/json")
-            .header("User-Agent", USER_AGENT)
-            .applyAuthorization(settings)
-            .build()
+            .header("User-Agent", USER_AGENT)            .build()
         return executeRemoteJsonRequest(request, pollingClient) { body ->
             parseTranscriptionStatusResponse(body)
         }
@@ -239,9 +232,7 @@ class RemoteWhisperTranscriber(
         val request = Request.Builder()
             .url("$baseUrl/transcriptions/${Uri.encode(jobId)}/result")
             .header("Accept", "application/json")
-            .header("User-Agent", USER_AGENT)
-            .applyAuthorization(settings)
-            .build()
+            .header("User-Agent", USER_AGENT)            .build()
         return executeRemoteJsonRequest(request, pollingClient) { body ->
             parseTranscriptionResultResponse(body)
         }
@@ -251,9 +242,7 @@ class RemoteWhisperTranscriber(
         val request = Request.Builder()
             .url("$baseUrl/transcriptions/${Uri.encode(jobId)}")
             .header("Accept", "application/json")
-            .header("User-Agent", USER_AGENT)
-            .applyAuthorization(settings)
-            .delete()
+            .header("User-Agent", USER_AGENT)            .delete()
             .build()
         runCatching {
             executeCancellable(pollingClient.newCall(request)).use { response ->
